@@ -1,0 +1,29 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/armory_45.png",
+      "ascent": 13,
+      "height": 111,
+      "chars": [
+        "\ue100"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/armory_36.png",
+      "ascent": 13,
+      "height": 93,
+      "chars": [
+        "\ue101"
+      ]
+    },
+    {
+      "type": "space",
+      "advances": {
+        "\uf001": -8,
+        "\uf002": -169
+      }
+    }
+  ]
+}

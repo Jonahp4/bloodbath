@@ -10,21 +10,24 @@ import org.bukkit.inventory.EquipmentSlotGroup;
 
 /**
  * The Blood Knight's armour, worn by the boss and now by players. Each piece is a netherite piece
- * underneath (fire-proof, same durability), with netherite's protection plus a heart of health.
+ * underneath (fire-proof, same durability) with more protection than netherite, plus a heart.
  */
 public enum ArmorPiece {
-	HELM("blood_knight_helm", "Blood Knight Helm", "helmet", Material.NETHERITE_HELMET, EquipmentSlot.HEAD, EquipmentSlotGroup.HEAD, 3,
+	HELM("blood_knight_helm", "Blood Knight Helm", "helmet", Material.NETHERITE_HELMET, EquipmentSlot.HEAD, EquipmentSlotGroup.HEAD, 4,
 		"The Knight's closed helm. Its eyes", "still burn behind the visor."),
-	CUIRASS("blood_knight_cuirass", "Blood Knight Cuirass", "chestplate", Material.NETHERITE_CHESTPLATE, EquipmentSlot.CHEST, EquipmentSlotGroup.CHEST, 8,
+	CUIRASS("blood_knight_cuirass", "Blood Knight Cuirass", "chestplate", Material.NETHERITE_CHESTPLATE, EquipmentSlot.CHEST, EquipmentSlotGroup.CHEST, 9,
 		"Its core still glows with the", "Knight's blood."),
-	GREAVES("blood_knight_greaves", "Blood Knight Greaves", "leggings", Material.NETHERITE_LEGGINGS, EquipmentSlot.LEGS, EquipmentSlotGroup.LEGS, 6,
+	GREAVES("blood_knight_greaves", "Blood Knight Greaves", "leggings", Material.NETHERITE_LEGGINGS, EquipmentSlot.LEGS, EquipmentSlotGroup.LEGS, 7,
 		"Plated legs with a glow in each knee."),
-	SABATONS("blood_knight_sabatons", "Blood Knight Sabatons", "boots", Material.NETHERITE_BOOTS, EquipmentSlot.FEET, EquipmentSlotGroup.FEET, 3,
+	SABATONS("blood_knight_sabatons", "Blood Knight Sabatons", "boots", Material.NETHERITE_BOOTS, EquipmentSlot.FEET, EquipmentSlotGroup.FEET, 4,
 		"Iron-shod boots that leave red", "footprints.");
 
-	/** Protection every piece shares with netherite. */
-	public static final double TOUGHNESS = 3.0;
-	public static final double KNOCKBACK_RESISTANCE = 0.1;
+	/**
+	 * Every piece beats netherite outright: one more armour point than the netherite piece
+	 * (4/9/7/4 against 3/8/6/3), more toughness (3.5 against 3) and more knockback resistance.
+	 */
+	public static final double TOUGHNESS = 3.5;
+	public static final double KNOCKBACK_RESISTANCE = 0.15;
 	/** Extra max health per piece, in half-hearts. */
 	public static final double HEALTH = 2.0;
 

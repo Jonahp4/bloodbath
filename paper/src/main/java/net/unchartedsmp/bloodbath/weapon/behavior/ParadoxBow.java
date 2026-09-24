@@ -353,7 +353,7 @@ public final class ParadoxBow implements WeaponBehavior {
 		if (echo != null) {
 			long left = Math.max(0, echo.due - ServerClock.now());
 			int delay = Math.max(10, ticksSetting("echo-delay", 30));
-			Component line = Component.text("⧖ Echo  ", NamedTextColor.DARK_RED).append(Hud.bar(1.0F - left / (float) delay))
+			Component line = Component.text("⧖ Echo  ", NamedTextColor.DARK_RED).append(Hud.bar(player, 1.0F - left / (float) delay))
 				.append(Component.text(Hud.seconds(left), NamedTextColor.GRAY));
 			return line.append(echo.marked != null
 				? Component.text("  ✦ locked on", NamedTextColor.RED)
@@ -361,7 +361,7 @@ public final class ParadoxBow implements WeaponBehavior {
 		}
 		if (drawing.containsKey(player.getUniqueId()) && isDrawing(player)) {
 			float pull = pull(player.getActiveItemUsedTime());
-			Component line = Component.text("Draw  ", NamedTextColor.DARK_RED).append(Hud.bar(pull));
+			Component line = Component.text("Draw  ", NamedTextColor.DARK_RED).append(Hud.bar(player, pull));
 			if (pull >= 1.0F) {
 				line = line.append(echoAvailable(player)
 					? Component.text("  ● ECHO PRIMED", NamedTextColor.RED)

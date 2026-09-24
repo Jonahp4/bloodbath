@@ -161,7 +161,7 @@ public final class BloodGrimoire implements WeaponBehavior {
 		long left = channel == null ? 0 : channel.endsAt() - ServerClock.now();
 		if (left > 0) {
 			float progress = 1.0F - left / (float) (PULSES * PULSE_INTERVAL_TICKS);
-			return Component.text("✚ Transfusion  ", NamedTextColor.DARK_RED).append(Hud.bar(progress))
+			return Component.text("✚ Transfusion  ", NamedTextColor.DARK_RED).append(Hud.bar(player, progress))
 				.append(Component.text("  draining " + name(channel.target()), NamedTextColor.GRAY));
 		}
 		Component line = Hud.cooldownBar(player, ability());

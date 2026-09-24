@@ -52,8 +52,13 @@ hud:
 effects:
   # Scales every particle count. 0.5 halves them for weaker PCs, 0 turns them off.
   particle-multiplier: 1.0
-  # Ability particles visible from far away (512 blocks instead of 32).
-  long-range: true
+  # Players further than this (blocks) from an effect aren't sent it at all. Up to
+  # full-detail-distance they see every particle, up to twice that half, beyond that a quarter.
+  view-distance: 64
+  full-detail-distance: 24
+  # Custom sprites (blood nova impacts), HUD icons and the armory's artwork for players who
+  # loaded the resource pack. Everyone else always gets the vanilla-safe version.
+  pack-visuals: true
   # Blood dripping from a held weapon.
   held-aura: true
   # Gore burst and blood streams into the killer when a weapon kills.
@@ -131,6 +136,8 @@ weapons:
     enabled: true
     cooldown: 3         # Harvest (right-click)
     bleed-hits: 5       # hits to hemorrhage
+    bleed-damage: 0.5   # per bleed stack, every bleed-interval (bleeding ignores armour)
+    bleed-interval: 1.5
     damage: 10          # hemorrhage damage to the target
     splash-damage: 8    # ...and to everything around it
     radius: 4
@@ -165,6 +172,9 @@ armor:
   kill-heal: 3
   # (3 pieces) Barbed Blood: damage melee attackers take back.
   barb-damage: 2
+  # (4 pieces) Effects the full set gives for as long as it's worn, as effect:amplifier
+  # (0 = level I). They go the moment a piece comes off. [] for none.
+  full-set-effects: [strength:0, speed:0, fire_resistance:0]
   # (4 pieces) Blood Rage: when a hit leaves you at this share of your max health or less, you get
   # Strength and Resistance and a blood shockwave hurls everything nearby away.
   rage-threshold: 0.4
@@ -172,55 +182,100 @@ armor:
   rage-radius: 4
   rage-cooldown: 60
 
-# Crafting recipes. Off by default: most servers hand weapons out with /bloodbath give or the
-# armory. Bloodbath weapons and armour can never be used as crafting ingredients.
+# The Blood Knight: a boss fight built from the boss model, with telegraphed attacks and a
+# bloodied second phase. Summon it by sneaking and right-clicking crying obsidian with a Blood
+# Core (the ritual), or with /bloodbath boss summon. It drops Blood Cores.
+# Players with the resource pack see the animated model; everyone else sees its netherite armour
+# fighting with nobody inside.
+boss:
+  enabled: true
+  summon-ritual: true
+  health: 600
+  armor: 12
+  melee-damage: 9         # its ordinary sword hits
+  scale: 1.0              # model size (1 = about 3 blocks tall)
+  arena-radius: 32        # it fights (and is leashed) within this of where it rose
+  max-active: 1           # Blood Knights (and summonings) at once, server-wide
+  warning-seconds: 6      # the omens before it rises
+  leave-timeout: 60       # seconds with nobody left in the arena before it sinks back down
+  phase-two-at: 0.5       # health share at which it's bloodied: faster, harder hitting
+  animation-interval: 2   # ticks between model updates: 1 smoothest, 3 lightest on bandwidth
+  atmosphere: true        # blood mist around players in the arena while it fights
+  announce: true          # tell nearby players when it falls
+  attacks:
+    cooldown: 3.5         # seconds between special attacks (bloodied: 30% less)
+    cleave-damage: 12     # a wide arc in front of it: get out of the arc
+    slam-damage: 10       # a shockwave along the ground: jump over it
+    spike-damage: 9       # eruptions under up to 3 players: step off the ring
+    charge-damage: 8      # a shield charge along a telegraphed line: sidestep it
+  loot:
+    cores-min: 2
+    cores-max: 4
+    armor-chance: 0.35    # chance of one Blood Knight armour piece
+    experience: 500
+
+# Every Bloodbath sound can be made quieter, swapped or muted.
+sounds:
+  volume: 1.0
+  # Swap a sound for another (or '' to mute it), by Minecraft sound id. For example:
+  # replace:
+  #   'entity.warden.sonic_boom': 'entity.generic.explode'
+  #   'block.bell.use': ''
+  replace: {}
+
+# Crafting recipes. Every weapon and armour piece needs a Blood Core (BLOOD_CORE below), which
+# the Blood Knight drops and which can be crafted from a nether star. Bloodbath items themselves
+# can never be used as ingredients, and a Blood Core only works in these recipes.
 recipes:
-  enabled: false
+  enabled: true
+  blood_core:
+    shape: ['RTR', 'TNT', 'RTR']
+    ingredients: {R: REDSTONE_BLOCK, T: GHAST_TEAR, N: NETHER_STAR}
   riftblade:
-    shape: [' E ', 'RSR', ' P ']
-    ingredients: {E: ENDER_EYE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, P: ENDER_PEARL}
+    shape: [' E ', 'RSR', 'PCP']
+    ingredients: {E: ENDER_EYE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, P: ENDER_PEARL, C: BLOOD_CORE}
   bloodhook:
-    shape: [' H ', 'RNR', ' L ']
-    ingredients: {H: TRIPWIRE_HOOK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, L: LEAD}
+    shape: [' H ', 'RNR', 'LCL']
+    ingredients: {H: TRIPWIRE_HOOK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, L: LEAD, C: BLOOD_CORE}
   nullblade:
-    shape: [' W ', 'RSR', ' F ']
-    ingredients: {W: WITHER_ROSE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, F: FERMENTED_SPIDER_EYE}
+    shape: [' W ', 'RSR', 'FCF']
+    ingredients: {W: WITHER_ROSE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, F: FERMENTED_SPIDER_EYE, C: BLOOD_CORE}
   meteor_gauntlet:
-    shape: [' M ', 'RNR', ' F ']
-    ingredients: {M: MAGMA_BLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, F: FIRE_CHARGE}
+    shape: [' M ', 'RNR', 'FCF']
+    ingredients: {M: MAGMA_BLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, F: FIRE_CHARGE, C: BLOOD_CORE}
   gravestone:
-    shape: [' O ', 'RNR', ' D ']
-    ingredients: {O: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, D: SOUL_SAND}
+    shape: [' O ', 'RNR', 'DCD']
+    ingredients: {O: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, D: SOUL_SAND, C: BLOOD_CORE}
   chronos:
-    shape: [' C ', 'RNR', ' E ']
-    ingredients: {C: CLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, E: ECHO_SHARD}
+    shape: [' K ', 'RNR', 'ECE']
+    ingredients: {K: CLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, E: ECHO_SHARD, C: BLOOD_CORE}
   thunder_pike:
-    shape: [' L ', 'RNR', ' B ']
-    ingredients: {L: LIGHTNING_ROD, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, B: BLAZE_ROD}
+    shape: [' L ', 'RNR', 'BCB']
+    ingredients: {L: LIGHTNING_ROD, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, B: BLAZE_ROD, C: BLOOD_CORE}
   mirrorfang:
-    shape: [' G ', 'RNR', ' A ']
-    ingredients: {G: TINTED_GLASS, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, A: AMETHYST_SHARD}
+    shape: [' G ', 'RNR', 'ACA']
+    ingredients: {G: TINTED_GLASS, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, A: AMETHYST_SHARD, C: BLOOD_CORE}
   void_scythe:
-    shape: [' W ', 'RSR', ' B ']
-    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, B: BONE_BLOCK}
+    shape: [' W ', 'RSR', 'BCB']
+    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, B: BONE_BLOCK, C: BLOOD_CORE}
   paradox_bow:
-    shape: [' E ', 'RBR', ' N ']
-    ingredients: {E: ECHO_SHARD, R: REDSTONE_BLOCK, B: BOW, N: NETHERITE_INGOT}
+    shape: [' E ', 'RBR', 'NCN']
+    ingredients: {E: ECHO_SHARD, R: REDSTONE_BLOCK, B: BOW, N: NETHERITE_INGOT, C: BLOOD_CORE}
   vampire_fang:
-    shape: [' T ', 'RSR', ' A ']
-    ingredients: {T: GHAST_TEAR, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, A: GOLDEN_APPLE}
+    shape: [' T ', 'RSR', 'ACA']
+    ingredients: {T: GHAST_TEAR, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, A: GOLDEN_APPLE, C: BLOOD_CORE}
   blood_grimoire:
-    shape: [' N ', 'RBR', ' T ']
-    ingredients: {N: NETHERITE_INGOT, R: REDSTONE_BLOCK, B: BOOK, T: TOTEM_OF_UNDYING}
+    shape: [' N ', 'RBR', 'TCT']
+    ingredients: {N: NETHERITE_INGOT, R: REDSTONE_BLOCK, B: BOOK, T: TOTEM_OF_UNDYING, C: BLOOD_CORE}
   blood_knight_helm:
-    shape: [' W ', 'RHR', ' R ']
-    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, H: NETHERITE_HELMET}
+    shape: [' W ', 'RHR', ' C ']
+    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, H: NETHERITE_HELMET, C: BLOOD_CORE}
   blood_knight_cuirass:
-    shape: [' C ', 'RAR', ' R ']
-    ingredients: {C: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, A: NETHERITE_CHESTPLATE}
+    shape: [' O ', 'RAR', ' C ']
+    ingredients: {O: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, A: NETHERITE_CHESTPLATE, C: BLOOD_CORE}
   blood_knight_greaves:
-    shape: [' W ', 'RLR', ' R ']
-    ingredients: {W: NETHER_WART_BLOCK, R: REDSTONE_BLOCK, L: NETHERITE_LEGGINGS}
+    shape: [' W ', 'RLR', ' C ']
+    ingredients: {W: NETHER_WART_BLOCK, R: REDSTONE_BLOCK, L: NETHERITE_LEGGINGS, C: BLOOD_CORE}
   blood_knight_sabatons:
-    shape: [' S ', 'RBR', ' R ']
-    ingredients: {S: SOUL_SAND, R: REDSTONE_BLOCK, B: NETHERITE_BOOTS}
+    shape: [' S ', 'RBR', ' C ']
+    ingredients: {S: SOUL_SAND, R: REDSTONE_BLOCK, B: NETHERITE_BOOTS, C: BLOOD_CORE}

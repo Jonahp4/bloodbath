@@ -21,7 +21,6 @@ import net.unchartedsmp.bloodbath.weapon.Gate;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.WorldBorder;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -35,7 +34,6 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -65,7 +63,7 @@ public final class BloodKnightSet implements Listener {
 		Settings settings = Settings.get();
 		if (!settings.armorEnabled || settings.armorKillHeal <= 0.0
 			|| !(event.getDamageSource().getCausingEntity() instanceof Player killer) || killer == event.getEntity()
-			|| killer.isDead() || BloodArmor.worn(killer) < 2) {
+			|| killer.isDead() || SetBonus.pieces(killer) < 2) {
 			return;
 		}
 		AttributeInstance max = killer.getAttribute(Attribute.MAX_HEALTH);
@@ -83,7 +81,7 @@ public final class BloodKnightSet implements Listener {
 		if (Damage.isAbilityDamage() || event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK
 			|| !settings.armorEnabled || settings.armorBarbDamage <= 0.0
 			|| !(event.getEntity() instanceof Player wearer) || !(event.getDamager() instanceof LivingEntity attacker)
-			|| attacker == wearer || BloodArmor.worn(wearer) < 3 || !Targeting.validTarget(wearer, attacker)) {
+			|| attacker == wearer || SetBonus.pieces(wearer) < 3 || !Targeting.validTarget(wearer, attacker)) {
 			return;
 		}
 		// After this hit has finished (a hit inside the damage event would nest in it).
@@ -104,7 +102,7 @@ public final class BloodKnightSet implements Listener {
 		}
 		double left = player.getHealth() - event.getFinalDamage();
 		if (left <= 0.0 || left > threshold(player) || !Cooldowns.isReady(player, Ability.BLOOD_RAGE)
-			|| BloodArmor.worn(player) < 4) {
+			|| SetBonus.pieces(player) < 4) {
 			return;
 		}
 		// After the hit has landed (and outside the damage event, which the shockwave would re-enter).
@@ -117,7 +115,7 @@ public final class BloodKnightSet implements Listener {
 	}
 
 	private static void rage(Player player) {
-		if (!player.isValid() || player.isDead() || !Cooldowns.isReady(player, Ability.BLOOD_RAGE) || BloodArmor.worn(player) < 4
+		if (!player.isValid() || player.isDead() || !Cooldowns.isReady(player, Ability.BLOOD_RAGE) || SetBonus.pieces(player) < 4
 			|| player.getGameMode() == GameMode.SPECTATOR || !Settings.get().abilitiesAllowedIn(player.getWorld())
 			|| !player.hasPermission(Gate.USE_PERMISSION)) {
 			return;
@@ -130,7 +128,8 @@ public final class BloodKnightSet implements Listener {
 		Cooldowns.start(player, Ability.BLOOD_RAGE);
 		int duration = settings.rageDurationTicks;
 		RAGING.put(player.getUniqueId(), ServerClock.now() + duration);
-		player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, duration, 0, false, true, true));
+		// Strength II: the full set already gives Strength I for as long as it's worn.
+		player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, duration, 1, false, true, true));
 		player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, duration, 0, false, true, true));
 		Location center = player.getLocation();
 		for (LivingEntity target : Targeting.livingInRadius(center, settings.rageRadius, player)) {
@@ -156,7 +155,7 @@ public final class BloodKnightSet implements Listener {
 			}
 			BloodFx.burst(BloodFx.chest(player), BloodFx.BLOOD_FADE, 4, 0.35);
 			if (tick % 4 == 3) {
-				player.playSound(player, BloodFx.HEARTBEAT, 0.9F, 1.1F);
+				BloodFx.playTo(player, BloodFx.HEARTBEAT, 0.9F, 1.1F);
 			}
 			return true;
 		});
@@ -199,8 +198,7 @@ public final class BloodKnightSet implements Listener {
 		if (until != null && until > now) {
 			return Component.text("☠ RAGE", NamedTextColor.RED).append(Component.text(Hud.seconds(until - now), NamedTextColor.GRAY));
 		}
-		ItemStack helmet = player.getInventory().getHelmet();
-		if (helmet == null || helmet.getType() != Material.NETHERITE_HELMET || BloodArmor.worn(player) < 4) {
+		if (!SetBonus.fullSetWearers().contains(player.getUniqueId())) {
 			return null;
 		}
 		long cooling = Cooldowns.remainingTicks(player, Ability.BLOOD_RAGE);
@@ -210,23 +208,26 @@ public final class BloodKnightSet implements Listener {
 		return evenWhenReady ? Component.text("☠ ●", NamedTextColor.DARK_RED) : null;
 	}
 
-	/** Full-set blood drips and Sabatons footprints, for everyone else to see. */
+	/** Full-set blood drips and Sabatons footprints (only wearers are looked at, from the cache). */
 	public static void tick(long now) {
 		Settings settings = Settings.get();
 		if (!settings.armorEnabled || !settings.heldAura) {
 			return;
 		}
-		if (now % STEP_INTERVAL_TICKS == 0) {
-			for (Player player : Bukkit.getOnlinePlayers()) {
-				footprints(player);
+		if (now % STEP_INTERVAL_TICKS == 0 && !SetBonus.sabatonWearers().isEmpty()) {
+			for (UUID id : SetBonus.sabatonWearers()) {
+				Player player = Bukkit.getPlayer(id);
+				if (player != null) {
+					footprints(player);
+				}
 			}
 		}
-		if (now % AURA_INTERVAL_TICKS != 0) {
+		if (now % AURA_INTERVAL_TICKS != 0 || SetBonus.fullSetWearers().isEmpty()) {
 			return;
 		}
-		for (Player player : Bukkit.getOnlinePlayers()) {
-			ItemStack helmet = player.getInventory().getHelmet();
-			if (helmet == null || helmet.getType() != Material.NETHERITE_HELMET || player.isDead() || BloodArmor.worn(player) < 4) {
+		for (UUID id : SetBonus.fullSetWearers()) {
+			Player player = Bukkit.getPlayer(id);
+			if (player == null || player.isDead()) {
 				continue;
 			}
 			Location at = player.getLocation().add(0.0, 0.9, 0.0);
@@ -234,13 +235,13 @@ public final class BloodKnightSet implements Listener {
 			if (now % (AURA_INTERVAL_TICKS * 3) == 0) {
 				BloodFx.ambientForOthers(player, at, BloodFx.BLOOD_FADE, 2, 0.35);
 			}
+			// The wearer sees it running down their legs to the ground, below their line of sight.
+			BloodFx.ambientForSelf(player, at.add(0.0, -0.55, 0.0), BloodFx.DRIP, 1, 0.22);
 		}
 	}
 
 	private static void footprints(Player player) {
-		ItemStack boots = player.getInventory().getBoots();
-		if (boots == null || boots.getType() != Material.NETHERITE_BOOTS || BloodArmor.typeOf(boots) != ArmorPiece.SABATONS
-			|| player.isDead() || player.isSneaking() || player.isFlying() || player.isInsideVehicle() || !onGround(player)) {
+		if (player.isDead() || player.isSneaking() || player.isFlying() || player.isInsideVehicle() || !onGround(player)) {
 			return;
 		}
 		Location feet = player.getLocation();
@@ -250,7 +251,7 @@ public final class BloodKnightSet implements Listener {
 		}
 		LAST_STEP.put(player.getUniqueId(), feet);
 		if (last != null) {
-			BloodFx.ambientForOthers(player, feet.clone().add(0.0, 0.05, 0.0), BloodFx.BLOOD, 2, 0.08);
+			BloodFx.ambient(feet.clone().add(0.0, 0.05, 0.0), BloodFx.BLOOD, 2, 0.08);
 		}
 	}
 

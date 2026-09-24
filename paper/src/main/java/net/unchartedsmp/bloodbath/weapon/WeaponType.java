@@ -32,7 +32,7 @@ public enum WeaponType {
 		"Right-click: hurl charged blood, call", "crimson lightning and ride the bolt."),
 	MIRRORFANG("mirrorfang", "Blood Mirrorfang", Ability.MIRRORFANG, Material.NETHERITE_SWORD, 1, 4.0, 0,
 		"Right-click: a blood mirror of you", "fights beside you."),
-	VOID_SCYTHE("void_scythe", "Hemorrhage Scythe", Ability.VOID_SCYTHE, Material.NETHERITE_SWORD, 12, 1.4, 2031,
+	VOID_SCYTHE("void_scythe", "Hemorrhage Scythe", Ability.VOID_SCYTHE, Material.NETHERITE_SWORD, 12, 1.0, 2031,
 		"Every hit makes the target bleed.", "The 5th hemorrhages them and everything", "around them."),
 	PARADOX_BOW("paradox_bow", "Sanguine Paradox Bow", Ability.PARADOX_BOW, Material.BOW, 0, 0, 384,
 		"A real bow. A fully drawn shot fires", "twice: its echo homes in on whatever", "the arrow hit, or retraces its flight."),

@@ -4,6 +4,9 @@ import java.util.UUID;
 import net.unchartedsmp.bloodbath.BloodbathPlugin;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
+import net.unchartedsmp.bloodbath.armor.SetBonus;
+import net.unchartedsmp.bloodbath.pack.PackState;
+import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -40,6 +43,7 @@ public final class SessionListener implements Listener {
 	public static void welcome(Player player) {
 		Hud.load(player);
 		refreshInventory(player);
+		SetBonus.refresh(player);
 		Recipes.discover(player);
 	}
 
@@ -57,11 +61,14 @@ public final class SessionListener implements Listener {
 		Behaviors.forget(id);
 		Hud.forget(id);
 		BloodKnightSet.forget(id);
+		PackState.forget(id);
+		Damage.forget(id);
 		plugin.weaponListener().forget(id);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onPackStatus(PlayerResourcePackStatusEvent event) {
 		plugin.packs().onStatus(event.getPlayer(), event.getID(), event.getStatus());
+		plugin.bosses().packChanged(event.getPlayer());
 	}
 }

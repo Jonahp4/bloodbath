@@ -308,6 +308,9 @@ public final class ResourcePackService {
 			return;
 		}
 		Settings settings = Settings.get();
+		PackState.set(player.getUniqueId(), status == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED
+			|| status == PlayerResourcePackStatusEvent.Status.ACCEPTED && PackState.hasPack(player)
+			|| status == PlayerResourcePackStatusEvent.Status.DOWNLOADED && PackState.hasPack(player));
 		switch (status) {
 			case DECLINED -> player.sendMessage(settings.prefix
 				.append(Component.text("No pack, no 3D weapons: they'll look like netherite swords. ", NamedTextColor.GRAY))

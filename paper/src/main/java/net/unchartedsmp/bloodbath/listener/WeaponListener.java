@@ -12,6 +12,7 @@ import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
+import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -22,6 +23,7 @@ import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import net.unchartedsmp.bloodbath.weapon.behavior.Mirrorfang;
+import org.bukkit.Keyed;
 import org.bukkit.block.Block;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.AbstractArrow;
@@ -130,6 +132,14 @@ public final class WeaponListener implements Listener {
 		Behaviors.of(type).melee(player, target, event.getFinalDamage());
 	}
 
+	/** Tells {@link Damage} what happened to its own hits, for /bloodbath debug. */
+	@EventHandler(priority = EventPriority.MONITOR)
+	public void onAbilityDamage(EntityDamageEvent event) {
+		if (Damage.isAbilityDamage()) {
+			Damage.observe(event.isCancelled());
+		}
+	}
+
 	// ---- the Paradox Bow ----------------------------------------------------------------------
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -224,7 +234,8 @@ public final class WeaponListener implements Listener {
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onItemSpawn(ItemSpawnEvent event) {
 		Item item = event.getEntity();
-		if (Settings.get().neverDespawn && (Weapons.isWeapon(item.getItemStack()) || BloodArmor.isArmor(item.getItemStack()))) {
+		ItemStack stack = item.getItemStack();
+		if (Settings.get().neverDespawn && (Weapons.isWeapon(stack) || BloodArmor.isArmor(stack) || BloodCore.isCore(stack))) {
 			item.setUnlimitedLifetime(true);
 			item.setInvulnerable(true);
 		}
@@ -237,8 +248,11 @@ public final class WeaponListener implements Listener {
 	 */
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onPrepareCraft(PrepareItemCraftEvent event) {
+		boolean ours = event.getRecipe() instanceof Keyed keyed && keyed.getKey().getNamespace().equals(Keys.WEAPON.getNamespace());
 		for (ItemStack ingredient : event.getInventory().getMatrix()) {
-			if (Weapons.isWeapon(ingredient) || BloodArmor.isArmor(ingredient)) {
+			// A Blood Core is a nether star underneath: keep it out of beacons and every other
+			// vanilla recipe, it only works in ours.
+			if (Weapons.isWeapon(ingredient) || BloodArmor.isArmor(ingredient) || !ours && BloodCore.isCore(ingredient)) {
 				event.getInventory().setResult(null);
 				return;
 			}

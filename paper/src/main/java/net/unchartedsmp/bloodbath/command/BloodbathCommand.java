@@ -16,15 +16,19 @@ import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
+import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.pack.ResourcePackService;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
+import net.unchartedsmp.bloodbath.util.Damage;
+import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -46,9 +50,11 @@ public final class BloodbathCommand implements TabExecutor {
 		new Sub("info", "info <weapon|armor>", "What a weapon or armor piece does", null),
 		new Sub("hud", "hud [on|off]", "Toggle the cooldown line", null),
 		new Sub("pack", "pack", "Get the 3D resource pack again", null),
-		new Sub("give", "give <player> <weapon|armor|all>", "Give weapons and Blood Knight armor", GIVE),
+		new Sub("give", "give <player> <weapon|armor|core [n]|all>", "Give weapons, armor and Blood Cores", GIVE),
 		new Sub("reset", "reset [player]", "Clear cooldowns and clots", ADMIN),
 		new Sub("status", "status", "Pack server, recipes, effects", ADMIN),
+		new Sub("boss", "boss <summon|stop|status>", "The Blood Knight boss fight", ADMIN),
+		new Sub("debug", "debug", "Show why ability hits land or don't", ADMIN),
 		new Sub("reload", "reload", "Reload config.yml", ADMIN));
 
 	private final BloodbathPlugin plugin;
@@ -80,6 +86,8 @@ public final class BloodbathCommand implements TabExecutor {
 			case "reset" -> reset(sender, rest);
 			case "status" -> status(sender);
 			case "reload" -> reload(sender);
+			case "debug" -> debug(sender);
+			case "boss" -> boss(sender, rest);
 			default -> help(sender, label);
 		}
 		return true;
@@ -264,6 +272,20 @@ public final class BloodbathCommand implements TabExecutor {
 		List<WeaponType> types = new ArrayList<>();
 		List<ArmorPiece> pieces = new ArrayList<>();
 		String key = what.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+		if (key.equals("core") || key.startsWith("core_") || key.equals("blood_core") || key.startsWith("blood_core_")) {
+			// "core", "core 16", "blood_core 4"
+			String[] parts = key.split("_");
+			int amount = 1;
+			try {
+				amount = Integer.parseInt(parts[parts.length - 1]);
+			} catch (NumberFormatException ignored) {
+				// no amount: one
+			}
+			for (Player target : targets) {
+				giveCores(target, amount);
+			}
+			return;
+		}
 		if (key.equals("all")) {
 			types.addAll(Arrays.stream(WeaponType.values()).filter(settings::enabled).toList());
 			if (settings.armorEnabled) {
@@ -313,6 +335,11 @@ public final class BloodbathCommand implements TabExecutor {
 
 	public static void giveTo(Player player, ArmorPiece piece) {
 		give(player, BloodArmor.create(piece), piece.displayName());
+	}
+
+	public static void giveCores(Player player, int amount) {
+		ItemStack cores = BloodCore.create(amount);
+		give(player, cores, cores.getAmount() == 1 ? "Blood Core" : cores.getAmount() + " Blood Cores");
 	}
 
 	private static void give(Player player, ItemStack stack, String name) {
@@ -365,6 +392,50 @@ public final class BloodbathCommand implements TabExecutor {
 		line(sender, "Disabled worlds", settings.disabledWorlds.isEmpty() ? "none" : String.join(", ", settings.disabledWorlds));
 	}
 
+	private void boss(CommandSender sender, String[] args) {
+		String action = args.length == 0 ? "status" : args[0].toLowerCase(Locale.ROOT);
+		switch (action) {
+			case "summon" -> {
+				if (!(sender instanceof Player player)) {
+					error(sender, "Stand where it should rise.");
+					return;
+				}
+				Location at = Targeting.lookBlock(player, 24.0).map(hit -> hit.getBlock().getLocation().add(0.5, 1.0, 0.5))
+					.orElse(player.getLocation());
+				at.setYaw(player.getLocation().getYaw() + 180.0F);
+				String refused = plugin.bosses().refusal(at);
+				if (refused != null) {
+					error(sender, refused);
+					return;
+				}
+				plugin.bosses().summon(at);
+				reply(sender, "The Blood Knight is rising at " + at.getBlockX() + " " + at.getBlockY() + " " + at.getBlockZ() + ".");
+			}
+			case "stop" -> {
+				int stopped = sender instanceof Player player && !(args.length > 1 && args[1].equalsIgnoreCase("all"))
+					? plugin.bosses().stop(player.getLocation(), 256.0) : plugin.bosses().stop(null, 0);
+				reply(sender, stopped == 0 ? "No Blood Knight nearby. (/bloodbath boss stop all for every world.)"
+					: "Sent " + stopped + " Blood Knight" + (stopped == 1 ? "" : "s") + " back into the earth.");
+			}
+			default -> {
+				List<String> lines = plugin.bosses().describe();
+				reply(sender, lines.isEmpty() ? "No Blood Knight is abroad. Summon one: sneak and right-click crying obsidian"
+					+ " with a Blood Core, or /bloodbath boss summon." : "Blood Knights: " + String.join("; ", lines));
+			}
+		}
+	}
+
+	private void debug(CommandSender sender) {
+		if (!(sender instanceof Player player)) {
+			error(sender, "Only players can watch hits.");
+			return;
+		}
+		boolean on = Damage.toggleDebug(player.getUniqueId());
+		reply(sender, on
+			? "Watching ability hits: each one is reported in chat with what happened to it. /bb debug again to stop."
+			: "Stopped watching ability hits.");
+	}
+
 	private void reload(CommandSender sender) {
 		plugin.reload();
 		reply(sender, "Reloaded config.yml. Weapons update as players hold them.");
@@ -407,14 +478,15 @@ public final class BloodbathCommand implements TabExecutor {
 			case "info" -> args.length == 2 ? matching(last, Stream.concat(weaponIds(), armorIds())) : List.of();
 			case "hud" -> args.length == 2 ? matching(last, Stream.of("on", "off")) : List.of();
 			case "pack", "reset" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, playerNames(true)) : List.of();
+			case "boss" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, Stream.of("summon", "stop", "status")) : List.of();
 			case "give" -> {
 				if (!sender.hasPermission(GIVE)) {
 					yield List.of();
 				}
 				if (args.length == 2) {
-					yield matching(last, Stream.concat(playerNames(false), Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight"))));
+					yield matching(last, Stream.concat(playerNames(false), Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core"))));
 				}
-				yield args.length == 3 ? matching(last, Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight"))) : List.of();
+				yield args.length == 3 ? matching(last, Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core"))) : List.of();
 			}
 			default -> List.of();
 		};

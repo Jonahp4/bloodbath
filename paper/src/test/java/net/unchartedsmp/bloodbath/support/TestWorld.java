@@ -59,6 +59,48 @@ public final class TestWorld extends WorldMock {
 		spawns.add(new Spawn(particle, new Location(this, x, y, z), receivers == null ? null : List.copyOf(receivers)));
 	}
 
+	/** MockBukkit's wither skeleton lacks the mob controls the Blood Knight uses: spawn ours instead. */
+	@Override
+	@SuppressWarnings("unchecked")
+	public <T extends Entity> T spawn(Location location, Class<T> clazz, java.util.function.Consumer<? super T> function,
+		org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason reason) {
+		if (clazz == org.bukkit.entity.WitherSkeleton.class) {
+			TestKnightSkeleton skeleton = new TestKnightSkeleton(getServer());
+			skeleton.setLocation(location.clone());
+			if (function != null) {
+				function.accept((T) skeleton);
+			}
+			getServer().registerEntity(skeleton);
+			return (T) skeleton;
+		}
+		if (clazz == org.bukkit.entity.ItemDisplay.class) {
+			TestItemDisplay display = new TestItemDisplay(getServer());
+			display.setLocation(location.clone());
+			if (function != null) {
+				function.accept((T) display);
+			}
+			getServer().registerEntity(display);
+			return (T) display;
+		}
+		return super.spawn(location, clazz, function, reason);
+	}
+
+	@Override
+	public org.bukkit.entity.Item dropItem(Location location, org.bukkit.inventory.ItemStack stack,
+		java.util.function.Consumer<? super org.bukkit.entity.Item> function) {
+		TestItem item = new TestItem(getServer(), stack);
+		item.setLocation(location.clone());
+		if (function != null) {
+			function.accept(item);
+		}
+		getServer().registerEntity(item);
+		return item;
+	}
+
+	private org.mockbukkit.mockbukkit.ServerMock getServer() {
+		return org.mockbukkit.mockbukkit.MockBukkit.getMock();
+	}
+
 	/** Hitbox overlap, like Paper (MockBukkit only checks whether the entity's feet are in the box). */
 	@Override
 	public Collection<Entity> getNearbyEntities(BoundingBox box, Predicate<? super Entity> filter) {

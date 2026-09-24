@@ -20,6 +20,10 @@ public final class Keys {
 	public static NamespacedKey MIRROR;
 	/** On players: 1 when they turned the action-bar HUD off. */
 	public static NamespacedKey HUD_OFF;
+	/** On Blood Cores. */
+	public static NamespacedKey CORE;
+	/** On every entity that makes up a Blood Knight boss (its body and its model's parts). */
+	public static NamespacedKey BOSS;
 
 	private Keys() {
 	}
@@ -31,6 +35,8 @@ public final class Keys {
 		KILLS = new NamespacedKey(plugin, "kills");
 		MIRROR = new NamespacedKey(plugin, "mirror");
 		HUD_OFF = new NamespacedKey(plugin, "hud_off");
+		CORE = new NamespacedKey(plugin, "core");
+		BOSS = new NamespacedKey(plugin, "boss");
 	}
 
 	/** A key in the resource pack's namespace, e.g. {@code unchartedsmp:riftblade}. */

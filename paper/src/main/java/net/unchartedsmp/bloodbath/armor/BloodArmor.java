@@ -133,11 +133,35 @@ public final class BloodArmor {
 		lines.add(plain("(2) Bloodlust: kills heal " + hearts(settings.armorKillHeal), NamedTextColor.GRAY));
 		lines.add(plain("(3) Barbed Blood: melee attackers", NamedTextColor.GRAY));
 		lines.add(plain("    take " + hearts(settings.armorBarbDamage) + " back", NamedTextColor.GRAY));
+		if (!settings.fullSetEffects.isEmpty()) {
+			lines.add(plain("(4) While worn: " + effectNames(settings), NamedTextColor.GRAY));
+		}
 		lines.add(plain("(4) Blood Rage: below " + Math.round(settings.rageThreshold * 100) + "% health, gain", NamedTextColor.GRAY));
-		lines.add(plain("    Strength and Resistance and hurl", NamedTextColor.GRAY));
+		lines.add(plain("    Strength II, Resistance and hurl", NamedTextColor.GRAY));
 		lines.add(plain("    enemies back. Every " + Math.round(settings.cooldownTicks(Ability.BLOOD_RAGE) / 20.0) + "s.", NamedTextColor.GRAY));
 		return lines;
 	}
+
+	/** "Strength, Speed, Fire Resistance" (with II, III... for higher levels). */
+	private static String effectNames(Settings settings) {
+		StringBuilder out = new StringBuilder();
+		for (var buff : settings.fullSetEffects.entrySet()) {
+			if (!out.isEmpty()) {
+				out.append(", ");
+			}
+			String key = buff.getKey().getKey().getKey();
+			for (String word : key.split("_")) {
+				out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1)).append(' ');
+			}
+			out.setLength(out.length() - 1);
+			if (buff.getValue() > 0) {
+				out.append(' ').append(ROMAN[Math.min(ROMAN.length - 1, buff.getValue())]);
+			}
+		}
+		return out.toString();
+	}
+
+	private static final String[] ROMAN = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
 
 	private static String hearts(double health) {
 		double hearts = health / 2.0;

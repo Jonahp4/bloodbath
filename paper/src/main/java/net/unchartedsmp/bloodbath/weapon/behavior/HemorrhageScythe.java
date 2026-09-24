@@ -1,6 +1,8 @@
 package net.unchartedsmp.bloodbath.weapon.behavior;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
@@ -14,13 +16,15 @@ import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 /**
- * Hemorrhage Scythe (id {@code void_scythe}): every hit makes the target bleed. The 5th hit within
+ * Hemorrhage Scythe (id {@code void_scythe}): every hit makes the target bleed, and bleeding hurts:
+ * each stack deals half a heart's worth every 1.5s until it fades. The 5th hit within
  * 8s of the last one hemorrhages them for 10 damage and rips 8 damage through everything within
  * 4 blocks. Right-click reaps: a blood arc in front of you that cuts and adds a bleed stack to
  * everything it touches.
@@ -36,7 +40,8 @@ public final class HemorrhageScythe implements WeaponBehavior {
 	private record BleedKey(UUID attacker, UUID target) {
 	}
 
-	private record Bleed(int stacks, long expiresAt, LivingEntity target) {
+	/** {@code nextTick}: when this bleed next hurts, counted from when it was first applied. */
+	private record Bleed(int stacks, long expiresAt, LivingEntity target, long nextTick) {
 	}
 
 	private final Map<BleedKey, Bleed> bleeds = new HashMap<>();
@@ -70,7 +75,8 @@ public final class HemorrhageScythe implements WeaponBehavior {
 			TickScheduler.schedule(0, () -> hemorrhage(player, target));
 			return;
 		}
-		bleeds.put(key, new Bleed(stacks, now + STACK_TIMEOUT_TICKS, target));
+		long nextTick = previous != null && now <= previous.expiresAt() ? previous.nextTick() : now + bleedInterval();
+		bleeds.put(key, new Bleed(stacks, now + STACK_TIMEOUT_TICKS, target, nextTick));
 		lastTarget.put(player.getUniqueId(), key);
 		Location chest = BloodFx.chest(target);
 		BloodFx.burst(chest, BloodFx.BLOOD_FADE, 8 + stacks * 2, 0.25);
@@ -171,10 +177,14 @@ public final class HemorrhageScythe implements WeaponBehavior {
 		return BloodFx.SOUL;
 	}
 
-	/** Bleeding targets visibly drip, more the more stacks they carry. */
+	/** Bleeding targets visibly drip, more the more stacks they carry, and take damage over time. */
 	@Override
 	public void tick(long now) {
-		if (now % 8 != 0 || bleeds.isEmpty()) {
+		if (bleeds.isEmpty()) {
+			return;
+		}
+		bleedDamage(now);
+		if (now % 8 != 0) {
 			return;
 		}
 		int nearDeath = stacksToHemorrhage() - 1;
@@ -187,6 +197,45 @@ public final class HemorrhageScythe implements WeaponBehavior {
 					BloodFx.burst(chest, BloodFx.BLOOD_FADE, 3, 0.3);
 				}
 			}
+		}
+	}
+
+	private int bleedInterval() {
+		return Math.max(10, ticksSetting("bleed-interval", 30));
+	}
+
+	private void bleedDamage(long now) {
+		double perStack = setting("bleed-damage", 0.5);
+		if (perStack <= 0.0) {
+			return;
+		}
+		// Collect first: the damage can kill, and death handlers must not see a map mid-iteration.
+		List<Map.Entry<BleedKey, Bleed>> due = null;
+		for (Map.Entry<BleedKey, Bleed> entry : bleeds.entrySet()) {
+			Bleed bleed = entry.getValue();
+			if (now >= bleed.nextTick() && now <= bleed.expiresAt() && bleed.target().isValid() && !bleed.target().isDead()) {
+				if (due == null) {
+					due = new ArrayList<>();
+				}
+				due.add(entry);
+			}
+		}
+		if (due == null) {
+			return;
+		}
+		int interval = bleedInterval();
+		for (Map.Entry<BleedKey, Bleed> entry : due) {
+			Bleed bleed = entry.getValue();
+			bleeds.replace(entry.getKey(), bleed, new Bleed(bleed.stacks(), bleed.expiresAt(), bleed.target(), now + interval));
+		}
+		for (Map.Entry<BleedKey, Bleed> entry : due) {
+			Player attacker = Bukkit.getPlayer(entry.getKey().attacker());
+			LivingEntity target = entry.getValue().target();
+			if (attacker == null || !Targeting.validTarget(attacker, target)) {
+				continue;
+			}
+			Damage.deal(target, perStack * entry.getValue().stacks(), attacker, type(), null, false);
+			BloodFx.burst(BloodFx.chest(target), BloodFx.SPLATTER, 3, 0.2, 0.05);
 		}
 	}
 

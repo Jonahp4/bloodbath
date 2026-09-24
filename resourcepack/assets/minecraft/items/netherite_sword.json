@@ -80,34 +80,6 @@
           "type": "minecraft:model",
           "model": "unchartedsmp:item/blood_grimoire"
         }
-      },
-      {
-        "when": "bloodbath:blood_knight_helm",
-        "model": {
-          "type": "minecraft:model",
-          "model": "unchartedsmp:item/blood_knight_helm"
-        }
-      },
-      {
-        "when": "bloodbath:blood_knight_cuirass",
-        "model": {
-          "type": "minecraft:model",
-          "model": "unchartedsmp:item/blood_knight_cuirass"
-        }
-      },
-      {
-        "when": "bloodbath:blood_knight_greaves",
-        "model": {
-          "type": "minecraft:model",
-          "model": "unchartedsmp:item/blood_knight_greaves"
-        }
-      },
-      {
-        "when": "bloodbath:blood_knight_sabatons",
-        "model": {
-          "type": "minecraft:model",
-          "model": "unchartedsmp:item/blood_knight_sabatons"
-        }
       }
     ],
     "fallback": {

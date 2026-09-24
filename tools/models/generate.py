@@ -1153,6 +1153,12 @@ def main():
     write_vanilla_overrides(definitions)
     write_armor_overrides(definitions)
     write_knight_equipment()
+    write_blood_core()
+    write_blood_nova()
+    write_boss_bar()
+    write_hud_and_gui()
+    import boss  # the Blood Knight boss model and rig (tools/models/boss.py)
+    boss.main()
     write_tooltip_sprites()
     write_pack_meta()
 
@@ -1184,7 +1190,7 @@ def write_vanilla_overrides(definitions):
             "fallback": fallback,
         }}
 
-    swords = [w for w in definitions if w != "paradox_bow"]
+    swords = [w for w in definitions if w in WEAPONS and w != "paradox_bow"]
     vanilla_bow = {
         "type": "minecraft:condition",
         "property": "minecraft:using_item",
@@ -1204,6 +1210,302 @@ def write_vanilla_overrides(definitions):
         json.dump(select(swords, vanilla_model("netherite_sword")), f, indent=2)
     with open(os.path.join(out, "bow.json"), "w") as f:
         json.dump(select(["paradox_bow"], vanilla_bow), f, indent=2)
+
+
+# The Blood Core: a nether star underneath, drawn as a thorned blood crystal whose heart beats
+# (lub-dub, rest). Animated item texture; the nether star definition swaps it in only for items
+# with custom_model_data "bloodbath:blood_core", so real nether stars keep their look.
+CORE_BEAT = [0.15, 0.95, 0.55, 1.0, 0.6, 0.35, 0.22, 0.15, 0.12, 0.12]
+CORE_FRAME_TICKS = [4, 2, 2, 2, 2, 3, 3, 4, 6, 6]
+
+
+def _core_shape(x, y):
+    ax, ay = abs(x), abs(y)
+    body = ax + ay <= 5.0
+    arm_x = ax <= 7.5 and ay <= 2.3 * (1 - ax / 8.6) + 0.35
+    arm_y = ay <= 7.5 and ax <= 2.3 * (1 - ay / 8.6) + 0.35
+    diag = abs(ax - ay) <= 1.1 and ax + ay <= 8.6
+    return body or arm_x or arm_y or diag
+
+
+def _core_frame(p):
+    c = {k: ImageColor.getrgb(v) for k, v in {
+        "out": "#2a040a", "rim": "#6e0a15", "dark": "#4a0710", "mid": "#7d0c18", "red": "#b3121f",
+        "hi": "#e0303c", "shine": "#ff8a92", "white": "#ffe6e8"}.items()}
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    inside = [[_core_shape(x - 7.5, y - 7.5) for x in range(16)] for y in range(16)]
+    inn = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and inside[y][x]
+    for y in range(16):
+        for x in range(16):
+            if not inside[y][x]:
+                continue
+            dx, dy = x - 7.5, y - 7.5
+            if not (inn(x + 1, y) and inn(x - 1, y) and inn(x, y + 1) and inn(x, y - 1)):
+                lit = (not inn(x - 1, y) or not inn(x, y - 1)) and dx + dy < 0
+                img.putpixel((x, y), c["rim" if lit else "out"] + (255,))
+                continue
+            # Four facets lit from the top left, with ridges along the axes.
+            col = c["hi"] if dx < 0 and dy < 0 else c["red"] if dy < 0 else c["mid"] if dx < 0 else c["dark"]
+            if abs(dx) < 0.6 and dy < 0 or abs(dy) < 0.6 and dx < 0:
+                col = c["shine"] if abs(dx) + abs(dy) > 3 else c["hi"]
+            elif abs(dx) < 0.6 or abs(dy) < 0.6:
+                col = c["mid"]
+            d = abs(dx) + abs(dy)
+            r = 1.6 + 1.4 * p                      # the heart swells with each beat
+            if d <= r:
+                t = d / r
+                col = c["white"] if t < 0.35 and p > 0.5 else c["shine"] if t < 0.6 else c["hi"]
+            elif d <= r + 1.0 and p > 0.45:
+                col = tuple((a + b) // 2 for a, b in zip(col, c["hi"]))
+            img.putpixel((x, y), col + (255,))
+    return img
+
+
+def write_blood_core():
+    tex = os.path.join(ASSETS, "textures", "item")
+    strip = Image.new("RGBA", (16, 16 * len(CORE_BEAT)))
+    for i, p in enumerate(CORE_BEAT):
+        strip.paste(_core_frame(p), (0, 16 * i))
+    strip.save(os.path.join(tex, "blood_core.png"))
+    with open(os.path.join(tex, "blood_core.png.mcmeta"), "w") as f:
+        json.dump({"animation": {"frames": [{"index": i, "time": t} for i, t in enumerate(CORE_FRAME_TICKS)]}}, f, indent=2)
+    with open(os.path.join(ASSETS, "models", "item", "blood_core.json"), "w") as f:
+        json.dump({"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/blood_core"}}, f, indent=1)
+    with open(os.path.join(ASSETS, "items", "blood_core.json"), "w") as f:
+        json.dump({"model": {"type": "minecraft:model", "model": f"{NS}:item/blood_core"}}, f, indent=2)
+    with open(os.path.join(PACK, "assets", "minecraft", "items", "nether_star.json"), "w") as f:
+        json.dump({"model": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "index": 0,
+            "cases": [{"when": "bloodbath:blood_core", "model": {"type": "minecraft:model", "model": f"{NS}:item/blood_core"}}],
+            "fallback": vanilla_model("nether_star"),
+        }}, f, indent=2)
+
+
+# ---- custom HUD, GUI, boss bar and particle art ------------------------------------------
+# All of it is only ever shown to players the plugin knows have the pack loaded.
+
+PAL = {k: ImageColor.getrgb(v) for k, v in {
+    "void": "#0b0506", "deep": "#170709", "well": "#0e0405", "rim": "#5c0b13", "crimson": "#a3121c",
+    "bright": "#e0303c", "glow": "#ff5a64", "pale": "#ffb3b8", "steel": "#3a3a42", "steel_hi": "#6a6a76",
+    "bone": "#c7bca2"}.items()}
+
+
+def _px(img, x, y, key_or_rgb, a=255):
+    rgb = PAL[key_or_rgb] if isinstance(key_or_rgb, str) else key_or_rgb
+    if 0 <= x < img.width and 0 <= y < img.height:
+        img.putpixel((x, y), tuple(rgb) + (a,))
+
+
+def _nova_frame(i, n=16, size=32):
+    """A blood nova: a hot core, then a ring that tears outward into droplets and thins away."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    t = i / (n - 1)
+    ease = 1 - (1 - t) ** 2
+    c = (size - 1) / 2
+    ring = 3 + 11.5 * ease
+    width = max(0.8, 3.2 * (1 - t))
+    for y in range(size):
+        for x in range(size):
+            dx, dy = x - c, y - c
+            d = math.hypot(dx, dy)
+            ang = math.atan2(dy, dx)
+            h = _hash(x, y, i, 7)
+            jag = 1.0 + 0.9 * math.sin(ang * 7 + i * 0.7) * t
+            if abs(d - ring) <= width * jag:
+                # The ring breaks up as it travels.
+                if h > t * 0.7:
+                    col = "pale" if t < 0.2 and abs(d - ring) < 0.6 else "bright" if t < 0.35 else "crimson" if t < 0.85 else "rim"
+                    _px(img, x, y, col)
+            elif d < ring - width and t < 0.3:
+                core = 1 - d / max(1, ring - width)
+                if h < 0.35 + core * 0.6:
+                    _px(img, x, y, "pale" if core > 0.6 and t < 0.15 else "glow" if core > 0.3 else "bright")
+    # Droplets flung past the ring.
+    for k in range(10):
+        ang = k * 2 * math.pi / 10 + _hash(k, 3, 1, 9) * 0.5
+        dist = ring + 2 + 6 * ease * (0.6 + 0.4 * _hash(k, 5, 2, 9))
+        if dist < c and t > 0.1 and _hash(k, i, 4, 9) > t * 0.7:
+            x, y = int(round(c + math.cos(ang) * dist)), int(round(c + math.sin(ang) * dist))
+            col = "bright" if t < 0.5 else "crimson"
+            _px(img, x, y, col)
+            if t < 0.6:
+                _px(img, x + 1, y, col)
+                _px(img, x, y + 1, col)
+    return img
+
+
+def write_blood_nova():
+    """Redraws the warden's sonic boom (nothing else uses it) as a blood nova, 16 frames."""
+    tex = os.path.join(ASSETS, "textures", "particle")
+    os.makedirs(tex, exist_ok=True)
+    names = []
+    for i in range(16):
+        _nova_frame(i).save(os.path.join(tex, f"blood_nova_{i}.png"))
+        names.append(f"{NS}:blood_nova_{i}")
+    out = os.path.join(PACK, "assets", "minecraft", "particles")
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "sonic_boom.json"), "w") as f:
+        json.dump({"textures": names}, f, indent=2)
+
+
+def write_boss_bar():
+    """The Blood Knight's bar: the yellow boss bar (unused by vanilla) redrawn in blood."""
+    out = os.path.join(PACK, "assets", "minecraft", "textures", "gui", "sprites", "boss_bar")
+    os.makedirs(out, exist_ok=True)
+    w, h = 182, 5
+    bg = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    fg = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    for x in range(w):
+        for y in range(h):
+            edge = y in (0, h - 1) or x in (0, w - 1)
+            _px(bg, x, y, "rim" if edge else "well")
+            if edge:
+                _px(fg, x, y, "crimson" if y == 0 else "rim")
+            else:
+                wave = 0.5 + 0.5 * math.sin(x * 0.35) * math.sin(x * 0.07 + 1.3)
+                col = "glow" if y == 1 and wave > 0.55 else "bright" if y == 1 else "crimson" if y == 2 else "rim"
+                if y == 2 and _hash(x, y, 1, 3) > 0.86:
+                    col = "bright"
+                _px(fg, x, y, col)
+    # Little drips hanging off the bottom of the frame.
+    for x in range(6, w - 6, 13):
+        _px(bg, x, h - 1, "crimson")
+    bg.save(os.path.join(out, "yellow_background.png"))
+    fg.save(os.path.join(out, "yellow_progress.png"))
+
+
+# HUD glyphs (font unchartedsmp:hud): blood-drop bar segments and a few icons.
+HUD_GLYPHS = {
+    "\ue000": ("bar_full", [
+        "..#..",
+        ".###.",
+        "#####",
+        "#####",
+        ".###.",
+    ]),
+    "\ue001": ("bar_empty", [
+        "..#..",
+        ".#.#.",
+        "#...#",
+        "#...#",
+        ".###.",
+    ]),
+    "\ue002": ("ready", [
+        "...#...",
+        "..###..",
+        ".#####.",
+        "###o###",
+        "##ooo##",
+        ".#####.",
+        "..###..",
+    ]),
+    "\ue003": ("skull", [
+        ".#####.",
+        "#######",
+        "#.###.#",
+        "#######",
+        ".##.##.",
+        ".#.#.#.",
+    ]),
+}
+
+
+def _glyph(name, rows):
+    img = Image.new("RGBA", (len(rows[0]), len(rows)), (0, 0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch == "#":
+                if name == "bar_empty":
+                    _px(img, x, y, "rim")
+                elif name == "skull":
+                    _px(img, x, y, "bone" if y < 4 else "pale")
+                else:
+                    _px(img, x, y, "glow" if y <= 1 or (x == 1 and y == 2) else "bright" if y < len(rows) - 1 else "crimson")
+            elif ch == "o":
+                _px(img, x, y, "pale")
+    return img
+
+
+# The armory's backdrop (font unchartedsmp:gui): drawn by the container title, under the items.
+GUI_WIDTH = 176
+
+
+def _armory_background(rows, slots):
+    """176 wide, down to just past the last container row. {slot index: style} gets a framed well."""
+    height = 17 + rows * 18 + 4
+    img = Image.new("RGBA", (GUI_WIDTH, height), (0, 0, 0, 0))
+    for y in range(height):
+        for x in range(GUI_WIDTH):
+            n = fbm(x * 0.15, y * 0.15, 0.0, 17)
+            col = tuple(int(a + (b - a) * n * 0.6) for a, b in zip(PAL["void"], PAL["deep"]))
+            border = x < 2 or x >= GUI_WIDTH - 2 or y < 2 or y >= height - 2
+            inner = x in (2, GUI_WIDTH - 3) or y in (2, height - 3)
+            if border:
+                col = PAL["rim"] if (x + y) % 7 else PAL["crimson"]
+            elif inner:
+                col = PAL["crimson"] if y == 2 else PAL["rim"]
+            img.putpixel((x, y), col + (255,))
+    # Blood running down from the top edge.
+    for x in range(4, GUI_WIDTH - 4):
+        length = int(_hash(x // 3, 1, 1, 21) * 9) if _hash(x // 3, 2, 1, 21) > 0.55 else 0
+        for y in range(3, 3 + length):
+            _px(img, x, y, "crimson" if y < 3 + length - 1 else "bright")
+    # A thin crimson rule under the title.
+    for x in range(8, GUI_WIDTH - 8):
+        _px(img, x, 15, "rim")
+    for slot, style in slots.items():
+        sx, sy = 7 + (slot % 9) * 18, 17 + (slot // 9) * 18
+        for y in range(18):
+            for x in range(18):
+                edge = x in (0, 17) or y in (0, 17)
+                if style == "weapon":
+                    col = "rim" if edge else "deep" if x == 1 or y == 1 else "well"
+                    if (x, y) in ((0, 0), (17, 0), (0, 17), (17, 17)):
+                        col = "bright"
+                elif style == "armor":
+                    col = "steel" if edge else "well"
+                    if y == 0 and not x in (0, 17):
+                        col = "steel_hi"
+                elif style == "core":
+                    glow = max(0.0, 1 - math.hypot(x - 8.5, y - 8.5) / 9.0)
+                    col = "bright" if edge else tuple(int(a + (b - a) * glow) for a, b in zip(PAL["well"], PAL["rim"]))
+                else:  # header / close: a quieter well
+                    col = "rim" if edge else "deep"
+                _px(img, sx + x, sy + y, col)
+    return img
+
+
+def write_hud_and_gui():
+    font_tex = os.path.join(ASSETS, "textures", "font")
+    os.makedirs(font_tex, exist_ok=True)
+    providers = []
+    for char, (name, rows) in HUD_GLYPHS.items():
+        _glyph(name, rows).save(os.path.join(font_tex, f"hud_{name}.png"))
+        providers.append({"type": "bitmap", "file": f"{NS}:font/hud_{name}.png", "ascent": len(rows) - 1,
+                          "height": len(rows), "chars": [json.loads('"' + char + '"')]})
+    fonts = os.path.join(ASSETS, "font")
+    os.makedirs(fonts, exist_ok=True)
+    with open(os.path.join(fonts, "hud.json"), "w") as f:
+        json.dump({"providers": providers}, f, indent=2)
+
+    weapon_slots = [10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25]
+    gui = []
+    for rows, char, extra in ((5, "\ue100", {29: "armor", 30: "armor", 32: "armor", 33: "armor", 31: "core", 40: "plain"}),
+                              (4, "\ue101", {31: "plain"})):
+        slots = {s: "weapon" for s in weapon_slots}
+        slots.update(extra)
+        slots[4] = "plain"
+        img = _armory_background(rows, slots)
+        name = f"armory_{rows * 9}"
+        img.save(os.path.join(font_tex, name + ".png"))
+        # ascent 13: the title is drawn 6px down with a 7px ascent, so the art's top meets the GUI's.
+        gui.append({"type": "bitmap", "file": f"{NS}:font/{name}.png", "ascent": 13, "height": img.height,
+                    "chars": [json.loads('"' + char + '"')]})
+    gui.append({"type": "space", "advances": {json.loads('"\\uf001"'): -8, json.loads('"\\uf002"'): -(GUI_WIDTH + 1 - 8)}})
+    with open(os.path.join(fonts, "gui.json"), "w") as f:
+        json.dump({"providers": gui}, f, indent=2)
 
 
 def lerp_rgba(a, b, t):
@@ -1281,14 +1583,15 @@ def write_armor_overrides(definitions):
             }}, f, indent=2)
 
 
-# The worn look: the vanilla humanoid armour layout at 2x (128x64). Clean bevelled gunmetal plates
-# (lit from the top left, like the icons), crimson trims, glowing accents, and only a few
-# deliberate blood drips.
-KS = 2  # texels per armour-texture unit
+# The worn look: the vanilla humanoid armour layout at 4x (256x128), so plates can be shaded
+# properly instead of reading as flat blocks: brushed gunmetal lit from the top left, bevelled
+# rims, rivets, engraved crimson filigree, a real gem at the heart, chainmail rings.
+# Everything below is drawn in model units (1 unit = KS texels) on each face of each box.
+KS = 4  # texels per armour-texture unit
 WORN = {k: hexrgb(v) for k, v in {
-    "o": "#08080a", "d": "#1a1a20", "m": "#2b2b33", "l": "#3b3b45", "h": "#5f5f6c", "s": "#8e8e9c",
-    "t": "#a3121c", "T": "#dc2a36", "t0": "#5c0910", "g": "#ff3b45", "G": "#ffb0b5", "k": "#050304",
-    "blood": "#4a060b", "drop": "#8c0f18",
+    "o": "#07070a", "d": "#17171c", "m": "#2a2a32", "l": "#3a3a44", "h": "#5d5d6a", "s": "#9a9aa8",
+    "t": "#a3121c", "T": "#e0303c", "t0": "#55080f", "g": "#ff3b45", "G": "#ffc0c4", "k": "#040203",
+    "blood": "#3f050a", "drop": "#8c0f18", "leather": "#2e1512", "leather_hi": "#4a221c",
 }.items()}
 
 
@@ -1299,111 +1602,205 @@ def _box_faces(u, v, w, h, d):
 
 
 class _Face:
-    """Draws on one face of a box, in that face's own texel coordinates."""
+    """Draws on one face of a box. Coordinates are model units (0..w, 0..h), from the face's top left."""
 
     def __init__(self, img, x, y, w, h, seed):
         self.img, self.x, self.y, self.w, self.h, self.seed = img, x, y, w, h, seed
+        self.tw, self.th = w * KS, h * KS
 
-    def put(self, px, py, color):
-        if 0 <= px < self.w and 0 <= py < self.h:
-            self.img[self.y + py, self.x + px, :3] = np.clip(color, 0, 255)
-            self.img[self.y + py, self.x + px, 3] = 255
+    def _t(self, u):
+        return int(round(u * KS))
 
-    def plate(self, x0, y0, x1, y1, tone="m"):
-        """A bevelled plate: soft top-to-bottom gradient, lit top/left rims, dark bottom/right."""
+    def put(self, px, py, color, alpha=1.0):
+        if 0 <= px < self.tw and 0 <= py < self.th:
+            gx, gy = self.x * KS + px, self.y * KS + py
+            if alpha < 1.0 and self.img[gy, gx, 3] > 0:
+                color = self.img[gy, gx, :3] * (1 - alpha) + np.asarray(color) * alpha
+            self.img[gy, gx, :3] = np.clip(color, 0, 255)
+            self.img[gy, gx, 3] = 255
+
+    def get(self, px, py):
+        return self.img[self.y * KS + py, self.x * KS + px, :3].copy()
+
+    def plate(self, u0, v0, u1, v1, tone="m", rivets=False):
+        """Brushed gunmetal: a soft top-to-bottom falloff, fine horizontal grain, a lit top/left
+        bevel two texels deep, a dark bottom/right edge, the odd scratch."""
+        x0, y0, x1, y1 = self._t(u0), self._t(v0), self._t(u1), self._t(v1)
         base = WORN[tone]
         for py in range(y0, y1):
+            fy = (py - y0) / max(1, y1 - y0 - 1)
             for px in range(x0, x1):
-                g = 1.12 - 0.24 * (py - y0) / max(1, y1 - y0 - 1)
-                n = 0.95 + 0.1 * _hash(self.x + px, self.y + py, 3, self.seed)
-                c = base * g * n
+                fx = (px - x0) / max(1, x1 - x0 - 1)
+                g = 1.16 - 0.34 * fy - 0.08 * fx
+                grain = 0.94 + 0.12 * value_noise((self.x * KS + px) * 0.35, (self.y * KS + py) * 2.1, 0.0, self.seed)
+                c = base * g * grain
                 if py == y0:
-                    c = base * 0.35 + WORN["h"] * 0.65
+                    c = c * 0.3 + WORN["s"] * 0.7
+                elif py == y0 + 1:
+                    c = c * 0.65 + WORN["h"] * 0.35
                 elif px == x0:
-                    c = c * 1.18
+                    c = c * 1.22
                 if py == y1 - 1:
-                    c = WORN["o"] * 0.6 + base * 0.4
+                    c = WORN["o"] * 0.75 + base * 0.25
+                elif py == y1 - 2:
+                    c = c * 0.7
                 elif px == x1 - 1:
-                    c = c * 0.72
+                    c = c * 0.62
+                self.put(px, py, c)
+        # Scratches: short, pale, diagonal.
+        for k in range(max(1, (x1 - x0) * (y1 - y0) // 180)):
+            sx = x0 + 2 + int(_hash(k, self.seed, x0, y0) * max(1, x1 - x0 - 6))
+            sy = y0 + 3 + int(_hash(self.seed, k, y0, x0) * max(1, y1 - y0 - 7))
+            for i in range(3):
+                if sx + i < x1 - 1 and sy + i < y1 - 2:
+                    self.put(sx + i, sy + i, self.get(sx + i, sy + i) * 0.55 + WORN["h"] * 0.45)
+        if rivets:
+            for rx, ry in ((x0 + 2, y0 + 3), (x1 - 4, y0 + 3), (x0 + 2, y1 - 5), (x1 - 4, y1 - 5)):
+                self.rivet(rx, ry)
+
+    def rivet(self, px, py):
+        self.put(px, py, WORN["s"])
+        self.put(px + 1, py, WORN["h"])
+        self.put(px, py + 1, WORN["h"])
+        self.put(px + 1, py + 1, WORN["o"])
+
+    def trim(self, u0, v0, u1, v1):
+        """A crimson band: lit top edge, shadowed bottom, a notch every so often."""
+        x0, y0, x1, y1 = self._t(u0), self._t(v0), self._t(u1), self._t(v1)
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                f = (py - y0) / max(1, y1 - y0 - 1)
+                c = WORN["T"] * (1 - f) + WORN["t0"] * f if y1 - y0 > 2 else WORN["t"]
+                if py == y0:
+                    c = WORN["T"] * 0.6 + WORN["G"] * 0.4
+                if py == y1 - 1:
+                    c = WORN["t0"] * 0.7
+                if (px - x0) % 10 == 5 and y0 < py < y1 - 1:
+                    c = WORN["t0"]
                 self.put(px, py, c)
 
-    def trim(self, x0, y0, x1, y1=None):
-        """Crimson trim: a bright top line, darker below."""
-        y1 = y0 + 1 if y1 is None else y1
-        for py in range(y0, y1):
-            for px in range(x0, x1):
-                self.put(px, py, WORN["T"] if py == y0 else WORN["t"] if py < y1 - 1 or y1 - y0 == 1 else WORN["t0"])
-
-    def fill(self, x0, y0, x1, y1, key):
-        for py in range(y0, y1):
-            for px in range(x0, x1):
+    def fill(self, u0, v0, u1, v1, key):
+        for py in range(self._t(v0), self._t(v1)):
+            for px in range(self._t(u0), self._t(u1)):
                 self.put(px, py, WORN[key])
 
-    def glow_diamond(self, cx, cy, r):
-        for py in range(self.h):
-            for px in range(self.w):
-                dist = abs(px - cx) + abs(py - cy)
-                if dist <= r - 0.5:
-                    self.put(px, py, WORN["G"] if dist <= 0.6 else WORN["g"])
-                elif dist <= r + 0.6:
+    def gem(self, cu, cv, r):
+        """A round blood gem: a dark setting, a crimson ring, a glowing body, a hot highlight."""
+        cx, cy, rr = cu * KS, cv * KS, r * KS
+        for py in range(int(cy - rr - 3), int(cy + rr + 4)):
+            for px in range(int(cx - rr - 3), int(cx + rr + 4)):
+                d = math.hypot(px + 0.5 - cx, py + 0.5 - cy)
+                if d <= rr:
+                    t = d / rr
+                    c = WORN["G"] * (1 - t) ** 2 + WORN["g"] * (1 - (1 - t) ** 2)
+                    if t > 0.75:
+                        c = c * 0.75
+                    self.put(px, py, c)
+                elif d <= rr + 1.2:
                     self.put(px, py, WORN["k"])
-                elif dist <= r + 1.6:
-                    self.put(px, py, WORN["t"])
+                elif d <= rr + 2.6:
+                    self.put(px, py, WORN["t"] if py < cy else WORN["t0"])
+        self.put(int(cx - rr * 0.4), int(cy - rr * 0.45), WORN["G"])
+        self.put(int(cx - rr * 0.4) + 1, int(cy - rr * 0.45), (WORN["G"] + WORN["g"]) / 2)
 
-    def drip(self, px, py, length):
-        for i in range(length):
+    def engrave(self, points, color="t0"):
+        """A thin engraved line (in units): a dark groove with a lit lip beneath it."""
+        for (u0, v0), (u1, v1) in zip(points, points[1:]):
+            steps = int(max(abs(u1 - u0), abs(v1 - v0)) * KS * 2) + 1
+            for i in range(steps + 1):
+                t = i / steps
+                px, py = int(round((u0 + (u1 - u0) * t) * KS)), int(round((v0 + (v1 - v0) * t) * KS))
+                self.put(px, py, WORN[color])
+                self.put(px, py + 1, self.get(min(px, self.tw - 1), min(py + 1, self.th - 1)) * 0.6 + WORN["h"] * 0.4
+                         if py + 1 < self.th else WORN["h"])
+
+    def swirl(self, cu, cv, size, mirror=False):
+        """A curling filigree flourish."""
+        pts = []
+        for i in range(24):
+            t = i / 23
+            a = t * math.pi * 2.2
+            r = size * (1 - t * 0.75)
+            pts.append((cu + (-1 if mirror else 1) * math.cos(a) * r, cv + math.sin(a) * r * 0.8 + t * size * 0.4))
+        self.engrave(pts)
+
+    def mail(self, u0, v0, u1, v1):
+        """Chainmail: rows of little rings, alternate rows offset."""
+        for py in range(self._t(v0), self._t(v1)):
+            for px in range(self._t(u0), self._t(u1)):
+                row = py // 2
+                cx = (px + (row % 2)) % 3
+                ring = (cx != 1) != (py % 2 == 1)
+                c = WORN["h"] * 0.8 if ring and py % 2 == 0 else WORN["m"] if ring else WORN["o"]
+                self.put(px, py, c)
+
+    def drip(self, u, v, length):
+        px, py = self._t(u), self._t(v)
+        n = int(length * KS)
+        for i in range(n):
             self.put(px, py + i, WORN["blood"])
-        self.put(px, py + length, WORN["drop"])
+            if i < n - 2:
+                self.put(px + 1, py + i, WORN["blood"], 0.5)
+        self.put(px, py + n, WORN["drop"])
+        self.put(px + 1, py + n, WORN["drop"], 0.6)
+        self.put(px, py + n + 1, WORN["drop"], 0.7)
 
-    def mail(self, x0, y0, x1, y1):
-        """Dark chainmail: a fine checker of two dark tones."""
-        for py in range(y0, y1):
-            for px in range(x0, x1):
-                self.put(px, py, WORN["m"] * 0.85 if (px + py) % 2 == 0 else WORN["d"] * 0.8)
+    def holes(self, u0, v0, cols, rows, gap):
+        for r in range(rows):
+            for c in range(cols):
+                px, py = self._t(u0 + c * gap), self._t(v0 + r * gap)
+                self.put(px, py, WORN["k"])
+                self.put(px + 1, py, WORN["k"])
+                self.put(px, py + 1, WORN["k"])
+                self.put(px + 1, py + 1, WORN["o"])
+                self.put(px, py + 2, WORN["h"])
+                self.put(px + 1, py + 2, WORN["h"])
 
 
 def _faces(img, u, v, w, h, d, seed):
-    return {face: _Face(img, fx * KS, fy * KS, fw * KS, fh * KS, seed + i)
+    return {face: _Face(img, fx, fy, fw, fh, seed + i)
             for i, (face, (fx, fy, fw, fh)) in enumerate(_box_faces(u, v, w, h, d).items())}
 
 
 def _paint_helm(img):
     f = _faces(img, 0, 0, 8, 8, 8, 11)
-    front = f["front"]                                    # 16x16
-    front.plate(0, 0, 16, 4, "l")                         # brow
-    front.trim(0, 4, 16, 6)                               # the band
-    front.fill(0, 6, 16, 8, "k")                          # visor slit
-    for x in (3, 4, 5, 10, 11, 12):                       # eyes
-        front.put(x, 6, WORN["G"] if x in (4, 11) else WORN["g"])
-        front.put(x, 7, WORN["g"] * 0.75)
-    front.plate(0, 8, 7, 16, "l")
-    front.plate(7, 8, 9, 16, "h")                         # nose ridge
-    front.plate(9, 8, 16, 16, "m")
-    for x in (3, 5, 10, 12):                              # breathing holes
-        for y in (10, 12):
-            front.put(x, y, WORN["k"])
-    for face, near_front in (("right", 15), ("left", 0)):
+    front = f["front"]
+    front.plate(0, 0, 8, 2.1, "l")                        # brow
+    front.trim(0, 2.1, 8, 2.8)                            # the band
+    front.fill(0, 2.8, 8, 3.8, "k")                       # visor slit
+    for cu in (1.9, 6.1):                                 # burning eyes
+        for py in range(front._t(2.9), front._t(3.7)):
+            for px in range(front._t(cu - 1.0), front._t(cu + 1.0)):
+                d = math.hypot((px + 0.5) / KS - cu, ((py + 0.5) / KS - 3.3) * 2.2)
+                if d < 1.0:
+                    front.put(px, py, WORN["G"] * (1 - d) + WORN["g"] * d if d > 0.3 else WORN["G"])
+    front.plate(0, 3.8, 3.7, 8, "l", rivets=True)         # cheek plates, with a raised nose ridge
+    front.plate(4.3, 3.8, 8, 8, "m", rivets=True)
+    front.plate(3.7, 3.8, 4.3, 8, "h")
+    front.holes(0.9, 4.7, 3, 4, 0.8)
+    front.holes(5.0, 4.7, 3, 4, 0.8)
+    for face, near_front in (("right", True), ("left", False)):
         side = f[face]
-        side.plate(0, 0, 16, 4, "m")
-        side.trim(0, 4, 16, 6)
-        side.plate(0, 6, 16, 16, "m")
-        lo, hi = (11, 16) if near_front == 15 else (0, 5)
-        side.fill(lo, 6, hi, 8, "k")                      # the slit wraps round
-        seam = 10 if near_front == 15 else 5
-        side.fill(seam, 8, seam + 1, 16, "o")             # cheek guard
-        side.put(seam + (-2 if near_front == 15 else 2), 11, WORN["s"])   # rivet
-        side.put(seam + (-2 if near_front == 15 else 2), 14, WORN["s"])
+        side.plate(0, 0, 8, 2.1, "m")
+        side.trim(0, 2.1, 8, 2.8)
+        side.plate(0, 2.8, 8, 8, "m")
+        lo, hi = (5.6, 8) if near_front else (0, 2.4)
+        side.fill(lo, 2.8, hi, 3.8, "k")                  # the slit wraps round
+        cheek = (4.6, 3.8, 8, 8) if near_front else (0, 3.8, 3.4, 8)
+        side.plate(*cheek, "l", rivets=True)              # cheek guard
+        side.engrave([(1.0, 5.0), (2.5, 4.4), (4.0, 5.2)] if near_front else [(4.0, 5.0), (5.5, 4.4), (7.0, 5.2)])
     back = f["back"]
-    back.plate(0, 0, 16, 4, "m")
-    back.trim(0, 4, 16, 6)
-    back.plate(0, 6, 16, 10, "m")
-    back.plate(0, 10, 16, 13, "l")                        # neck guard lames
-    back.plate(0, 13, 16, 16, "m")
+    back.plate(0, 0, 8, 2.1, "m")
+    back.trim(0, 2.1, 8, 2.8)
+    back.plate(0, 2.8, 8, 5.0, "m")
+    back.plate(0, 5.0, 8, 6.5, "l")                       # neck guard lames
+    back.plate(0, 6.5, 8, 8, "m")
     top = f["top"]
-    top.plate(0, 0, 16, 16, "l")
-    top.trim(7, 0, 9, 16)                                 # crest ridge
-    top.fill(9, 0, 10, 16, "o")
-    f["bottom"].fill(0, 0, 16, 16, "d")
+    top.plate(0, 0, 8, 8, "l")
+    top.trim(3.5, 0, 4.5, 8)                              # crest ridge
+    top.engrave([(1.5, 1.0), (1.2, 4.0), (1.8, 7.0)])
+    top.engrave([(6.5, 1.0), (6.8, 4.0), (6.2, 7.0)])
+    f["bottom"].fill(0, 0, 8, 8, "d")
 
 
 def _paint_torso(img, u, v, seed, legs_only=False):
@@ -1412,102 +1809,102 @@ def _paint_torso(img, u, v, seed, legs_only=False):
         # Leggings only show the belt and faulds at the bottom of the body box.
         for face in ("front", "back", "left", "right"):
             s = f[face]
-            s.fill(0, 16, s.w, 18, "d")                   # belt
-            s.fill(0, 16, s.w, 17, "m")
-            s.plate(0, 18, s.w, 21, "m")
-            s.plate(0, 21, s.w, 24, "l")
-            s.trim(0, 23, s.w)
+            s.fill(0, 8, s.w, 9.2, "leather")
+            s.fill(0, 8, s.w, 8.3, "leather_hi")
+            s.plate(0, 9.2, s.w, 10.6, "m")
+            s.plate(0, 10.6, s.w, 12, "l")
+            s.trim(0, 11.5, s.w, 12)
         buckle = f["front"]
-        buckle.fill(6, 16, 10, 18, "s")
-        buckle.put(7, 16, WORN["G"])
-        buckle.put(8, 16, WORN["g"])
-        buckle.put(7, 17, WORN["g"])
-        buckle.put(8, 17, WORN["g"] * 0.7)
+        buckle.fill(3.1, 7.9, 4.9, 9.3, "h")
+        buckle.gem(4.0, 8.6, 0.45)
         return
-    front = f["front"]                                    # 16x24
-    front.plate(0, 0, 16, 2, "d")                         # gorget
-    front.trim(0, 2, 16)
-    front.plate(0, 3, 8, 14, "l")                         # breastplate halves
-    front.plate(8, 3, 16, 14, "m")
-    front.glow_diamond(7.5, 8.0, 2.0)                     # the Knight's blood core
-    front.drip(9, 12, 3)
-    front.drip(5, 13, 2)
-    for y0 in (14, 17, 20):                               # lames
-        front.plate(0, y0, 16, y0 + 3, "m" if y0 != 17 else "l")
-    front.trim(0, 23, 16)
+    front = f["front"]
+    front.plate(0, 0, 8, 1.0, "d")                        # gorget
+    front.trim(0, 1.0, 8, 1.5)
+    front.plate(0, 1.5, 4.1, 6.8, "l", rivets=True)       # breastplate halves
+    front.plate(3.9, 1.5, 8, 6.8, "m", rivets=True)
+    front.swirl(2.0, 3.3, 1.2)
+    front.swirl(6.0, 3.3, 1.2, mirror=True)
+    front.gem(4.0, 4.3, 1.05)                             # the Knight's blood, still glowing
+    front.drip(4.55, 5.5, 1.3)
+    front.drip(2.6, 6.2, 0.9)
+    for v0 in (6.8, 8.5, 10.2):                           # lames
+        front.plate(0, v0, 8, v0 + 1.8, "m" if v0 != 8.5 else "l")
+    front.trim(0, 11.5, 8, 12)
     back = f["back"]
-    back.plate(0, 0, 16, 14, "m")
-    back.trim(7, 1, 9, 13)                                # spine
-    back.fill(9, 1, 10, 13, "o")
-    for y0 in (14, 17, 20):
-        back.plate(0, y0, 16, y0 + 3, "m")
-    back.trim(0, 23, 16)
+    back.plate(0, 0, 8, 6.8, "m", rivets=True)
+    back.trim(3.6, 0.5, 4.4, 6.5)                         # spine
+    back.engrave([(1.0, 1.5), (2.2, 3.2), (1.2, 5.5)])
+    back.engrave([(7.0, 1.5), (5.8, 3.2), (6.8, 5.5)])
+    for v0 in (6.8, 8.5, 10.2):
+        back.plate(0, v0, 8, v0 + 1.8, "m")
+    back.trim(0, 11.5, 8, 12)
     for face in ("left", "right"):
         s = f[face]
-        s.plate(0, 0, 8, 14, "m")
-        for y0 in (14, 17, 20):
-            s.plate(0, y0, 8, y0 + 3, "m")
-        s.trim(0, 23, 8)
+        s.plate(0, 0, 4, 6.8, "m")
+        for v0 in (6.8, 8.5, 10.2):
+            s.plate(0, v0, 4, v0 + 1.8, "m")
+        s.trim(0, 11.5, 4, 12)
     top = f["top"]
-    top.plate(0, 0, 16, 8, "l")
-    top.fill(5, 0, 11, 2, "d")                            # collar
-    f["bottom"].fill(0, 0, 16, 8, "d")
+    top.plate(0, 0, 8, 4, "l")
+    top.fill(2.5, 0, 5.5, 1.2, "d")                       # collar
+    f["bottom"].fill(0, 0, 8, 4, "d")
 
 
 def _paint_arm(img):
     f = _faces(img, 40, 16, 4, 12, 4, 37)
     for face in ("front", "back", "left", "right"):
-        s = f[face]                                       # 8x24
-        s.plate(0, 0, 8, 4, "l")                          # pauldron, two layers
-        s.trim(0, 4, 8)
-        s.plate(0, 5, 8, 8, "m")
-        s.fill(0, 8, 8, 9, "t0")
-        s.mail(0, 9, 8, 14)                               # upper arm
-        s.trim(0, 14, 8)
-        s.plate(0, 15, 8, 24, "m")                        # vambrace
+        s = f[face]
+        s.plate(0, 0, 4, 2.2, "l")                        # pauldron, two layers
+        s.trim(0, 2.2, 4, 2.7)
+        s.plate(0, 2.7, 4, 4.3, "m")
+        s.fill(0, 4.3, 4, 4.6, "t0")
+        s.mail(0, 4.6, 4, 7.0)                            # upper arm
+        s.trim(0, 7.0, 4, 7.5)
+        s.plate(0, 7.5, 4, 12, "m")                       # vambrace
+        s.engrave([(0.6, 8.2), (2.0, 8.8), (3.4, 8.2)])
         if face in ("front", "right"):
-            for x in range(2, 6):
-                s.put(x, 19, WORN["g"] if x in (3, 4) else WORN["g"] * 0.7)
+            for px in range(s._t(1.0), s._t(3.0)):
+                for py in range(s._t(9.6), s._t(10.0)):
+                    s.put(px, py, WORN["g"] if s._t(1.4) <= px < s._t(2.6) else WORN["t"])
+        s.trim(0, 11.6, 4, 12)
     top = f["top"]
-    top.plate(0, 0, 8, 8, "l")
-    for i in range(8):                                    # crimson rim round the pauldron top
-        for x, y in ((i, 0), (i, 7), (0, i), (7, i)):
-            top.put(x, y, WORN["t"])
-    f["bottom"].fill(0, 0, 8, 8, "d")
+    top.plate(0, 0, 4, 4, "l", rivets=True)
+    top.trim(0, 0, 4, 0.35)
+    f["bottom"].fill(0, 0, 4, 4, "d")
 
 
 def _paint_boots(img):
     f = _faces(img, 0, 16, 4, 12, 4, 53)
     for face in ("front", "back", "left", "right"):
-        s = f[face]                                       # only the lowest 10 texels show
-        s.trim(0, 14, 8, 16)                              # cuff
-        s.plate(0, 16, 8, 20, "m")
-        s.plate(0, 20, 8, 24, "l" if face == "front" else "m")
-        s.fill(0, 23, 8, 24, "o")                         # sole edge
+        s = f[face]                                       # only the lowest 5 units show
+        s.trim(0, 7.0, 4, 7.8)                            # cuff
+        s.plate(0, 7.8, 4, 10.0, "m")
+        s.plate(0, 10.0, 4, 12, "l" if face == "front" else "m", rivets=face == "front")
+        s.fill(0, 11.6, 4, 12, "o")                       # sole edge
     toe = f["front"]
-    toe.put(3, 21, WORN["G"])
-    toe.put(4, 21, WORN["g"])
-    toe.put(3, 22, WORN["g"] * 0.7)
-    toe.put(4, 22, WORN["g"] * 0.7)
-    f["right"].put(5, 18, WORN["s"])                      # strap buckles
-    f["left"].put(2, 18, WORN["s"])
-    f["bottom"].fill(0, 0, 8, 8, "d")
+    toe.gem(2.0, 10.9, 0.4)
+    f["right"].rivet(f["right"]._t(3.0), f["right"]._t(9.0))
+    f["left"].rivet(f["left"]._t(0.8), f["left"]._t(9.0))
+    f["bottom"].fill(0, 0, 4, 4, "d")
 
 
 def _paint_legs(img):
     f = _faces(img, 0, 16, 4, 12, 4, 79)
     for face in ("front", "back", "left", "right"):
-        s = f[face]                                       # 8x24
-        s.plate(0, 0, 8, 10, "m")                         # thigh
-        s.plate(0, 10, 8, 15, "l" if face == "front" else "m")   # knee cop
-        s.plate(0, 15, 8, 24, "m")                        # greave
+        s = f[face]
+        s.plate(0, 0, 4, 5.0, "m")                        # thigh
+        s.plate(0, 5.0, 4, 7.4, "l" if face == "front" else "m")   # knee cop
+        s.plate(0, 7.4, 4, 12, "m")                       # greave
     for face in ("front", "left", "right"):
-        f[face].trim(0, 9, 8)                             # above the knee
+        f[face].trim(0, 4.5, 4, 5.0)                      # above the knee
     knee = f["front"]
-    knee.glow_diamond(3.5, 12.5, 1.5)
-    knee.plate(3, 16, 5, 23, "h")                         # shin ridge
-    knee.drip(2, 15, 2)
-    f["bottom"].fill(0, 0, 8, 8, "d")
+    knee.swirl(1.0, 1.4, 0.8)
+    knee.swirl(3.0, 1.4, 0.8, mirror=True)
+    knee.gem(2.0, 6.2, 0.55)
+    knee.plate(1.7, 8.0, 2.3, 11.5, "h")                  # shin ridge
+    knee.drip(1.2, 7.4, 0.8)
+    f["bottom"].fill(0, 0, 4, 4, "d")
 
 
 def write_knight_equipment():
@@ -1532,6 +1929,55 @@ def write_knight_equipment():
     with open(os.path.join(eq, "blood_knight.json"), "w") as f:
         json.dump({"layers": {"humanoid": [{"texture": f"{NS}:blood_knight"}],
                               "humanoid_leggings": [{"texture": f"{NS}:blood_knight"}]}}, f, indent=2)
+
+
+# The Blood Core: a nether star underneath, drawn as a thorned blood crystal whose heart beats
+# (lub-dub, rest). Animated item texture; the nether star definition swaps it in only for items
+# with custom_model_data "bloodbath:blood_core", so real nether stars keep their look.
+CORE_BEAT = [0.15, 0.95, 0.55, 1.0, 0.6, 0.35, 0.22, 0.15, 0.12, 0.12]
+CORE_FRAME_TICKS = [4, 2, 2, 2, 2, 3, 3, 4, 6, 6]
+
+
+def _core_shape(x, y):
+    ax, ay = abs(x), abs(y)
+    body = ax + ay <= 5.0
+    arm_x = ax <= 7.5 and ay <= 2.3 * (1 - ax / 8.6) + 0.35
+    arm_y = ay <= 7.5 and ax <= 2.3 * (1 - ay / 8.6) + 0.35
+    diag = abs(ax - ay) <= 1.1 and ax + ay <= 8.6
+    return body or arm_x or arm_y or diag
+
+
+def _core_frame(p):
+    c = {k: ImageColor.getrgb(v) for k, v in {
+        "out": "#2a040a", "rim": "#6e0a15", "dark": "#4a0710", "mid": "#7d0c18", "red": "#b3121f",
+        "hi": "#e0303c", "shine": "#ff8a92", "white": "#ffe6e8"}.items()}
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    inside = [[_core_shape(x - 7.5, y - 7.5) for x in range(16)] for y in range(16)]
+    inn = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and inside[y][x]
+    for y in range(16):
+        for x in range(16):
+            if not inside[y][x]:
+                continue
+            dx, dy = x - 7.5, y - 7.5
+            if not (inn(x + 1, y) and inn(x - 1, y) and inn(x, y + 1) and inn(x, y - 1)):
+                lit = (not inn(x - 1, y) or not inn(x, y - 1)) and dx + dy < 0
+                img.putpixel((x, y), c["rim" if lit else "out"] + (255,))
+                continue
+            # Four facets lit from the top left, with ridges along the axes.
+            col = c["hi"] if dx < 0 and dy < 0 else c["red"] if dy < 0 else c["mid"] if dx < 0 else c["dark"]
+            if abs(dx) < 0.6 and dy < 0 or abs(dy) < 0.6 and dx < 0:
+                col = c["shine"] if abs(dx) + abs(dy) > 3 else c["hi"]
+            elif abs(dx) < 0.6 or abs(dy) < 0.6:
+                col = c["mid"]
+            d = abs(dx) + abs(dy)
+            r = 1.6 + 1.4 * p                      # the heart swells with each beat
+            if d <= r:
+                t = d / r
+                col = c["white"] if t < 0.35 and p > 0.5 else c["shine"] if t < 0.6 else c["hi"]
+            elif d <= r + 1.0 and p > 0.45:
+                col = tuple((a + b) // 2 for a, b in zip(col, c["hi"]))
+            img.putpixel((x, y), col + (255,))
+    return img
 
 
 PACK_DESCRIPTION = "\u00a74Bloodbath\u00a7r 3D weapons"

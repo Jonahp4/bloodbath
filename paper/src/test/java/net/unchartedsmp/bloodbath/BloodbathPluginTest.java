@@ -17,6 +17,8 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import com.destroystokyo.paper.event.player.PlayerArmorChangeEvent;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -32,10 +34,14 @@ import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
+import net.unchartedsmp.bloodbath.core.BloodCore;
+import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
 import net.unchartedsmp.bloodbath.hud.Hud;
+import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.pack.ResourcePackService;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
+import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.support.TestArrow;
 import net.unchartedsmp.bloodbath.support.TestPlayer;
@@ -47,8 +53,10 @@ import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import net.unchartedsmp.bloodbath.weapon.behavior.Mirrorfang;
 import org.bukkit.Location;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.BlockFace;
@@ -56,6 +64,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.WitherSkeleton;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -72,10 +83,12 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.AfterEach;
@@ -701,20 +714,224 @@ class BloodbathPluginTest {
 	}
 
 	@Test
-	void yourOwnWeaponsAuraStaysOutOfYourFace() {
+	void yourOwnWeaponsAuraIsSmallAndBelowYourEyes() {
 		TestPlayer alex = server.addTestPlayer("Alex");
 		stand(alex, 3.5, 0.5, 90.0F, 0.0F);
 		hold(player, WeaponType.RIFTBLADE);
 		world.spawns.clear();
 		ticks(60);
 		Location eyes = player.getEyeLocation();
-		List<TestWorld.Spawn> close = world.spawns.stream().filter(s -> s.at().distance(eyes) < 1.6).toList();
-		assertFalse(close.isEmpty(), "the aura is there");
-		for (TestWorld.Spawn spawn : close) {
-			assertNotNull(spawn.receivers(), spawn.particle() + " went to everyone, the holder included");
-			assertFalse(spawn.receivers().contains(player), spawn.particle() + " in the holder's face");
-			assertTrue(spawn.receivers().contains(alex), "others see it");
+		List<TestWorld.Spawn> mine = world.spawns.stream().filter(s -> s.receivers() != null && s.receivers().contains(player)).toList();
+		assertFalse(mine.isEmpty(), "the holder sees their weapon drip");
+		for (TestWorld.Spawn spawn : mine) {
+			assertTrue(spawn.particle() == Particle.FALLING_DUST || spawn.particle() == Particle.DUST, spawn.particle() + " for the holder");
+			assertTrue(eyes.getY() - spawn.at().getY() > 0.8, "below the line of sight: " + spawn.at());
+			assertEquals(List.of(player), spawn.receivers(), "the holder's own version is theirs alone");
 		}
+		assertTrue(world.spawns.stream().anyMatch(s -> s.receivers() != null && s.receivers().contains(alex)
+			&& s.particle() == Particle.DUST_COLOR_TRANSITION), "others see the full aura");
+	}
+
+	@Test
+	void particlesOnlyGoToPlayersInRangeWithLessDetailFarAway() {
+		TestPlayer near = server.addTestPlayer("Near");
+		stand(near, 10.5, 0.5, 0.0F, 0.0F);
+		TestPlayer mid = server.addTestPlayer("Mid");
+		stand(mid, 40.5, 0.5, 0.0F, 0.0F);
+		TestPlayer far = server.addTestPlayer("Far");
+		stand(far, 500.5, 0.5, 0.0F, 0.0F);
+		world.spawns.clear();
+		world.particles = 0;
+		BloodFx.burst(new Location(world, 0.5, 6.0, 0.5), BloodFx.BLOOD, 40, 0.3);
+		assertTrue(world.spawns.stream().noneMatch(s -> s.receivers() == null || s.receivers().contains(far)), "not sent 500 blocks away");
+		assertTrue(world.spawns.stream().anyMatch(s -> s.receivers().contains(near)));
+		assertTrue(world.spawns.stream().anyMatch(s -> s.receivers().contains(mid)));
+		assertEquals(40 + 20, world.particles, "full detail up close, half at mid range");
+	}
+
+	@Test
+	void abilityHitsDontSwallowYourNextSwing() {
+		TestZombie zombie = zombie(1.5, 0.5);
+		zombie.setNoDamageTicks(0);
+		Damage.deal(zombie, 4.0, player, WeaponType.VOID_SCYTHE);
+		assertEquals(16.0, zombie.getHealth(), 1.0E-9);
+		assertEquals(0, zombie.getNoDamageTicks(), "no i-frames from an ability hit");
+		zombie.setNoDamageTicks(15);
+		Damage.deal(zombie, 4.0, player, WeaponType.VOID_SCYTHE);
+		assertEquals(15, zombie.getNoDamageTicks(), "and a melee hit's own i-frames are kept");
+	}
+
+	@Test
+	void bleedingHurtsOverTime() {
+		TestZombie zombie = zombie(1.5, 0.5);
+		hold(player, WeaponType.VOID_SCYTHE);
+		melee(player, zombie, 1.0);
+		melee(player, zombie, 1.0);
+		double before = zombie.getHealth();
+		ticks(31);
+		assertEquals(before - 1.0, zombie.getHealth(), 1.0E-9, "two stacks, half a heart each");
+		assertEquals(0.0, zombie.getVelocity().length(), 1.0E-9, "bleeding doesn't knock back");
+	}
+
+	@Test
+	void theScytheSwingsAtOneAttackPerSecond() {
+		assertEquals(1.0, WeaponType.VOID_SCYTHE.attackSpeed(), 1.0E-9);
+		ItemStack scythe = Weapons.create(WeaponType.VOID_SCYTHE);
+		assertEquals(-3.0, modifier(scythe, Attribute.ATTACK_SPEED), 1.0E-9, "4 base + -3 = 1");
+	}
+
+	@Test
+	void debugReportsWhyAHitDidntLand() {
+		TestZombie zombie = zombie(1.5, 0.5);
+		player.performCommand("bloodbath debug");
+		chat(player);
+		Damage.deal(zombie, 3.0, player, WeaponType.RIFTBLADE);
+		List<String> said = chat(player);
+		assertTrue(any(said, "hit, health 20.0"), said.toString());
+		// A protection plugin that cancels the hit.
+		server.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+			@org.bukkit.event.EventHandler(priority = org.bukkit.event.EventPriority.HIGH)
+			public void protect(EntityDamageEvent event) {
+				event.setCancelled(true);
+			}
+		}, plugin);
+		Damage.deal(zombie, 3.0, player, WeaponType.RIFTBLADE);
+		assertTrue(any(chat(player), "CANCELLED by another plugin"));
+		assertEquals(17.0, zombie.getHealth(), 1.0E-9);
+	}
+
+	// ---- the Blood Knight ----------------------------------------------------------------------
+
+	private WitherSkeleton knight() {
+		return world.getEntitiesByClass(WitherSkeleton.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)).findFirst().orElse(null);
+	}
+
+	private long bossParts() {
+		return world.getEntitiesByClass(ItemDisplay.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE) && e.isValid()).count();
+	}
+
+	private void summonKnight() {
+		stand(player, 0.5, 0.5, 0.0F, 30.0F);
+		assertTrue(plugin.bosses().summon(new Location(world, 0.5, 5.0, 6.5)));
+		ticks(Settings.get().boss.warningTicks() + 1);
+	}
+
+	@Test
+	void theBloodKnightRisesFightsAndFalls() {
+		summonKnight();
+		WitherSkeleton knight = knight();
+		assertNotNull(knight, "it rose");
+		assertTrue(knight.isInvisible(), "the model is its body");
+		assertFalse(knight.isPersistent(), "never saved to disk");
+		assertEquals(38, bossParts(), "one display per model part");
+		assertTrue(knight.isInvulnerable(), "untouchable while it rises");
+		ticks(61);
+		assertFalse(knight.isInvulnerable());
+
+		double before = knight.getHealth();
+		Damage.deal(knight, 50.0, player, WeaponType.RIFTBLADE);
+		assertEquals(before - 50.0, knight.getHealth(), 1.0E-6);
+		Damage.deal(knight, 10000.0, player, WeaponType.RIFTBLADE);
+		assertTrue(knight.isDead());
+		ticks(56);
+		List<Item> loot = world.getEntitiesByClass(Item.class).stream().toList();
+		assertTrue(loot.stream().filter(item -> BloodCore.isCore(item.getItemStack())).count() >= 2, "it drops Blood Cores");
+		ticks(100);
+		assertEquals(0, bossParts(), "the body is gone once it has fallen");
+		assertTrue(plugin.bosses().describe().isEmpty());
+	}
+
+	@Test
+	void theBloodKnightsAttacksHurtAndItsBodyMoves() {
+		summonKnight();
+		stand(player, 0.5, 4.5, 0.0F, 0.0F); // two blocks from it
+		ItemDisplay part = world.getEntitiesByClass(ItemDisplay.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)).findFirst().orElseThrow();
+		ticks(61);
+		var before = part.getTransformation();
+		double health = player.getHealth();
+		ticks(160);
+		assertTrue(player.getHealth() < health, "a cleave or a slam landed");
+		assertFalse(before.equals(part.getTransformation()), "the model is animated");
+		assertFalse(part.isVisibleByDefault(), "only players with the pack see the model");
+	}
+
+	@Test
+	@SuppressWarnings("removal") // building the death event by hand is the point
+	void dyingInTheArenaIsMarked() {
+		summonKnight();
+		ticks(61);
+		chat(player);
+		player.setHealth(0.0);
+		server.getPluginManager().callEvent(new org.bukkit.event.entity.PlayerDeathEvent(player,
+			DamageSource.builder(DamageType.GENERIC).build(), new ArrayList<>(), 0, "died"));
+		assertTrue(any(chat(player), "was claimed by the Blood Knight"));
+	}
+
+	@Test
+	void theBloodKnightSinksBackWhenNobodyIsLeft() {
+		plugin.getConfig().set("boss.leave-timeout", 5);
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		summonKnight();
+		ticks(61);
+		player.setGameMode(GameMode.CREATIVE); // not a fighter
+		ticks(5 * 20 + 70);
+		assertNull(knight());
+		assertEquals(0, bossParts());
+	}
+
+	@Test
+	void theRitualTakesACoreAndOnlyOneKnightAtATime() {
+		world.getBlockAt(3, 4, 3).setType(Material.CRYING_OBSIDIAN);
+		player.getInventory().setItemInMainHand(BloodCore.create(2));
+		player.setSneaking(true);
+		PlayerInteractEvent ritual = new PlayerInteractEvent(player, Action.RIGHT_CLICK_BLOCK, player.getInventory().getItemInMainHand(),
+			world.getBlockAt(3, 4, 3), BlockFace.UP, EquipmentSlot.HAND);
+		server.getPluginManager().callEvent(ritual);
+		assertEquals(1, player.getInventory().getItemInMainHand().getAmount(), "one core spent");
+		assertEquals(1, plugin.bosses().active());
+		assertNotNull(plugin.bosses().refusal(new Location(world, 100, 5, 100)), "one at a time by default");
+		player.performCommand("bloodbath boss stop");
+		assertEquals(0, plugin.bosses().active());
+	}
+
+	@Test
+	void disablingThePluginRemovesTheKnight() {
+		summonKnight();
+		assertNotNull(knight());
+		server.getPluginManager().disablePlugin(plugin);
+		assertNull(knight());
+		assertEquals(0, bossParts());
+	}
+
+
+	@Test
+	void playersWithThePackGetTheCustomArtAndNobodyElseDoes() {
+		TestPlayer plain = server.addTestPlayer("Plain");
+		stand(plain, 2.5, 0.5, 0.0F, 0.0F);
+		server.getPluginManager().callEvent(new PlayerResourcePackStatusEvent(player, ResourcePackService.PACK_ID,
+			PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED));
+		assertTrue(PackState.hasPack(player));
+		assertFalse(PackState.hasPack(plain));
+
+		world.spawns.clear();
+		BloodFx.burst(new Location(world, 0.5, 6, 0.5), BloodFx.NOVA, 10, 0.2);
+		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.SONIC_BOOM && sp.receivers().equals(List.of(player))),
+			"the blood nova sprite, for the pack user only");
+		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.DUST && sp.receivers().equals(List.of(plain))),
+			"a vanilla-safe burst for everyone else");
+
+		assertTrue(plain(Hud.bar(player, 0.5F)).contains("\ue000"), "blood-drop bar");
+		assertFalse(plain(Hud.bar(plain, 0.5F)).contains("\ue000"));
+
+		player.performCommand("bloodbath armory");
+		var top = player.getOpenInventory().getTopInventory();
+		assertNull(top.getItem(0), "no glass panes: the backdrop frames the slots");
+		plain.performCommand("bloodbath armory");
+		assertEquals(Material.RED_STAINED_GLASS_PANE, plain.getOpenInventory().getTopInventory().getItem(0).getType());
 	}
 
 	// ---- kills ---------------------------------------------------------------------------------
@@ -756,9 +973,58 @@ class BloodbathPluginTest {
 
 	// ---- Blood Knight armour -------------------------------------------------------------------
 
+	/** Puts the pieces on the way a server does: the slot changes, then the equip event fires. */
+	@SuppressWarnings("deprecation") // the event's only constructor takes the old slot type
 	private void wear(TestPlayer who, ArmorPiece... pieces) {
 		for (ArmorPiece piece : pieces) {
+			ItemStack old = who.getInventory().getItem(piece.slot());
 			who.getInventory().setItem(piece.slot(), BloodArmor.create(piece));
+			server.getPluginManager().callEvent(new PlayerArmorChangeEvent(who, PlayerArmorChangeEvent.SlotType.valueOf(
+				piece.slot() == EquipmentSlot.HEAD ? "HEAD" : piece.slot() == EquipmentSlot.CHEST ? "CHEST" : piece.slot() == EquipmentSlot.LEGS ? "LEGS" : "FEET"),
+				old, who.getInventory().getItem(piece.slot())));
+		}
+		ticks(2);
+	}
+
+	@SuppressWarnings("deprecation")
+	private void takeOff(TestPlayer who, ArmorPiece piece) {
+		ItemStack old = who.getInventory().getItem(piece.slot());
+		who.getInventory().setItem(piece.slot(), null);
+		server.getPluginManager().callEvent(new PlayerArmorChangeEvent(who, PlayerArmorChangeEvent.SlotType.valueOf(
+			piece.slot() == EquipmentSlot.HEAD ? "HEAD" : piece.slot() == EquipmentSlot.CHEST ? "CHEST" : piece.slot() == EquipmentSlot.LEGS ? "LEGS" : "FEET"),
+			old, null));
+		ticks(2);
+	}
+
+	@Test
+	void theFullSetBuffsYouWhileWornAndStopsWhenAPieceComesOff() {
+		wear(player, ArmorPiece.HELM, ArmorPiece.CUIRASS, ArmorPiece.GREAVES);
+		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH), "three pieces: no buffs yet");
+		wear(player, ArmorPiece.SABATONS);
+		PotionEffect strength = player.getPotionEffect(PotionEffectType.STRENGTH);
+		assertNotNull(strength);
+		assertTrue(strength.isInfinite());
+		assertNotNull(player.getPotionEffect(PotionEffectType.SPEED));
+		assertNotNull(player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE));
+		assertTrue(any(actionBars(player), "strength is yours"));
+
+		player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 200, 2)); // a potion on top
+		takeOff(player, ArmorPiece.HELM);
+		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH), "gone the moment a piece comes off");
+		assertNull(player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE));
+		PotionEffect speed = player.getPotionEffect(PotionEffectType.SPEED);
+		assertNotNull(speed, "someone else's stronger effect is left alone");
+		assertEquals(2, speed.getAmplifier());
+	}
+
+	@Test
+	void theArmourAlwaysBeatsNetherite() {
+		Map<ArmorPiece, Double> netherite = Map.of(ArmorPiece.HELM, 3.0, ArmorPiece.CUIRASS, 8.0, ArmorPiece.GREAVES, 6.0, ArmorPiece.SABATONS, 3.0);
+		for (ArmorPiece piece : ArmorPiece.values()) {
+			ItemStack item = BloodArmor.create(piece);
+			assertTrue(modifier(item, Attribute.ARMOR) > netherite.get(piece), piece.id());
+			assertTrue(modifier(item, Attribute.ARMOR_TOUGHNESS) > 3.0, piece.id());
+			assertTrue(modifier(item, Attribute.KNOCKBACK_RESISTANCE) > 0.1, piece.id());
 		}
 	}
 
@@ -859,6 +1125,7 @@ class BloodbathPluginTest {
 	}
 
 	@Test
+	@SuppressWarnings("removal") // building the hit event by hand is the point
 	void threePiecesBarbMeleeAttackers() {
 		TestZombie zombie = zombie(1.5, 0.5);
 		wear(player, ArmorPiece.HELM, ArmorPiece.CUIRASS);
@@ -876,7 +1143,7 @@ class BloodbathPluginTest {
 	}
 
 	@Test
-	void sabatonsLeaveFootprintsForOthers() {
+	void sabatonsLeaveFootprints() {
 		TestPlayer alex = server.addTestPlayer("Alex");
 		stand(alex, 4.5, 0.5, 90.0F, 0.0F);
 		wear(player, ArmorPiece.SABATONS);
@@ -887,7 +1154,7 @@ class BloodbathPluginTest {
 		}
 		List<TestWorld.Spawn> steps = world.spawns.stream().filter(sp -> Math.abs(sp.at().getY() - 5.05) < 1.0E-6).toList();
 		assertFalse(steps.isEmpty(), "footprints");
-		assertTrue(steps.stream().allMatch(sp -> sp.receivers() != null && !sp.receivers().contains(player) && sp.receivers().contains(alex)));
+		assertTrue(steps.stream().allMatch(sp -> sp.receivers() != null && sp.receivers().contains(alex)), "everyone sees footprints");
 	}
 
 	@Test
@@ -898,7 +1165,8 @@ class BloodbathPluginTest {
 		server.getPluginManager().callEvent(new EntityDamageEvent(player, EntityDamageEvent.DamageCause.ENTITY_ATTACK, attackBy(zombie(2.5, 0.5)), 1.0));
 		ticks(1);
 		assertTrue(Cooldowns.isReady(player, Ability.BLOOD_RAGE));
-		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH));
+		PotionEffect strength = player.getPotionEffect(PotionEffectType.STRENGTH);
+		assertTrue(strength == null || strength.getAmplifier() == 0, "the set's own Strength I, but no rage (Strength II)");
 	}
 
 	@Test
@@ -1018,21 +1286,44 @@ class BloodbathPluginTest {
 	}
 
 	@Test
-	void recipesRegisterOnlyWhenEnabled() {
-		assertNull(server.getRecipe(new NamespacedKey(plugin, "riftblade")));
-		plugin.getConfig().set("recipes.enabled", true);
-		plugin.saveConfig();
-		player.performCommand("bloodbath reload");
-		assertEquals(WeaponType.values().length + ArmorPiece.values().length, Recipes.count());
+	void everyRecipeNeedsABloodCore() {
+		// On by default now: a Blood Core makes them expensive.
+		assertEquals(WeaponType.values().length + ArmorPiece.values().length + 1, Recipes.count());
 		ShapedRecipe recipe = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "riftblade"));
 		assertNotNull(recipe);
 		assertEquals(WeaponType.RIFTBLADE, Weapons.typeOf(recipe.getResult()));
+		assertTrue(recipe.getChoiceMap().values().stream().anyMatch(choice -> choice instanceof RecipeChoice.ExactChoice exact
+			&& exact.getChoices().stream().allMatch(BloodCore::isCore)), "the core is an exact-item ingredient");
 		ShapedRecipe helm = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "blood_knight_helm"));
 		assertEquals(ArmorPiece.HELM, BloodArmor.typeOf(helm.getResult()));
+		ShapedRecipe core = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "blood_core"));
+		assertTrue(BloodCore.isCore(core.getResult()));
+
+		// An older config's recipe without a core: the built-in one (with a core) is used instead.
+		plugin.getConfig().set("recipes.riftblade.shape", List.of("RRR", "RSR", "RRR"));
+		plugin.getConfig().set("recipes.riftblade.ingredients", Map.of("R", "REDSTONE_BLOCK", "S", "NETHERITE_SWORD"));
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		ShapedRecipe fallback = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "riftblade"));
+		assertTrue(fallback.getChoiceMap().values().stream().anyMatch(choice -> choice instanceof RecipeChoice.ExactChoice));
+
 		plugin.getConfig().set("recipes.enabled", false);
 		plugin.saveConfig();
 		player.performCommand("bloodbath reload");
 		assertNull(server.getRecipe(new NamespacedKey(plugin, "riftblade")));
+	}
+
+	@Test
+	void bloodCoresAreGivenAndLookTheirPart() {
+		player.performCommand("bloodbath give Steve core 3");
+		ItemStack cores = player.getInventory().getItem(0);
+		assertTrue(BloodCore.isCore(cores));
+		assertEquals(3, cores.getAmount());
+		assertEquals(Material.NETHER_STAR, cores.getType());
+		assertEquals("Blood Core", plain(cores.getItemMeta().itemName()));
+		assertFalse(BloodCore.isCore(new ItemStack(Material.NETHER_STAR)), "a plain nether star isn't a core");
+		assertTrue(BloodCore.create(1).isSimilar(BloodCore.create(1)), "cores stack and match recipes exactly");
+		assertTrue(plugin.getCommand("bloodbath").tabComplete(player, "bb", new String[] {"give", "Steve", "co"}).contains("core"));
 	}
 
 	@Test

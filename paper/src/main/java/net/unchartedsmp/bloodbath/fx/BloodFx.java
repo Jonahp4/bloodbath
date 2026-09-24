@@ -1,7 +1,5 @@
 package net.unchartedsmp.bloodbath.fx;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import net.unchartedsmp.bloodbath.config.Settings;
 import org.bukkit.Color;
@@ -17,14 +15,26 @@ import org.bukkit.entity.Player;
  * The shared blood palette: every weapon draws its particles and sounds from here so the whole
  * set reads as one theme. Sounds are played by vanilla id, so nothing breaks if a constant moves.
  *
- * <p>Ability particles are sent long-range (up to 512 blocks, configurable). Every count is scaled
- * by {@code effects.particle-multiplier}. Cosmetics that hang around a player's own hands (the
+ * <p>Particles go through {@link Particles}: only to players within {@code effects.view-distance},
+ * with fewer particles for distant viewers, and every count scaled by
+ * {@code effects.particle-multiplier}. Cosmetics that hang around a player's own hands (the
  * held-weapon drips, the bow's draw) go to everyone else only: in first person they'd be right
  * in front of the camera.
  */
 public final class BloodFx {
-	/** A particle type plus the data it needs (dust colour, block state, ...), or null. */
-	public record Fx(Particle particle, Object data) {
+	/**
+	 * A particle type plus the data it needs (dust colour, block state, ...), optionally with a
+	 * variant for players who loaded the resource pack (a custom sprite in place of a vanilla one).
+	 */
+	public record Fx(Particle particle, Object data, Fx packVariant, double countScale, double speed) {
+		public Fx(Particle particle, Object data) {
+			this(particle, data, null, 1.0, -1.0);
+		}
+
+		/** This effect, but players with the pack see {@code variant} ({@code countScale} as many, at {@code speed}). */
+		public Fx withPack(Fx variant, double countScale, double speed) {
+			return new Fx(particle, data, variant, countScale, speed);
+		}
 	}
 
 	public static final Color BLOOD_RED = Color.fromRGB(0xB00010);
@@ -50,6 +60,15 @@ public final class BloodFx {
 	public static final Fx BURST = new Fx(Particle.EXPLOSION, null);
 	public static final Fx BURST_HUGE = new Fx(Particle.EXPLOSION_EMITTER, null);
 	public static final Fx GLYPH = new Fx(Particle.ENCHANT, null);
+	/** Low, heavy, dark-red haze: the Blood Mist. */
+	public static final Fx MIST = new Fx(Particle.DUST_COLOR_TRANSITION, new Particle.DustTransition(Color.fromRGB(0x3A0008), Color.fromRGB(0x12000A), 3.2F));
+	/** Tiny bright sparks of blood, for rising and orbiting streams. */
+	public static final Fx EMBER = new Fx(Particle.DUST, new Particle.DustOptions(Color.fromRGB(0xFF4050), 0.55F));
+	/**
+	 * An impact flash. Players with the pack see the "blood nova" sprite animation (the pack
+	 * redraws the warden's sonic boom, which nothing else uses); everyone else a dust burst.
+	 */
+	public static final Fx NOVA = BLOOD_LARGE.withPack(new Fx(Particle.SONIC_BOOM, null), 0.0, 0.0);
 
 	public static final String HEARTBEAT = "entity.warden.heartbeat";
 	public static final String SQUELCH = "entity.slime.squish";
@@ -70,6 +89,7 @@ public final class BloodFx {
 	public static final String MARKED = "entity.arrow.hit_player";
 	public static final String ECHO_HIT = "item.trident.hit";
 	public static final String BARBS = "enchant.thorns.hit";
+	public static final String ARMOR_SET = "block.beacon.power_select";
 	public static final String RAGE_FADES = "block.fire.extinguish";
 	public static final String HIT_MARKER = "block.note_block.hat";
 	public static final String CLOCK_MARK = "block.respawn_anchor.set_spawn";
@@ -83,62 +103,45 @@ public final class BloodFx {
 	public static final String PAGE = "item.book.page_turn";
 	public static final String RANK_UP = "ui.toast.challenge_complete";
 
-	private static final double OTHERS_RANGE_SQUARED = 48.0 * 48.0;
+	/** Held-weapon drips and other ambience: nobody further than this needs them. */
+	private static final double AMBIENT_RANGE = 32.0;
 
 	private BloodFx() {
 	}
 
-	private static int scaled(int count) {
-		double multiplier = Settings.get().particleMultiplier;
-		if (count <= 0 || multiplier <= 0.0) {
-			return 0;
-		}
-		return Math.max(1, (int) Math.round(count * multiplier));
+	private static double viewDistance() {
+		return Settings.get().particleViewDistance;
 	}
 
 	// ---- spawning helpers ------------------------------------------------------------------
 
-	/** Ability particle: long-range (configurable), count scaled by the multiplier. */
+	/** Ability particle: seen from {@code effects.view-distance}, fewer the further away the viewer is. */
 	public static void emit(World world, Fx fx, double x, double y, double z, int count, double dx, double dy, double dz, double speed) {
-		int n = scaled(count);
-		if (n > 0) {
-			world.spawnParticle(fx.particle(), x, y, z, n, dx, dy, dz, speed, fx.data(), Settings.get().longRangeParticles);
-		}
+		Particles.spawn(world, fx, x, y, z, count, dx, dy, dz, speed, Particles.Audience.ALL, null, viewDistance());
 	}
 
-	/** Ambient particle (held-weapon drips): normal range. */
+	/** Ambient particle (held-weapon drips, auras): close range only. */
 	public static void ambient(Location at, Fx fx, int count, double spread) {
-		int n = scaled(count);
-		if (n > 0) {
-			at.getWorld().spawnParticle(fx.particle(), at.getX(), at.getY(), at.getZ(), n, spread, spread, spread, 0.0, fx.data(), false);
-		}
+		Particles.spawn(at.getWorld(), fx, at.getX(), at.getY(), at.getZ(), count, spread, spread, spread, 0.0, Particles.Audience.ALL,
+			null, AMBIENT_RANGE);
 	}
 
 	/** Ambient particle that everyone but {@code self} sees. */
 	public static void ambientForOthers(Player self, Location at, Fx fx, int count, double spread) {
-		forOthers(self, at, fx, count, spread, 0.0);
+		Particles.spawn(at.getWorld(), fx, at.getX(), at.getY(), at.getZ(), count, spread, spread, spread, 0.0, Particles.Audience.OTHERS,
+			self, AMBIENT_RANGE);
+	}
+
+	/** Ambient particle only {@code self} sees (their own, toned-down view of their aura). */
+	public static void ambientForSelf(Player self, Location at, Fx fx, int count, double spread) {
+		Particles.spawn(at.getWorld(), fx, at.getX(), at.getY(), at.getZ(), count, spread, spread, spread, 0.0, Particles.Audience.SELF,
+			self, AMBIENT_RANGE);
 	}
 
 	/** Ability-style burst that everyone but {@code self} sees. */
 	public static void burstForOthers(Player self, Location at, Fx fx, int count, double spread) {
-		forOthers(self, at, fx, count, spread, 0.02);
-	}
-
-	private static void forOthers(Player self, Location at, Fx fx, int count, double spread, double speed) {
-		int n = scaled(count);
-		if (n <= 0) {
-			return;
-		}
-		World world = at.getWorld();
-		List<Player> viewers = new ArrayList<>();
-		for (Player player : world.getPlayers()) {
-			if (player != self && player.getLocation().distanceSquared(at) <= OTHERS_RANGE_SQUARED) {
-				viewers.add(player);
-			}
-		}
-		if (!viewers.isEmpty()) {
-			world.spawnParticle(fx.particle(), viewers, self, at.getX(), at.getY(), at.getZ(), n, spread, spread, spread, speed, fx.data(), false);
-		}
+		Particles.spawn(at.getWorld(), fx, at.getX(), at.getY(), at.getZ(), count, spread, spread, spread, 0.02, Particles.Audience.OTHERS,
+			self, viewDistance());
 	}
 
 	public static void burst(Location at, Fx fx, int count, double spread) {
@@ -160,6 +163,10 @@ public final class BloodFx {
 	/** Particle line between two points, {@code perBlock} samples per block of distance. */
 	public static void line(Location from, Location to, Fx fx, double perBlock) {
 		double length = from.distance(to);
+		if (!Particles.anyoneNear(from.getWorld(), (from.getX() + to.getX()) / 2, (from.getY() + to.getY()) / 2,
+			(from.getZ() + to.getZ()) / 2, viewDistance() + length / 2)) {
+			return;
+		}
 		int steps = Math.max(2, (int) Math.ceil(length * perBlock * Math.min(1.0, Settings.get().particleMultiplier)));
 		World w = from.getWorld();
 		for (int i = 0; i <= steps; i++) {
@@ -170,6 +177,9 @@ public final class BloodFx {
 
 	/** Flat horizontal ring. */
 	public static void ring(Location center, Fx fx, double radius, int points) {
+		if (!Particles.anyoneNear(center.getWorld(), center.getX(), center.getY(), center.getZ(), viewDistance() + radius)) {
+			return;
+		}
 		int n = Math.max(3, (int) Math.round(points * Math.min(1.0, Settings.get().particleMultiplier)));
 		World w = center.getWorld();
 		for (int i = 0; i < n; i++) {
@@ -224,8 +234,28 @@ public final class BloodFx {
 		play(chest, HEARTBEAT, 1.0F, 0.6F);
 	}
 
+	/** A sound at a place (heard by whoever is close enough), after the config's volume and swaps. */
 	public static void play(Location at, String sound, float volume, float pitch) {
-		at.getWorld().playSound(at, sound, SoundCategory.PLAYERS, volume, pitch);
+		String id = resolve(sound);
+		float scaled = volume * (float) Settings.get().soundVolume;
+		if (id != null && scaled > 0.0F) {
+			at.getWorld().playSound(at, id, SoundCategory.PLAYERS, scaled, pitch);
+		}
+	}
+
+	/** A sound only {@code player} hears (hit markers, heartbeats, menu clicks). */
+	public static void playTo(Player player, String sound, float volume, float pitch) {
+		String id = resolve(sound);
+		float scaled = volume * (float) Settings.get().soundVolume;
+		if (id != null && scaled > 0.0F) {
+			player.playSound(player, id, SoundCategory.PLAYERS, scaled, pitch);
+		}
+	}
+
+	/** {@code sounds.replace} lets owners swap or mute (empty string) any sound by id. */
+	private static String resolve(String sound) {
+		String id = Settings.get().soundReplace.getOrDefault(sound, sound);
+		return id.isEmpty() ? null : id;
 	}
 
 	public static void play(Entity at, String sound, float volume, float pitch) {

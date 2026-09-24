@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.key.Key;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.ability.Ability;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
@@ -16,6 +17,7 @@ import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -119,14 +121,25 @@ public final class Hud {
 
 	/** Blood slowly dripping off whatever Bloodbath weapon is in hand. */
 	private static void aura(Player player, WeaponBehavior behavior, boolean offhand, long now) {
-		// Everyone else sees it; the holder would have it right in front of the camera.
+		// Everyone else gets the full aura. The holder gets a quieter version of their own: drops
+		// falling off the weapon at the bottom corner of the view (full-size motes at hand height
+		// would sit right in front of the first-person camera).
 		Location hand = handPos(player, offhand);
+		long step = now / INTERVAL_TICKS;
 		BloodFx.ambientForOthers(player, hand, BloodFx.DRIP, 1, 0.08);
-		if ((now / INTERVAL_TICKS) % 3 == 0) {
+		if (step % 3 == 0) {
 			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.2, 0.0), behavior.auraAccent(), 1, 0.15);
 		}
-		if ((now / INTERVAL_TICKS) % 5 == 0 && Cooldowns.isReady(player, behavior.ability())) {
+		boolean ready = Cooldowns.isReady(player, behavior.ability());
+		if (step % 5 == 0 && ready) {
 			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.3, 0.0), BloodFx.BLOOD_FADE, 2, 0.2);
+		}
+		Location own = hand.add(0.0, -0.12, 0.0);
+		if (step % 2 == 0) {
+			BloodFx.ambientForSelf(player, own, BloodFx.DRIP, 1, 0.06);
+		}
+		if (step % (ready ? 3 : 6) == 0) {
+			BloodFx.ambientForSelf(player, own, BloodFx.EMBER, 1, 0.1);
 		}
 	}
 
@@ -146,21 +159,44 @@ public final class Hud {
 
 	// ---- status line pieces ----------------------------------------------------------------
 
-	/** "Bloodrift |||||||||||||||||||| 6.2s" or "Bloodrift ● READY". */
+	/** The resource pack's HUD font: blood-drop bar segments and icons. */
+	private static final Key HUD_FONT = Key.key(Keys.PACK_NAMESPACE, "hud");
+	private static final int DROP_SEGMENTS = 10;
+	/** Every bar there can be, built once: [0..segments] filled, plain and with the pack. */
+	private static final Component[] PLAIN_BARS = new Component[BAR_SEGMENTS + 1];
+	private static final Component[] DROP_BARS = new Component[DROP_SEGMENTS + 1];
+	private static final Component PLAIN_READY = Component.text("● READY", NamedTextColor.RED);
+	private static final Component DROP_READY = Component.text("\ue002", NamedTextColor.WHITE).font(HUD_FONT)
+		.append(Component.text(" READY", NamedTextColor.RED));
+
+	static {
+		for (int i = 0; i <= BAR_SEGMENTS; i++) {
+			PLAIN_BARS[i] = Component.text("|".repeat(i), NamedTextColor.RED)
+				.append(Component.text("|".repeat(BAR_SEGMENTS - i), NamedTextColor.DARK_GRAY));
+		}
+		for (int i = 0; i <= DROP_SEGMENTS; i++) {
+			DROP_BARS[i] = Component.text("\ue000".repeat(i) + "\ue001".repeat(DROP_SEGMENTS - i), NamedTextColor.WHITE).font(HUD_FONT);
+		}
+	}
+
+	/** "Bloodrift |||||||||||||||||||| 6.2s" or "Bloodrift ● READY" (blood drops with the pack). */
 	public static Component cooldownBar(Player player, Ability ability) {
 		Component name = Component.text(ability.displayName() + "  ", NamedTextColor.DARK_RED);
 		long remaining = Cooldowns.remainingTicks(player, ability);
 		if (remaining <= 0) {
-			return name.append(Component.text("● READY", NamedTextColor.RED));
+			return name.append(PackState.hasPack(player) ? DROP_READY : PLAIN_READY);
 		}
-		return name.append(bar(Cooldowns.progress(player, ability)))
+		return name.append(bar(player, Cooldowns.progress(player, ability)))
 			.append(Component.text(seconds(remaining), NamedTextColor.GRAY));
 	}
 
-	public static Component bar(float progress) {
-		int filled = Math.max(0, Math.min(BAR_SEGMENTS, Math.round(progress * BAR_SEGMENTS)));
-		return Component.text("|".repeat(filled), NamedTextColor.RED)
-			.append(Component.text("|".repeat(BAR_SEGMENTS - filled), NamedTextColor.DARK_GRAY));
+	/** A progress bar: plain bars, or blood drops for players with the resource pack. */
+	public static Component bar(Player player, float progress) {
+		float p = Math.max(0.0F, Math.min(1.0F, progress));
+		if (PackState.hasPack(player)) {
+			return DROP_BARS[Math.round(p * DROP_SEGMENTS)];
+		}
+		return PLAIN_BARS[Math.round(p * BAR_SEGMENTS)];
 	}
 
 	public static Component timer(String label, long ticks) {

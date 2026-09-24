@@ -5,6 +5,10 @@ import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
+import net.unchartedsmp.bloodbath.armor.SetBonus;
+import net.unchartedsmp.bloodbath.boss.BossManager;
+import net.unchartedsmp.bloodbath.fx.Particles;
+import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.command.BloodbathCommand;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.gui.MenuListener;
@@ -35,6 +39,7 @@ public class BloodbathPlugin extends JavaPlugin {
 
 	private ResourcePackService packs;
 	private WeaponListener weaponListener;
+	private BossManager bosses;
 	private BukkitTask ticker;
 
 	@Override
@@ -55,6 +60,10 @@ public class BloodbathPlugin extends JavaPlugin {
 		plugins.registerEvents(new SessionListener(this), this);
 		plugins.registerEvents(new MenuListener(), this);
 		plugins.registerEvents(new BloodKnightSet(), this);
+		plugins.registerEvents(new SetBonus(), this);
+		bosses = new BossManager(this);
+		plugins.registerEvents(bosses, this);
+		SetBonus.init();
 
 		PluginCommand command = getCommand("bloodbath");
 		if (command != null) {
@@ -78,7 +87,13 @@ public class BloodbathPlugin extends JavaPlugin {
 			ticker = null;
 		}
 		Behaviors.shutdown(); // removes live blood mirrors before the worlds save
+		if (bosses != null) {
+			bosses.shutdown(); // every Blood Knight and its model, before the worlds save
+		}
 		BloodKnightSet.shutdown(); // nobody keeps a red screen
+		SetBonus.shutdown(); // the full-set buffs are infinite: take them back
+		Particles.invalidate();
+		PackState.clearAll();
 		TickScheduler.clearAll();
 		Cooldowns.clearAll();
 		NullField.clearAll();
@@ -95,6 +110,7 @@ public class BloodbathPlugin extends JavaPlugin {
 		Behaviors.tick(now);
 		Hud.tick(now);
 		BloodKnightSet.tick(now);
+		bosses.tick(now);
 		if (now % PRUNE_INTERVAL_TICKS == 0) {
 			Cooldowns.prune();
 			NullField.prune();
@@ -118,10 +134,15 @@ public class BloodbathPlugin extends JavaPlugin {
 		for (Player player : getServer().getOnlinePlayers()) {
 			SessionListener.refreshInventory(player);
 		}
+		SetBonus.refreshAll();
 	}
 
 	public ResourcePackService packs() {
 		return packs;
+	}
+
+	public BossManager bosses() {
+		return bosses;
 	}
 
 	public WeaponListener weaponListener() {

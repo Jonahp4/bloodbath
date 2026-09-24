@@ -24,4 +24,16 @@ public final class TestZombie extends ZombieMock {
 			setHealth(left);
 		}
 	}
+
+	private double lastDamage;
+
+	@Override
+	public double getLastDamage() {
+		return lastDamage;
+	}
+
+	@Override
+	public void setLastDamage(double damage) {
+		lastDamage = damage;
+	}
 }

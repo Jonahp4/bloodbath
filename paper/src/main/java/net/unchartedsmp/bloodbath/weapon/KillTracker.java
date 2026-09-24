@@ -6,7 +6,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
-import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -26,7 +25,7 @@ public final class KillTracker {
 				Component.text(after.title(), after.color()),
 				Component.text("Your " + type.displayName() + " has tasted " + kills + " kills", NamedTextColor.GRAY),
 				Title.Times.times(Duration.ofMillis(250), Duration.ofSeconds(2), Duration.ofMillis(750))));
-			killer.playSound(killer.getLocation(), BloodFx.RANK_UP, SoundCategory.PLAYERS, 0.8F, 0.8F);
+			BloodFx.playTo(killer, BloodFx.RANK_UP, 0.8F, 0.8F);
 			killer.sendMessage(Settings.get().prefix.append(Component.text("Your ", NamedTextColor.GRAY))
 				.append(Component.text(type.displayName(), NamedTextColor.RED))
 				.append(Component.text(" is now ", NamedTextColor.GRAY))

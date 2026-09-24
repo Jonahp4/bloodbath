@@ -1,0 +1,40 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/hud_bar_full.png",
+      "ascent": 4,
+      "height": 5,
+      "chars": [
+        "\ue000"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/hud_bar_empty.png",
+      "ascent": 4,
+      "height": 5,
+      "chars": [
+        "\ue001"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/hud_ready.png",
+      "ascent": 6,
+      "height": 7,
+      "chars": [
+        "\ue002"
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/hud_skull.png",
+      "ascent": 5,
+      "height": 6,
+      "chars": [
+        "\ue003"
+      ]
+    }
+  ]
+}

@@ -5,19 +5,22 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.command.BloodbathCommand;
 import net.unchartedsmp.bloodbath.config.Settings;
+import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.Inventory;
@@ -37,6 +40,10 @@ public final class ArmoryMenu implements InventoryHolder {
 	private static final int[] WEAPON_SLOTS = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25};
 	/** The Blood Knight's set, helm to sabatons, split around the middle of the third row. */
 	private static final int[] ARMOR_SLOTS = {29, 30, 32, 33};
+	/** Between the armour pieces: the Blood Core every recipe needs. */
+	private static final int CORE_SLOT = 31;
+
+	private static final Key GUI_FONT = Key.key(Keys.PACK_NAMESPACE, "gui");
 
 	private final Inventory inventory;
 	private final Map<Integer, WeaponType> weapons = new HashMap<>();
@@ -49,11 +56,21 @@ public final class ArmoryMenu implements InventoryHolder {
 		boolean showArmor = Settings.get().armorEnabled;
 		int size = showArmor ? 45 : 36;
 		closeSlot = size - 5;
-		inventory = Bukkit.createInventory(this, size, Component.text("☠ Bloodbath Armory", NamedTextColor.DARK_RED));
-		ItemStack pane = pane();
-		for (int slot = 0; slot < size; slot++) {
-			if (slot < 9 || slot >= size - 9 || slot % 9 == 0 || slot % 9 == 8) {
-				inventory.setItem(slot, pane);
+		// With the resource pack, the title draws a blood-soaked backdrop behind the slots (a font
+		// glyph under the items); without it, the classic red glass frame.
+		boolean art = PackState.hasPack(viewer);
+		Component title = Component.text("☠ Bloodbath Armory", NamedTextColor.DARK_RED);
+		if (art) {
+			title = Component.text("\uf001" + (showArmor ? "\ue100" : "\ue101") + "\uf002", NamedTextColor.WHITE).font(GUI_FONT)
+				.append(Component.text("☠ Bloodbath Armory", NamedTextColor.RED).font(Key.key("minecraft", "default")));
+		}
+		inventory = Bukkit.createInventory(this, size, title);
+		if (!art) {
+			ItemStack pane = pane();
+			for (int slot = 0; slot < size; slot++) {
+				if (slot < 9 || slot >= size - 9 || slot % 9 == 0 || slot % 9 == 8) {
+					inventory.setItem(slot, pane);
+				}
 			}
 		}
 		List<WeaponType> shown = Arrays.stream(WeaponType.values()).filter(Settings.get()::enabled).toList();
@@ -72,6 +89,8 @@ public final class ArmoryMenu implements InventoryHolder {
 				armor.put(ARMOR_SLOTS[i], pieces[i]);
 				inventory.setItem(ARMOR_SLOTS[i], BloodArmor.icon(pieces[i], hints()));
 			}
+			inventory.setItem(CORE_SLOT, BloodCore.icon(List.of(Component.empty(),
+				hint(canTake ? "Click to take one, shift-click for 16" : "Beat the Blood Knight for some", NamedTextColor.RED))));
 		}
 		inventory.setItem(HEADER_SLOT, header(shown.size(), showArmor));
 		inventory.setItem(closeSlot, button(Material.BARRIER, "Close"));
@@ -86,7 +105,7 @@ public final class ArmoryMenu implements InventoryHolder {
 
 	public static void open(Player player) {
 		player.openInventory(new ArmoryMenu(player).getInventory());
-		player.playSound(player.getLocation(), BloodFx.PAGE, SoundCategory.PLAYERS, 0.8F, 0.7F);
+		BloodFx.playTo(player, BloodFx.PAGE, 0.8F, 0.7F);
 	}
 
 	@Override
@@ -98,6 +117,12 @@ public final class ArmoryMenu implements InventoryHolder {
 	void click(Player player, int slot, ClickType click) {
 		if (slot == closeSlot) {
 			player.closeInventory();
+			return;
+		}
+		if (slot == CORE_SLOT && inventory.getSize() > 36) {
+			if (canTake && player.hasPermission("bloodbath.give")) {
+				BloodbathCommand.giveCores(player, click.isShiftClick() ? 16 : 1);
+			}
 			return;
 		}
 		WeaponType type = weapons.get(slot);
