@@ -4,6 +4,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
 import net.unchartedsmp.bloodbath.command.BloodbathCommand;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.gui.MenuListener;
@@ -53,6 +54,7 @@ public class BloodbathPlugin extends JavaPlugin {
 		plugins.registerEvents(new MirrorGuard(), this);
 		plugins.registerEvents(new SessionListener(this), this);
 		plugins.registerEvents(new MenuListener(), this);
+		plugins.registerEvents(new BloodKnightSet(), this);
 
 		PluginCommand command = getCommand("bloodbath");
 		if (command != null) {
@@ -91,6 +93,7 @@ public class BloodbathPlugin extends JavaPlugin {
 		TickScheduler.drain();
 		Behaviors.tick(now);
 		Hud.tick(now);
+		BloodKnightSet.tick(now);
 		if (now % PRUNE_INTERVAL_TICKS == 0) {
 			Cooldowns.prune();
 			NullField.prune();

@@ -43,6 +43,15 @@ public final class Settings {
 	/** "auto" (only when the pack is required), "true" or "false". */
 	public final String tooltipFrame;
 
+	public final boolean armorEnabled;
+	/** Health restored per kill with 2+ Blood Knight pieces (half-hearts). */
+	public final double armorKillHeal;
+	/** Blood Rage triggers when health falls to this share of max health. */
+	public final double rageThreshold;
+	public final int rageDurationTicks;
+	public final double rageRadius;
+	private final int rageCooldownTicks;
+
 	public final boolean recipesEnabled;
 	public final ConfigurationSection recipes;
 	public final Component prefix;
@@ -82,6 +91,13 @@ public final class Settings {
 		countMobKills = bool(c, "kill-tracking.count-mobs", true);
 		tooltipFrame = str(c, "items.tooltip-frame", "auto").trim().toLowerCase(Locale.ROOT);
 
+		armorEnabled = bool(c, "armor.enabled", true);
+		armorKillHeal = Math.max(0.0, c == null ? 3.0 : c.getDouble("armor.kill-heal", 3.0));
+		rageThreshold = Math.max(0.05, Math.min(0.95, c == null ? 0.4 : c.getDouble("armor.rage-threshold", 0.4)));
+		rageDurationTicks = Math.max(20, (int) Math.round((c == null ? 8.0 : c.getDouble("armor.rage-duration", 8.0)) * 20.0));
+		rageRadius = Math.max(0.0, c == null ? 4.0 : c.getDouble("armor.rage-radius", 4.0));
+		rageCooldownTicks = Math.max(0, (int) Math.round((c == null ? 60.0 : c.getDouble("armor.rage-cooldown", 60.0)) * 20.0));
+
 		recipesEnabled = bool(c, "recipes.enabled", false);
 		recipes = c == null ? null : c.getConfigurationSection("recipes");
 		prefix = MiniMessage.miniMessage().deserialize(str(c, "messages.prefix", "<dark_red>☠</dark_red> "));
@@ -120,7 +136,7 @@ public final class Settings {
 	 */
 	public String itemFingerprint() {
 		StringBuilder key = new StringBuilder();
-		key.append(killTracking).append(tooltipFrame());
+		key.append(killTracking).append(tooltipFrame()).append(armorKillHeal).append(rageThreshold);
 		for (Ability ability : Ability.values()) {
 			key.append(',').append(cooldownTicks(ability));
 		}
@@ -137,6 +153,9 @@ public final class Settings {
 	}
 
 	public int cooldownTicks(Ability ability) {
+		if (ability == Ability.BLOOD_RAGE) {
+			return rageCooldownTicks;
+		}
 		WeaponType type = WeaponType.of(ability);
 		ConfigurationSection section = type == null ? null : weapons.get(type);
 		if (section == null || !section.contains("cooldown")) {

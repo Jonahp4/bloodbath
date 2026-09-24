@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "unchartedsmp:blood_knight"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "unchartedsmp:blood_knight"
+      }
+    ]
+  }
+}

@@ -10,6 +10,8 @@ public final class Keys {
 
 	/** On weapon items: the weapon id. */
 	public static NamespacedKey WEAPON;
+	/** On Blood Knight armour: the piece id. */
+	public static NamespacedKey ARMOR;
 	/** On weapon items: which definition revision built the item's name/lore/attributes. */
 	public static NamespacedKey REVISION;
 	/** On weapon items: kills made with it. */
@@ -24,6 +26,7 @@ public final class Keys {
 
 	static void init(Plugin plugin) {
 		WEAPON = new NamespacedKey(plugin, "weapon");
+		ARMOR = new NamespacedKey(plugin, "armor");
 		REVISION = new NamespacedKey(plugin, "revision");
 		KILLS = new NamespacedKey(plugin, "kills");
 		MIRROR = new NamespacedKey(plugin, "mirror");

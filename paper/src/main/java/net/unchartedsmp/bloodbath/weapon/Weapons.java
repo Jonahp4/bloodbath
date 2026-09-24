@@ -8,6 +8,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.unchartedsmp.bloodbath.Keys;
+import net.unchartedsmp.bloodbath.armor.ArmorPiece;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -51,6 +53,10 @@ public final class Weapons {
 	 */
 	public static void setRevision(String value) {
 		revision = value;
+	}
+
+	public static String revision() {
+		return revision;
 	}
 
 	public static WeaponType typeOf(ItemStack stack) {
@@ -189,12 +195,17 @@ public final class Weapons {
 	}
 
 	/**
-	 * What a Blood Mirror wears: just the look of the item, never the item itself. Weapons keep
-	 * their 3D model; everything else is a bare item of the same type (no enchants, no contents).
+	 * What a Blood Mirror wears: just the look of the item, never the item itself. Weapons and
+	 * Blood Knight armour keep their look; everything else is a bare item of the same type (no
+	 * enchants, no contents).
 	 */
 	public static ItemStack displayCopy(ItemStack worn) {
 		if (worn == null || worn.getType().isAir()) {
 			return null;
+		}
+		ArmorPiece piece = BloodArmor.typeOf(worn);
+		if (piece != null) {
+			return BloodArmor.displayCopy(worn, piece);
 		}
 		ItemStack copy = new ItemStack(worn.getType());
 		WeaponType type = typeOf(worn);

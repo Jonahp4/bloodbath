@@ -1,22 +1,22 @@
 # Bloodbath
 
-Twelve blood-soaked ability weapons with real 3D models, for **Paper 1.21.4 and newer**. Comes with
-commands, an armory menu, kill ranks, a config for every number, optional crafting recipes, and a
-resource pack that the plugin hosts for you.
+Twelve blood-soaked ability weapons with real 3D models and the Blood Knight's armour set, for
+**Paper 1.21.4 and newer**. Comes with commands, an armory menu, kill ranks, a config for every
+number, optional crafting recipes, and a resource pack that the plugin hosts for you.
 
 **Downloads**
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.0.0.jar`](dist/paper/Bloodbath-1.0.0.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.0.0.zip`](dist/Bloodbath-ResourcePack-1.0.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.1.0.jar`](dist/paper/Bloodbath-1.1.0.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.1.0.zip`](dist/Bloodbath-ResourcePack-1.1.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.0.0.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.1.0.jar` into `plugins/` and restart.
 3. Let players download the 3D models: open **TCP port 8163** on your firewall/router. The plugin
    serves the resource pack from there and players get a download prompt when they join. Can't
    open a port? See [Resource pack](#resource-pack).
@@ -51,6 +51,22 @@ bow draw, hook range, mirror timer...). A bell and a blood ring tell you when an
 Blood drips off the weapon in your hand, every delayed hit is telegraphed on the ground, and kills
 burst and bleed back into the killer.
 
+## Blood Knight armour
+
+The boss's armour, worn by players: **Blood Knight Helm, Cuirass, Greaves and Sabatons**
+(`/bb give <you> armor`). Each piece is netherite underneath (same protection, toughness,
+knockback resistance and durability, fireproof) plus **one extra heart**.
+
+| Set bonus | |
+|---|---|
+| **2 pieces, Bloodlust** | Every kill heals you 1.5 hearts. |
+| **4 pieces, Blood Rage** | When a hit leaves you at 40% health or less: Strength and Resistance for 8s and a blood shockwave that hurls everything within 4 blocks away. 60s cooldown. A clot (Clotblade) stops it. |
+
+A full set drips blood. The worn armour and the icons come from the resource pack. **Without the
+pack, the pieces look like netherite in the inventory but are invisible when worn** (vanilla has
+no model for them). Keep that in mind if the pack is optional on your server, or turn the set off
+with `armor.enabled: false`.
+
 **Kill ranks.** Weapons count their kills and rank up: Blooded (5), Crimson (25), Sanguine (100),
 Bloodbath (250). The count lives on the item, so it travels with the weapon when it's traded.
 
@@ -61,12 +77,12 @@ Bloodbath (250). The count lives on the item, so it travels with the weapon when
 | Command | Who | |
 |---|---|---|
 | `/bb help` | everyone | |
-| `/bb armory` | everyone | Browse every weapon. Admins click to take one. |
+| `/bb armory` | everyone | Browse every weapon and armour piece. Admins click to take one. |
 | `/bb list` | everyone | Hover a name to see the item. |
-| `/bb info <weapon>` | everyone | Accepts ids or names ("scythe", "Clotblade"). No name: the weapon in your hand. |
+| `/bb info <weapon\|piece>` | everyone | Accepts ids or names ("scythe", "Clotblade", "helm"). No name: the weapon in your hand. |
 | `/bb hud [on\|off]` | everyone | Hide or show the action-bar line for yourself. Remembered. |
 | `/bb pack` | everyone | Get the resource pack again. |
-| `/bb give <player\|all> <weapon\|all>` | op | `/bb give <weapon>` gives it to yourself. |
+| `/bb give <player\|all> <weapon\|piece\|armor\|all>` | op | `/bb give <weapon>` gives it to yourself. `armor` is the whole set; `all` is every weapon plus the set. |
 | `/bb reset [player\|all]` | op | Clear cooldowns and clots. |
 | `/bb pack <player\|all>` | op | Send the pack to someone else. |
 | `/bb status` | op | Pack server, downloads, recipes, live effects, disabled weapons. |
@@ -84,8 +100,9 @@ Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.ar
 - `gameplay.respect-world-pvp`: abilities don't hurt, pull or launch players where PvP is off.
 - `effects.particle-multiplier`: 0.5 halves every particle, 0 turns them off.
 - `kill-tracking`: turn it off, or count only player kills.
-- `recipes`: off by default. Turn on for a crafting recipe per weapon (all editable). Weapons can
-  never be used as crafting ingredients.
+- `armor`: the Blood Knight set on or off, and every set-bonus number.
+- `recipes`: off by default. Turn on for a crafting recipe per weapon and armour piece (all
+  editable). Bloodbath items can never be used as crafting ingredients.
 - `items.tooltip-frame`: the blood tooltip frame (see below).
 
 ## Resource pack
@@ -106,8 +123,8 @@ typed to join. There's nothing to configure if that port is reachable.
 
 If a download fails, the player is told, and the console says why (usually the port).
 
-The pack overrides the vanilla netherite sword and bow models only for Bloodbath items (matched by
-`custom_model_data`); every other sword and bow is untouched.
+The pack overrides the vanilla netherite sword, bow and netherite armour models only for Bloodbath
+items (matched by `custom_model_data`); every other item, armour trims included, is untouched.
 
 ## Dupe and exploit safety
 
@@ -118,13 +135,21 @@ The pack overrides the vanilla netherite sword and bow models only for Bloodbath
   deleted on sight.
 - **Armory:** every icon is a sheet of paper wearing the weapon's look, and every click in the
   menu is cancelled, so nothing real can be pulled out of it.
-- **Crafting:** weapons are netherite swords and bows underneath, so they're blocked as crafting
+- **Crafting:** weapons and armour are netherite underneath, so they're blocked as crafting
   ingredients (that also stops the grid's repair recipe turning two weapons into one sword).
 - **Teleports** (rift, pike, recall) never put you inside blocks, and don't carry you across
   dimensions mid-cast. Bloodhook and Transfusion need line of sight.
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.1.0
+
+- **Blood Knight armour**, based on the boss model: four pieces with set bonuses (Bloodlust and
+  Blood Rage), their own worn texture, an armory row, recipes and config.
+- **No more texture flicker.** Every model had overlapping faces that z-fought (flickered)
+  at some angles. The generator now finds them and pushes the smaller face out. It also pads every
+  texture with a 1-pixel border so edges don't bleed at a distance.
 
 ## What's new in 1.0.0
 
@@ -144,12 +169,13 @@ The pack overrides the vanilla netherite sword and bow models only for Bloodbath
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.0.0.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.1.0.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock
 Paper 1.21.11 server) and play it: every weapon's ability and passive, kill tracking, the armory,
-the mirror's dupe guards, commands, config reloads, recipes and the pack server. The test world
+the mirror's dupe guards, the armour set bonuses, commands, config reloads, recipes and the pack
+server. The test world
 checks particle data the way Paper does, and any error the plugin logs fails the test.
 
 `paper/offline-build/build.sh` builds the same plugin without Gradle or network access (it needs
@@ -161,7 +187,8 @@ is byte-for-byte reproducible.
 The models, textures, tooltip frame and pack overrides in `resourcepack/` are all generated by
 [`tools/models/generate.py`](tools/models/generate.py) (needs `numpy` and `pillow`). Edit the cube
 lists there and rerun it. Each weapon is 11-24 cubes with its own painted texture; the bow has an
-idle model and three pull stages. The `.json` models open in Blockbench as Java Block/Item models.
+idle model and three pull stages. The armour's worn textures (`textures/entity/equipment`) are
+painted there too. The `.json` models open in Blockbench as Java Block/Item models.
 
 ## The Fabric mod (legacy)
 

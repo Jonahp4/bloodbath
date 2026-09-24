@@ -32,7 +32,7 @@ import os
 import shutil
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageColor
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 PACK = os.path.join(ROOT, "resourcepack")          # shared by the Paper plugin and the Fabric mod
@@ -105,6 +105,7 @@ CLOT = pal("#120103", "#240306", "#38060b", "#520912", "#7a0f1a")
 PARCHMENT = pal("#6b5a3e", "#8f7a55", "#b39d70", "#d4c192", "#efe2b8")
 HIDE = pal("#1c0205", "#33050b", "#520912", "#721020", "#95192c")
 STRING = pal("#5a0a10", "#8c1019", "#bf1c28", "#ef4a57", "#ffb0b6")
+KNIGHT = pal("#08080a", "#141417", "#212125", "#303036", "#43434a", "#5c5c64")  # the Blood Knight's plate
 STAIN = hexrgb("#7a0d18")
 STAIN_DARK = hexrgb("#4a0610")
 WHITE = hexrgb("#ffffff")
@@ -254,7 +255,24 @@ def paint_texel(mat, face, u, v, w, h, p, el):
         return c
     if mat == "string":
         return ramp(STRING, 0.4 + 0.5 * fbm(x, y * 2, z, seed))
+    if mat == "knight":
+        return knight_plate(x, y, z, seed, top_left, bottom_right)
     raise ValueError(mat)
+
+
+def knight_plate(x, y, z, seed, highlight=False, shade=False):
+    """The Blood Knight boss's armour: gunmetal plates streaked with blood, white-lit edges."""
+    c = ramp(KNIGHT, 0.2 + 0.65 * fbm(x * 0.5, y * 0.5, z * 0.5, seed, 3))
+    smear = fbm(x * 0.45 + 5, y * 0.18, z * 0.45, 61, 3)          # blood runs down the plates
+    if smear > 0.57:
+        c = ramp(BLOOD, 0.1 + (smear - 0.57) * 2.4)
+    if smear > 0.75:
+        c = ramp(GLOW, (smear - 0.75) * 2.5)
+    if highlight:
+        c = c * 0.35 + WHITE * 0.65
+    if shade:
+        c = c * 0.45
+    return c
 
 
 # --------------------------------------------------------------------------------------------
@@ -507,6 +525,83 @@ def blood_grimoire():
     return m
 
 
+# ---- the Blood Knight's armour (inventory models; the worn look is painted separately) ------
+
+# The helm is a plain, vanilla-shaped 16x16 icon rather than a 3D model: gunmetal plate lit from
+# the top left, a blood-red band, a visor slit with two burning eyes, open at the face.
+HELM_ICON = [
+    "................",
+    "................",
+    "................",
+    "....oooooooo....",
+    "...ohhhccccbo...",
+    "..ohhcccccRcbo..",
+    "..ohccccccccbo..",
+    "..orrrrrrrrrdo..",
+    "..obkggkkggkao..",
+    "..ohcbo..obaao..",
+    "..ohcbo..oRaao..",
+    "..orrro..orddo..",
+    "..ooooo..ooooo..",
+    "................",
+    "................",
+    "................",
+]
+HELM_COLORS = {
+    "o": "#0a0a0c", "a": "#26262c", "b": "#36363e", "c": "#4a4a54", "h": "#70707c",
+    "k": "#0d0707", "g": "#ff3b45", "r": "#b3141f", "d": "#7a0d16", "R": "#5a0a12",
+}
+
+
+def blood_knight_helm_icon():
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    for y, row in enumerate(HELM_ICON):
+        assert len(row) == 16, y
+        for x, ch in enumerate(row):
+            if ch != ".":
+                img.putpixel((x, y), ImageColor.getrgb(HELM_COLORS[ch]) + (255,))
+    return img
+
+
+def blood_knight_cuirass():
+    m = Model()
+    m.box(3.6, 2.0, 5.6, 12.4, 11.0, 10.4, "knight", name="torso")
+    m.box(4.2, 5.0, 10.4, 11.8, 10.4, 11.0, "knight", name="breastplate")
+    for i, y in enumerate((2.4, 3.7)):
+        m.box(4.0, y, 10.4, 12.0, y + 1.0, 10.9, "knight", name=f"fauld_{i}")
+    m.diamond(8.0, 7.6, 3.4, 0.5, "blackblade", cz=11.1, name="core_setting")
+    m.diamond(8.0, 7.6, 2.2, 0.8, "glow", cz=11.25, name="core")
+    m.box(5.4, 11.0, 6.2, 10.6, 12.4, 9.8, "knight", name="gorget")
+    for side, x1 in (("l", 1.0), ("r", 11.2)):
+        m.box(x1, 8.4, 5.0, x1 + 3.8, 12.0, 11.0, "knight", name=f"pauldron_{side}")
+        m.box(x1 - 0.2, 7.8, 4.8, x1 + 4.0, 8.6, 11.2, "blade", name=f"pauldron_trim_{side}")
+        m.diamond(x1 + 1.9, 12.3, 1.2, 1.2, "bone", name=f"pauldron_spike_{side}")
+    return m
+
+
+def blood_knight_greaves():
+    m = Model()
+    m.box(3.6, 10.0, 5.6, 12.4, 12.0, 10.4, "knight", name="waist")
+    m.diamond(8.0, 11.0, 1.8, 0.5, "glow", cz=10.6, name="buckle")
+    for side, x1 in (("l", 4.0), ("r", 8.4)):
+        m.box(x1, 1.0, 6.0, x1 + 3.6, 10.0, 10.0, "knight", name=f"leg_{side}")
+        m.box(x1 - 0.3, 4.2, 9.9, x1 + 3.9, 6.2, 10.6, "knight", name=f"knee_{side}")
+        m.box(x1 + 1.3, 1.8, 10.0, x1 + 2.3, 3.6, 10.2, "glow", name=f"shin_slit_{side}")
+        m.box(x1 + 0.2, 7.4, 10.4, x1 + 3.4, 10.2, 11.0, "knight", name=f"tasset_{side}")
+    return m
+
+
+def blood_knight_sabatons():
+    m = Model()
+    for side, x1 in (("l", 3.0), ("r", 8.6)):
+        m.box(x1, 1.0, 5.0, x1 + 4.4, 6.0, 10.0, "knight", name=f"boot_{side}")
+        m.box(x1, 1.0, 10.0, x1 + 4.4, 3.2, 12.6, "knight", name=f"toe_{side}")
+        m.box(x1 - 0.2, 4.6, 4.8, x1 + 4.6, 5.6, 10.2, "blade", name=f"cuff_{side}")
+        m.box(x1 + 1.7, 2.2, 12.5, x1 + 2.7, 2.8, 12.75, "glow", name=f"toe_glow_{side}")
+        m.diamond(x1 + 2.2, 3.4, 1.2, 1.2, "bone", cz=4.6, name=f"spur_{side}")
+    return m
+
+
 def paradox_bow(stage):
     """stage 0 = idle (no arrow), 1..3 = pulling_0..pulling_2."""
     m = Model()
@@ -561,6 +656,12 @@ WEAPONS = {
     "vampire_fang": ("Vampire Fang", vampire_fang),
     "blood_grimoire": ("Blood Grimoire", blood_grimoire),
 }
+ARMOR = {
+    "blood_knight_helm": ("Blood Knight Helm", None, "helmet"),       # flat icon, see HELM_ICON
+    "blood_knight_cuirass": ("Blood Knight Cuirass", blood_knight_cuirass, "chestplate"),
+    "blood_knight_greaves": ("Blood Knight Greaves", blood_knight_greaves, "leggings"),
+    "blood_knight_sabatons": ("Blood Knight Sabatons", blood_knight_sabatons, "boots"),
+}
 BOW_IDLE = None  # set in main(): framing reference for the bow's pull stages
 BOW_STAGES = {"paradox_bow_pulling_0": 1, "paradox_bow_pulling_1": 2, "paradox_bow_pulling_2": 3}
 
@@ -599,6 +700,9 @@ def texel_size(d):
     return max(1, int(math.ceil(d - 0.05)))
 
 
+GUTTER = 1  # texels of padding around every face in the atlas
+
+
 def pack(rects, width):
     """Shelf packer: rects = [(key, w, h)] -> {key: (x, y)}, total height."""
     placed, x, y, shelf = {}, 0, 0, 0
@@ -609,6 +713,127 @@ def pack(rects, width):
         x += w
         shelf = max(shelf, h)
     return placed, y + shelf
+
+
+# --------------------------------------------------------------------------------------------
+# Z-fighting: two cubes whose faces lie in the same plane, facing the same way, flicker between
+# each other's textures ("texture clipping"). Every model is checked in world space (element
+# rotations applied) and the smaller face of each clash is pushed out by a hair so one face
+# always wins.
+# --------------------------------------------------------------------------------------------
+
+ZF_EPS = 1e-4
+ZF_NUDGE = 0.02
+
+
+def _rotate(el, p, about_origin=True):
+    if not el["rot"]:
+        return p
+    axis, angle, origin = el["rot"]
+    a = math.radians(angle)
+    o = list(origin) if about_origin else [0.0, 0.0, 0.0]
+    # Right-handed about the axis, like Minecraft: +angle about Z turns +X toward +Y, about X
+    # turns +Y toward +Z, about Y turns +Z toward +X.
+    i, j = {"x": (1, 2), "y": (2, 0), "z": (0, 1)}[axis]
+    q = list(p)
+    di, dj = p[i] - o[i], p[j] - o[j]
+    q[i] = o[i] + di * math.cos(a) - dj * math.sin(a)
+    q[j] = o[j] + di * math.sin(a) + dj * math.cos(a)
+    return tuple(q)
+
+
+def _world_face(el, axis, sign):
+    lo, hi = el["from"], el["to"]
+    u, v = [i for i in range(3) if i != axis]
+    corners = []
+    for a, b in ((0, 0), (1, 0), (1, 1), (0, 1)):
+        q = [0.0, 0.0, 0.0]
+        q[axis] = hi[axis] if sign > 0 else lo[axis]
+        q[u] = (lo, hi)[a][u]
+        q[v] = (lo, hi)[b][v]
+        corners.append(_rotate(el, q))
+    n = [0.0, 0.0, 0.0]
+    n[axis] = float(sign)
+    return np.array(_rotate(el, n, about_origin=False)), [np.array(c) for c in corners]
+
+
+def _clip(subject, clipper):
+    """Sutherland-Hodgman: convex polygon intersection in 2D."""
+    def inside(p, a, b):
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= -1e-9
+    def cross_point(p1, p2, a, b):
+        d1, d2 = p2 - p1, b - a
+        den = d1[0] * d2[1] - d1[1] * d2[0]
+        t = ((a[0] - p1[0]) * d2[1] - (a[1] - p1[1]) * d2[0]) / den
+        return p1 + d1 * t
+    out = subject
+    for i in range(len(clipper)):
+        a, b = clipper[i], clipper[(i + 1) % len(clipper)]
+        inp, out = out, []
+        for j in range(len(inp)):
+            cur, prev = inp[j], inp[j - 1]
+            if inside(cur, a, b):
+                if not inside(prev, a, b):
+                    out.append(cross_point(prev, cur, a, b))
+                out.append(cur)
+            elif inside(prev, a, b):
+                out.append(cross_point(prev, cur, a, b))
+        if not out:
+            return []
+    return out
+
+
+def _area(poly):
+    return abs(sum(poly[i][0] * poly[i - 1][1] - poly[i - 1][0] * poly[i][1] for i in range(len(poly)))) / 2
+
+
+def _ccw(poly):
+    return poly if sum(poly[i - 1][0] * poly[i][1] - poly[i][0] * poly[i - 1][1] for i in range(len(poly))) > 0 else poly[::-1]
+
+
+def zfighting(model):
+    """[(i, axis_i, sign_i, j, axis_j, sign_j, overlap_area)] for every clashing pair of faces."""
+    faces = [(i, axis, sign) + _world_face(el, axis, sign)
+             for i, el in enumerate(model.elements) for axis in range(3) for sign in (-1, 1)]
+    clashes = []
+    for k, (i, ai, si, ni, ci) in enumerate(faces):
+        for j, aj, sj, nj, cj in faces[k + 1:]:
+            if i == j or np.dot(ni, nj) < 1 - 1e-6 or abs(np.dot(ni, ci[0]) - np.dot(nj, cj[0])) > ZF_EPS:
+                continue
+            # 2D basis in the shared plane.
+            e1 = ci[1] - ci[0]
+            e1 = e1 / np.linalg.norm(e1)
+            e2 = np.cross(ni, e1)
+            to2d = lambda pts: _ccw([np.array([np.dot(p, e1), np.dot(p, e2)]) for p in pts])
+            overlap = _clip(to2d(ci), to2d(cj))
+            if len(overlap) >= 3 and _area(overlap) > ZF_EPS:
+                clashes.append((i, ai, si, j, aj, sj, _area(overlap)))
+    return clashes
+
+
+def resolve_zfighting(model, name):
+    """Pushes the smaller face of every clash outward until the model is clean."""
+    fixed = 0
+    for _ in range(12):
+        clashes = zfighting(model)
+        if not clashes:
+            if fixed:
+                print(f"  {name}: fixed {fixed} flickering face pair(s)")
+            return
+        seen = set()
+        for i, ai, si, j, aj, sj, _ in clashes:
+            area = lambda e, ax: math.prod(e["to"][d] - e["from"][d] for d in range(3) if d != ax)
+            k, ax, sg = (i, ai, si) if area(model.elements[i], ai) <= area(model.elements[j], aj) else (j, aj, sj)
+            if (k, ax, sg) in seen:
+                continue
+            seen.add((k, ax, sg))
+            el = model.elements[k]
+            if sg > 0:
+                el["to"] = el["to"][:ax] + [el["to"][ax] + ZF_NUDGE] + el["to"][ax + 1:]
+            else:
+                el["from"] = el["from"][:ax] + [el["from"][ax] - ZF_NUDGE] + el["from"][ax + 1:]
+            fixed += 1
+    raise AssertionError(f"{name}: z-fighting didn't converge: {zfighting(model)[:3]}")
 
 
 def build_texture(models, weapon):
@@ -622,7 +847,7 @@ def build_texture(models, weapon):
             for face in FACES:
                 w, h = (texel_size(d) for d in face_dims(el, face))
                 key = (mi, ei, face)
-                rects.append((key, w, h))
+                rects.append((key, w + 2 * GUTTER, h + 2 * GUTTER))
                 meta[key] = (el, w, h)
     for size in (32, 64, 128, 256):
         placed, height = pack(rects, size)
@@ -630,14 +855,23 @@ def build_texture(models, weapon):
             break
     img = np.zeros((size, size, 4), dtype=float)
     uvs = {}
-    for key, (px, py) in placed.items():
+    for key, (gx, gy) in placed.items():
         el, w, h = meta[key]
         face = key[2]
+        px, py = gx + GUTTER, gy + GUTTER
         for v in range(h):
             for u in range(w):
                 c = paint_texel(el["mat"], face, u, v, w, h, texel_point(el, face, u, v, w, h), el)
                 img[py + v, px + u, :3] = np.clip(c, 0, 255)
                 img[py + v, px + u, 3] = 255
+        # Repeat each face's edge texels into its gutter, so filtering and mipmaps at a face's edge
+        # sample its own colours instead of the neighbouring face's.
+        for d in range(1, GUTTER + 1):
+            img[py - d, px:px + w] = img[py, px:px + w]
+            img[py + h - 1 + d, px:px + w] = img[py + h - 1, px:px + w]
+        for d in range(1, GUTTER + 1):
+            img[py - GUTTER:py + h + GUTTER, px - d] = img[py - GUTTER:py + h + GUTTER, px]
+            img[py - GUTTER:py + h + GUTTER, px + w - 1 + d] = img[py - GUTTER:py + h + GUTTER, px + w - 1]
         s = 16.0 / size
         uvs[key] = [round(px * s, 4), round(py * s, 4), round((px + w) * s, 4), round((py + h) * s, 4)]
     return Image.fromarray(img.astype("uint8"), "RGBA"), uvs, size
@@ -666,13 +900,8 @@ def extent(model):
     """Longest extent of the model once pre-rotated by -45 degrees (as shown in hand/GUI)."""
     pts = []
     for e in model.elements:
-        (x1, y1, _), (x2, y2, _) = e["from"], e["to"]
-        corners = [(x1, y1), (x1, y2), (x2, y1), (x2, y2)]
-        if e["rot"] and e["rot"][0] == "z":
-            a = math.radians(e["rot"][1])
-            ox, oy = e["rot"][2][:2]
-            corners = [(ox + (x - ox) * math.cos(a) - (y - oy) * math.sin(a), oy + (x - ox) * math.sin(a) + (y - oy) * math.cos(a)) for x, y in corners]
-        pts += corners
+        (x1, y1, z1), (x2, y2, z2) = e["from"], e["to"]
+        pts += [_rotate(e, (x, y, z))[:2] for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
     a = math.radians(-45)
     rot = [((x - 8) * math.cos(a) - (y - 8) * math.sin(a), (x - 8) * math.sin(a) + (y - 8) * math.cos(a)) for x, y in pts]
     xs, ys = [p[0] for p in rot], [p[1] for p in rot]
@@ -684,16 +913,11 @@ def v3(s):
 
 
 def model_corners(model):
-    """Every cube corner in model space (element Z rotations applied)."""
+    """Every cube corner in model space (element rotations applied)."""
     pts = []
     for e in model.elements:
         (x1, y1, z1), (x2, y2, z2) = e["from"], e["to"]
-        corners = [(x, y, z) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
-        if e["rot"] and e["rot"][0] == "z":
-            a = math.radians(e["rot"][1])
-            ox, oy = e["rot"][2][:2]
-            corners = [(ox + (x - ox) * math.cos(a) - (y - oy) * math.sin(a), oy + (x - ox) * math.sin(a) + (y - oy) * math.cos(a), z) for x, y, z in corners]
-        pts += corners
+        pts += [_rotate(e, (x, y, z)) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
     return np.array(pts) - 8.0
 
 
@@ -710,16 +934,11 @@ def fit_to_slot(transform, model, fill=15.0, max_scale=1.0, base=(0.0, 0.0, 0.0)
 
 
 def model_center(model):
-    """Centre of the model's bounding box in model space (element Z rotations included)."""
+    """Centre of the model's bounding box in model space (element rotations included)."""
     pts = []
     for e in model.elements:
         (x1, y1, z1), (x2, y2, z2) = e["from"], e["to"]
-        corners = [(x, y, z) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
-        if e["rot"] and e["rot"][0] == "z":
-            a = math.radians(e["rot"][1])
-            ox, oy = e["rot"][2][:2]
-            corners = [(ox + (x - ox) * math.cos(a) - (y - oy) * math.sin(a), oy + (x - ox) * math.sin(a) + (y - oy) * math.cos(a), z) for x, y, z in corners]
-        pts += corners
+        pts += [_rotate(e, (x, y, z)) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
     return [(min(p[i] for p in pts) + max(p[i] for p in pts)) / 2 for i in range(3)]
 
 
@@ -781,9 +1000,17 @@ def display(model, weapon):
         disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
         disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
         disp["head"] = {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
+    if weapon.startswith("blood_knight_"):
+        # Armour pieces: shown front-on at a 3/4 angle, held like any other item.
+        disp["thirdperson_righthand"] = {"rotation": [0, 0, 0], "translation": [0, 3, 1], "scale": v3(0.55)}
+        disp["firstperson_righthand"] = {"rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68)}
+        disp["gui"] = {"rotation": [20, -30, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
+        disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
+        disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
+        disp["head"] = {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
     # The bow's pull stages must keep the idle model's framing, or the icon would jump around.
     framing = BOW_IDLE if weapon.startswith("paradox_bow") else model
-    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon in ("meteor_gauntlet", "blood_grimoire") else 1.0)
+    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon in ("meteor_gauntlet", "blood_grimoire") or weapon.startswith("blood_knight_") else 1.0)
     fit_to_slot(disp["fixed"], framing, fill=14.0)
     fit_to_slot(disp["ground"], framing, fill=7.0, max_scale=0.5, base=(0.0, 2.0, 0.0))
     return disp
@@ -836,10 +1063,20 @@ def main():
     definitions = {}
     global BOW_IDLE
     BOW_IDLE = paradox_bow(0)
-    for weapon, (title, build) in WEAPONS.items():
+    items = {**{k: v for k, v in WEAPONS.items()}, **{k: (t, b) for k, (t, b, _) in ARMOR.items()}}
+    for weapon, (title, build) in items.items():
+        if build is None:
+            write_flat_item(weapon, models_out, tex_out)
+            definitions[weapon] = item_definition(weapon)
+            with open(os.path.join(items_out, f"{weapon}.json"), "w") as f:
+                json.dump(definitions[weapon], f, indent=2)
+            print(f"{weapon:24s} flat 16x16 icon")
+            continue
         variants = [(weapon, build())]
         if weapon == "paradox_bow":
             variants += [(name, paradox_bow(stage)) for name, stage in BOW_STAGES.items()]
+        for name, model in variants:
+            resolve_zfighting(model, name)
         atlas, uvs, size = build_texture([m for _, m in variants], weapon)
         atlas.save(os.path.join(tex_out, f"{weapon}.png"))
         atlas.save(os.path.join(prev_dir, "textures", f"{weapon}.png"))
@@ -866,8 +1103,16 @@ def main():
     with open(os.path.join(prev_dir, "models.json"), "w") as f:
         json.dump(preview, f, separators=(",", ":"))
     write_vanilla_overrides(definitions)
+    write_armor_overrides(definitions)
+    write_knight_equipment()
     write_tooltip_sprites()
     write_pack_meta()
+
+
+def write_flat_item(name, models_out, tex_out):
+    blood_knight_helm_icon().save(os.path.join(tex_out, f"{name}.png"))
+    with open(os.path.join(models_out, f"{name}.json"), "w") as f:
+        json.dump({"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/{name}"}}, f, indent=1)
 
 
 def vanilla_model(path):
@@ -963,6 +1208,172 @@ def write_tooltip_sprites():
     with open(os.path.join(out, "bloodbath_frame.png.mcmeta"), "w") as f:
         json.dump({"gui": {"scaling": {"type": "nine_slice", "width": size, "height": size, "border": 10,
                                        "stretch_inner": True}}}, f, indent=2)
+
+
+TRIMS = ("quartz", "iron", "netherite", "redstone", "copper", "gold", "emerald", "diamond", "lapis", "amethyst", "resin")
+
+
+def write_armor_overrides(definitions):
+    """Netherite armour items: our model for Blood Knight pieces, vanilla (with trims) otherwise."""
+    out = os.path.join(PACK, "assets", "minecraft", "items")
+    for piece, (_, _, kind) in ARMOR.items():
+        vanilla = {  # verbatim structure of vanilla assets/minecraft/items/netherite_<kind>.json
+            "type": "minecraft:select",
+            "property": "minecraft:trim_material",
+            "cases": [{"when": f"minecraft:{t}", "model": vanilla_model(f"netherite_{kind}_{t}_trim")} for t in TRIMS],
+            "fallback": vanilla_model(f"netherite_{kind}"),
+        }
+        with open(os.path.join(out, f"netherite_{kind}.json"), "w") as f:
+            json.dump({"model": {
+                "type": "minecraft:select",
+                "property": "minecraft:custom_model_data",
+                "index": 0,
+                "cases": [{"when": f"bloodbath:{piece}", "model": definitions[piece]["model"]}],
+                "fallback": vanilla,
+            }}, f, indent=2)
+
+
+# The worn look: the vanilla humanoid armour layout at 2x (128x64), painted like the boss.
+KS = 2  # texels per armour-texture unit
+
+
+def _box_faces(u, v, w, h, d):
+    """Vanilla box UV layout: {face: (x, y, width, height)} in texture units."""
+    return {"top": (u + d, v, w, d), "bottom": (u + d + w, v, w, d), "right": (u, v + d, d, h),
+            "front": (u + d, v + d, w, h), "left": (u + d + w, v + d, d, h), "back": (u + d + w + d, v + d, w, h)}
+
+
+def _paint_box(img, u, v, w, h, d, seed, detail=None, rows=None):
+    """Paints one box of the armour texture. detail(face, px, py, fw, fh) may return a colour
+    (or None for plate); rows limits side faces to their lowest `rows` texture units (boots)."""
+    for face, (fx, fy, fw, fh) in _box_faces(u, v, w, h, d).items():
+        fw, fh = fw * KS, fh * KS
+        for py in range(fh):
+            if rows is not None and face not in ("top", "bottom") and py < fh - rows * KS:
+                continue
+            if rows is not None and face == "top":
+                continue
+            for px in range(fw):
+                gx, gy = fx * KS + px, fy * KS + py
+                c = detail(face, px, py, fw, fh) if detail else None
+                if c is None:
+                    edge_hi = py == 0 or (rows is not None and py == fh - rows * KS)
+                    c = knight_plate(gx * 0.5, gy * 0.5, seed * 0.37, seed, edge_hi and face not in ("top", "bottom"),
+                                     py == fh - 1 and face not in ("top", "bottom"))
+                    # Plate seams every few texels, like the boss's layered armour.
+                    if face not in ("top", "bottom") and py % 10 == 9:
+                        c = c * 0.5
+                img[gy, gx, :3] = np.clip(c, 0, 255)
+                img[gy, gx, 3] = 255
+
+
+def _helm_detail(face, px, py, fw, fh):
+    if face == "front":  # 16x16: a plain closed helm, red band, visor slit with burning eyes
+        if py == 0:
+            return KNIGHT[5]
+        if py == 4:
+            return ramp(BLOOD, 0.6)                           # the band, same as the icon
+        if py in (6, 7) and 1 <= px <= 14:
+            if (3 <= px <= 5 or 10 <= px <= 12):
+                return ramp(GLOW, 0.85 if py == 6 else 0.55)
+            return KNIGHT[0]                                  # the visor slit
+        if py == 8 and 1 <= px <= 14:
+            return KNIGHT[4]                                  # lit lower lip of the slit
+        if 10 <= py <= 13 and px in (5, 7, 8, 10) and py % 2 == 0:
+            return KNIGHT[0]                                  # breathing holes
+    if face in ("left", "right", "back") and py == 4:
+        return ramp(BLOOD, 0.6)                               # the band goes all the way round
+    if face in ("left", "right") and py == 9:
+        return KNIGHT[0]                                      # cheek guard seam
+    return None
+
+
+def _chest_detail(face, px, py, fw, fh):
+    if face == "front":  # 16x24: breastplate with the glowing core, then faulds
+        cx, cy = 7.5, 8.5
+        dist = abs(px - cx) + abs(py - cy)
+        if dist <= 2.0:
+            return ramp(GLOW, 0.8)
+        if dist <= 3.2:
+            return ramp(GLOW, 0.3)
+        if dist <= 4.0:
+            return KNIGHT[0]
+        if py in (15, 18, 21):
+            return KNIGHT[0]
+        if py in (16, 19, 22):
+            return KNIGHT[4]
+    if face == "back" and 7 <= px <= 8:
+        return ramp(BLOOD, 0.45)
+    return None
+
+
+def _arm_detail(face, px, py, fw, fh):
+    if face == "top" or py <= 8:  # pauldron
+        c = knight_plate(px * 0.5 + 40, py * 0.5, 3, 7)
+        if py == 0 or py == 8:
+            return c * 0.35 + WHITE * 0.65 if py == 0 else ramp(BLOOD, 0.55)
+        return c * 0.8
+    if face != "top" and face != "bottom" and 18 <= py <= 19 and 2 <= px <= fw - 3:
+        return ramp(GLOW, 0.6)          # a glowing slit in the vambrace
+    return None
+
+
+def _boot_detail(face, px, py, fw, fh):
+    if face == "front" and py >= fh - 3 and 2 <= px <= 5:
+        return ramp(GLOW, 0.6)
+    if py == fh - 10:
+        return ramp(BLOOD, 0.6)           # blood-red cuff
+    return None
+
+
+def _waist_detail(face, px, py, fw, fh):
+    """Leggings show only the lowest 4 units of the body box: a belt, then faulds."""
+    if face in ("front", "back", "left", "right") and py in (fh - 8, fh - 7):
+        if face == "front" and fw // 2 - 2 <= px <= fw // 2 + 1:
+            return ramp(GLOW, 0.7)
+        return ramp(BLOOD, 0.35)
+    return None
+
+
+def _leg_detail(face, px, py, fw, fh):
+    if face in ("front", "back", "left", "right"):
+        if py <= 1:
+            return ramp(BLOOD, 0.35)                                  # belt line
+        if face == "front" and 9 <= py <= 12:                         # knee guard
+            return KNIGHT[4] if py == 9 else KNIGHT[3] * 0.8 + ramp(BLOOD, 0.3) * 0.2
+        if face == "front" and 16 <= py <= 19 and 3 <= px <= 4:
+            return ramp(GLOW, 0.6)                                    # shin slit
+    return None
+
+
+def write_knight_equipment():
+    tex = os.path.join(ASSETS, "textures", "entity", "equipment")
+    os.makedirs(os.path.join(tex, "humanoid"), exist_ok=True)
+    os.makedirs(os.path.join(tex, "humanoid_leggings"), exist_ok=True)
+
+    outer = np.zeros((32 * KS, 64 * KS, 4), dtype=float)
+    _paint_box(outer, 0, 0, 8, 8, 8, 11, _helm_detail)        # helmet (head)
+    _paint_box(outer, 16, 16, 8, 12, 4, 23, _chest_detail)    # chestplate (body)
+    _paint_box(outer, 40, 16, 4, 12, 4, 37, _arm_detail)      # chestplate (arms)
+    _paint_box(outer, 0, 16, 4, 12, 4, 53, _boot_detail, rows=5)  # boots (legs)
+    Image.fromarray(outer.astype("uint8"), "RGBA").save(os.path.join(tex, "humanoid", "blood_knight.png"))
+
+    inner = np.zeros((32 * KS, 64 * KS, 4), dtype=float)
+    waist = np.zeros_like(inner)
+    _paint_box(waist, 16, 16, 8, 12, 4, 67, _waist_detail)
+    # Leggings only show the lower part of the body box (belt and faulds).
+    for face, (fx, fy, fw, fh) in _box_faces(16, 16, 8, 12, 4).items():
+        if face in ("front", "back", "left", "right"):
+            y0 = (fy + fh) * KS - 8
+            inner[y0:(fy + fh) * KS, fx * KS:(fx + fw) * KS] = waist[y0:(fy + fh) * KS, fx * KS:(fx + fw) * KS]
+    _paint_box(inner, 0, 16, 4, 12, 4, 79, _leg_detail)       # leggings (legs)
+    Image.fromarray(inner.astype("uint8"), "RGBA").save(os.path.join(tex, "humanoid_leggings", "blood_knight.png"))
+
+    eq = os.path.join(ASSETS, "equipment")
+    os.makedirs(eq, exist_ok=True)
+    with open(os.path.join(eq, "blood_knight.json"), "w") as f:
+        json.dump({"layers": {"humanoid": [{"texture": f"{NS}:blood_knight"}],
+                              "humanoid_leggings": [{"texture": f"{NS}:blood_knight"}]}}, f, indent=2)
 
 
 PACK_DESCRIPTION = "\u00a74Bloodbath\u00a7r 3D weapons"

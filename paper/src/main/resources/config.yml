@@ -152,8 +152,22 @@ weapons:
     gift-heal: 8
     gift-regeneration: 4
 
+# The Blood Knight's armour (helm, cuirass, greaves, sabatons). Netherite protection plus a heart
+# of health per piece. Without the resource pack it looks like netherite in the inventory but is
+# invisible when worn, so keep that in mind if the pack is optional on your server.
+armor:
+  enabled: true
+  # (2 pieces) Bloodlust: health every kill gives back.
+  kill-heal: 3
+  # (4 pieces) Blood Rage: when a hit leaves you at this share of your max health or less, you get
+  # Strength and Resistance and a blood shockwave hurls everything nearby away.
+  rage-threshold: 0.4
+  rage-duration: 8
+  rage-radius: 4
+  rage-cooldown: 60
+
 # Crafting recipes. Off by default: most servers hand weapons out with /bloodbath give or the
-# armory. Bloodbath weapons can never be used as crafting ingredients.
+# armory. Bloodbath weapons and armour can never be used as crafting ingredients.
 recipes:
   enabled: false
   riftblade:
@@ -192,3 +206,15 @@ recipes:
   blood_grimoire:
     shape: [' N ', 'RBR', ' T ']
     ingredients: {N: NETHERITE_INGOT, R: REDSTONE_BLOCK, B: BOOK, T: TOTEM_OF_UNDYING}
+  blood_knight_helm:
+    shape: [' W ', 'RHR', ' R ']
+    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, H: NETHERITE_HELMET}
+  blood_knight_cuirass:
+    shape: [' C ', 'RAR', ' R ']
+    ingredients: {C: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, A: NETHERITE_CHESTPLATE}
+  blood_knight_greaves:
+    shape: [' W ', 'RLR', ' R ']
+    ingredients: {W: NETHER_WART_BLOCK, R: REDSTONE_BLOCK, L: NETHERITE_LEGGINGS}
+  blood_knight_sabatons:
+    shape: [' S ', 'RBR', ' R ']
+    ingredients: {S: SOUL_SAND, R: REDSTONE_BLOCK, B: NETHERITE_BOOTS}

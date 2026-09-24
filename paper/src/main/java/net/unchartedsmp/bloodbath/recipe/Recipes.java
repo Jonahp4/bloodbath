@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
+import net.unchartedsmp.bloodbath.armor.ArmorPiece;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
@@ -14,12 +16,13 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.recipe.CraftingBookCategory;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Optional crafting recipes, one per weapon, read from the {@code recipes} section of config.yml.
+ * Optional crafting recipes, one per weapon and Blood Knight piece, read from the {@code recipes} section of config.yml.
  * Off by default: most servers hand weapons out with /bloodbath give or the armory.
  */
 public final class Recipes {
@@ -40,9 +43,14 @@ public final class Recipes {
 			if (section == null || !settings.enabled(type)) {
 				continue;
 			}
-			ShapedRecipe recipe = parse(new NamespacedKey(plugin, type.id()), type, section, log);
-			if (recipe != null && Bukkit.addRecipe(recipe)) {
-				REGISTERED.add(recipe.getKey());
+			add(plugin, type.id(), Weapons.create(type), section, log);
+		}
+		if (settings.armorEnabled) {
+			for (ArmorPiece piece : ArmorPiece.values()) {
+				ConfigurationSection section = settings.recipes.getConfigurationSection(piece.id());
+				if (section != null) {
+					add(plugin, piece.id(), BloodArmor.create(piece), section, log);
+				}
 			}
 		}
 		if (!REGISTERED.isEmpty()) {
@@ -50,14 +58,21 @@ public final class Recipes {
 			for (Player player : Bukkit.getOnlinePlayers()) {
 				discover(player);
 			}
-			log.info("Registered " + REGISTERED.size() + " weapon recipes.");
+			log.info("Registered " + REGISTERED.size() + " Bloodbath recipes.");
 		}
 	}
 
-	private static ShapedRecipe parse(NamespacedKey key, WeaponType type, ConfigurationSection section, Logger log) {
+	private static void add(Plugin plugin, String id, ItemStack result, ConfigurationSection section, Logger log) {
+		ShapedRecipe recipe = parse(new NamespacedKey(plugin, id), result, section, log);
+		if (recipe != null && Bukkit.addRecipe(recipe)) {
+			REGISTERED.add(recipe.getKey());
+		}
+	}
+
+	private static ShapedRecipe parse(NamespacedKey key, ItemStack result, ConfigurationSection section, Logger log) {
 		List<String> shape = section.getStringList("shape");
 		ConfigurationSection ingredients = section.getConfigurationSection("ingredients");
-		String where = "recipes." + type.id();
+		String where = "recipes." + key.getKey();
 		if (shape.isEmpty() || shape.size() > 3 || ingredients == null) {
 			log.warning(where + ": needs a 'shape' of 1-3 rows and an 'ingredients' map. Skipped.");
 			return null;
@@ -75,7 +90,7 @@ public final class Recipes {
 				}
 			}
 		}
-		ShapedRecipe recipe = new ShapedRecipe(key, Weapons.create(type));
+		ShapedRecipe recipe = new ShapedRecipe(key, result);
 		recipe.shape(shape.toArray(String[]::new));
 		for (char symbol : used) {
 			String name = ingredients.getString(String.valueOf(symbol));
@@ -102,7 +117,7 @@ public final class Recipes {
 		Bukkit.updateRecipes();
 	}
 
-	/** Puts the weapon recipes in the player's recipe book. */
+	/** Puts the Bloodbath recipes in the player's recipe book. */
 	public static void discover(Player player) {
 		if (!REGISTERED.isEmpty() && player.hasPermission("bloodbath.craft")) {
 			player.discoverRecipes(REGISTERED);

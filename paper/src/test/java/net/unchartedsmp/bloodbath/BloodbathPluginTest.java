@@ -29,6 +29,8 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.unchartedsmp.bloodbath.ability.Ability;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
+import net.unchartedsmp.bloodbath.armor.ArmorPiece;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
 import net.unchartedsmp.bloodbath.hud.Hud;
@@ -47,6 +49,8 @@ import net.unchartedsmp.bloodbath.weapon.behavior.Mirrorfang;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.damage.DamageSource;
@@ -289,7 +293,7 @@ class BloodbathPluginTest {
 				given.add(item);
 			}
 		}
-		assertEquals(WeaponType.values().length, given.size());
+		assertEquals(WeaponType.values().length + ArmorPiece.values().length, given.size(), "every weapon and the Blood Knight set");
 		for (WeaponType type : WeaponType.values()) {
 			ItemStack item = given.stream().filter(i -> Weapons.typeOf(i) == type).findFirst().orElse(null);
 			assertNotNull(item, type.id());
@@ -309,7 +313,8 @@ class BloodbathPluginTest {
 			assertFalse(meta.getEnchantmentGlintOverride(), type.id());
 			assertNull(meta.getTooltipStyle(), "the tooltip frame needs a required pack by default");
 		}
-		assertEquals(WeaponType.values().length, chat(player).stream().filter(line -> line.startsWith("☠ You take up the")).count());
+		assertEquals(WeaponType.values().length + ArmorPiece.values().length,
+			chat(player).stream().filter(line -> line.startsWith("☠ You take up the")).count());
 	}
 
 	@Test
@@ -692,6 +697,140 @@ class BloodbathPluginTest {
 		assertEquals(0, Weapons.kills(player.getInventory().getItemInMainHand()));
 	}
 
+	// ---- Blood Knight armour -------------------------------------------------------------------
+
+	private void wear(TestPlayer who, ArmorPiece... pieces) {
+		for (ArmorPiece piece : pieces) {
+			who.getInventory().setItem(piece.slot(), BloodArmor.create(piece));
+		}
+	}
+
+	private static double modifier(ItemStack item, Attribute attribute) {
+		var modifiers = item.getItemMeta().getAttributeModifiers(attribute);
+		assertNotNull(modifiers, attribute.toString());
+		return modifiers.stream().mapToDouble(AttributeModifier::getAmount).sum();
+	}
+
+	@Test
+	void theBloodKnightSetIsNetheritePlusAHeartAndWearsTheKnightsLook() {
+		assertTrue(player.performCommand("bloodbath give Steve armor"));
+		for (ArmorPiece piece : ArmorPiece.values()) {
+			ItemStack item = null;
+			for (ItemStack stack : player.getInventory().getContents()) {
+				if (BloodArmor.typeOf(stack) == piece) {
+					item = stack;
+				}
+			}
+			assertNotNull(item, piece.id());
+			assertEquals(piece.base(), item.getType());
+			ItemMeta meta = item.getItemMeta();
+			assertEquals(piece.displayName(), plain(meta.itemName()));
+			// (The look isn't checked: MockBukkit drops the equippable and custom_model_data
+			// components whenever item meta is copied.)
+			assertEquals(piece.armor(), modifier(item, Attribute.ARMOR), 1.0E-9, piece.id());
+			assertEquals(ArmorPiece.TOUGHNESS, modifier(item, Attribute.ARMOR_TOUGHNESS), 1.0E-9, piece.id());
+			assertEquals(ArmorPiece.HEALTH, modifier(item, Attribute.MAX_HEALTH), 1.0E-9, piece.id());
+			assertTrue(any(lore(item), "(2) Bloodlust: kills heal 1.5 hearts"), piece.id());
+			assertTrue(any(lore(item), "Every 60s."), piece.id());
+			assertNull(Weapons.typeOf(item), "armour is never mistaken for a weapon");
+			assertFalse(BloodArmor.refresh(item), "already current");
+		}
+		assertNull(BloodArmor.typeOf(new ItemStack(Material.NETHERITE_HELMET)));
+		ItemStack forged = new ItemStack(Material.DIAMOND_HELMET);
+		forged.editMeta(meta -> meta.getPersistentDataContainer().set(Keys.ARMOR, PersistentDataType.STRING, "blood_knight_helm"));
+		assertNull(BloodArmor.typeOf(forged), "a tag on the wrong base item doesn't count");
+	}
+
+	@Test
+	void armourIsFoundByNameAndGivenPieceByPiece() {
+		assertEquals(ArmorPiece.GREAVES, ArmorPiece.find("greaves"));
+		assertEquals(ArmorPiece.HELM, ArmorPiece.find("Blood Knight Helm"));
+		assertEquals(ArmorPiece.SABATONS, ArmorPiece.find("blood_knight_sabatons"));
+		player.performCommand("bloodbath give Steve helm");
+		assertEquals(ArmorPiece.HELM, BloodArmor.typeOf(player.getInventory().getItem(0)));
+		chat(player);
+		player.performCommand("bloodbath info cuirass");
+		assertTrue(any(chat(player), "Blood Rage"));
+		var command = plugin.getCommand("bloodbath");
+		assertTrue(command.tabComplete(player, "bb", new String[] {"give", "Steve", "blood_k"}).contains("blood_knight"));
+		assertTrue(command.tabComplete(player, "bb", new String[] {"give", "Steve", "blood_knight_h"}).contains("blood_knight_helm"));
+	}
+
+	@Test
+	void twoPiecesHealOnEveryKill() {
+		wear(player, ArmorPiece.HELM);
+		player.setHealth(10.0);
+		server.getPluginManager().callEvent(new EntityDeathEvent(zombie(1.5, 0.5), attackBy(player), new ArrayList<>()));
+		assertEquals(10.0, player.getHealth(), 1.0E-9, "one piece isn't a set");
+		wear(player, ArmorPiece.CUIRASS);
+		server.getPluginManager().callEvent(new EntityDeathEvent(zombie(1.5, 0.5), attackBy(player), new ArrayList<>()));
+		assertEquals(13.0, player.getHealth(), 1.0E-9);
+	}
+
+	@Test
+	void theFullSetRagesWhenAHitLeavesYouLow() {
+		TestZombie zombie = zombie(2.5, 0.5);
+		wear(player, ArmorPiece.HELM, ArmorPiece.CUIRASS, ArmorPiece.GREAVES);
+		player.setHealth(10.0);
+		server.getPluginManager().callEvent(new EntityDamageEvent(player, EntityDamageEvent.DamageCause.ENTITY_ATTACK, attackBy(zombie), 4.0));
+		ticks(1);
+		assertTrue(Cooldowns.isReady(player, Ability.BLOOD_RAGE), "three pieces: no rage");
+
+		wear(player, ArmorPiece.SABATONS);
+		server.getPluginManager().callEvent(new EntityDamageEvent(player, EntityDamageEvent.DamageCause.ENTITY_ATTACK, attackBy(zombie), 1.0));
+		ticks(1);
+		assertTrue(Cooldowns.isReady(player, Ability.BLOOD_RAGE), "10 - 1 is still above 40%");
+
+		server.getPluginManager().callEvent(new EntityDamageEvent(player, EntityDamageEvent.DamageCause.ENTITY_ATTACK, attackBy(zombie), 4.0));
+		ticks(1);
+		assertFalse(Cooldowns.isReady(player, Ability.BLOOD_RAGE));
+		assertNotNull(player.getPotionEffect(PotionEffectType.STRENGTH));
+		assertNotNull(player.getPotionEffect(PotionEffectType.RESISTANCE));
+		assertTrue(zombie.getVelocity().getX() > 0.5, "hurled away: " + zombie.getVelocity());
+	}
+
+	@Test
+	void aClotStopsTheRage() {
+		wear(player, ArmorPiece.values());
+		player.setHealth(6.0);
+		NullField.debuff(player, 80);
+		server.getPluginManager().callEvent(new EntityDamageEvent(player, EntityDamageEvent.DamageCause.ENTITY_ATTACK, attackBy(zombie(2.5, 0.5)), 1.0));
+		ticks(1);
+		assertTrue(Cooldowns.isReady(player, Ability.BLOOD_RAGE));
+		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH));
+	}
+
+	@Test
+	@SuppressWarnings("removal")
+	void theArmoryHasAnArmourRow() {
+		player.performCommand("bloodbath armory");
+		var view = player.getOpenInventory();
+		assertEquals(45, view.getTopInventory().getSize());
+		ItemStack icon = view.getTopInventory().getItem(29);
+		assertEquals(Material.PAPER, icon.getType());
+		assertNull(BloodArmor.typeOf(icon));
+		assertEquals("Blood Knight Helm", plain(icon.getItemMeta().itemName()));
+		player.simulateInventoryClick(view, ClickType.LEFT, 29);
+		assertEquals(ArmorPiece.HELM, BloodArmor.typeOf(player.getInventory().getItem(0)));
+
+		plugin.getConfig().set("armor.enabled", false);
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		player.performCommand("bloodbath armory");
+		assertEquals(36, player.getOpenInventory().getTopInventory().getSize());
+		chat(player);
+		player.performCommand("bloodbath give Steve armor");
+		assertTrue(any(chat(player), "disabled"));
+	}
+
+	@Test
+	void theMirrorWearsOnlyAPictureOfTheArmour() {
+		ItemStack copy = Weapons.displayCopy(BloodArmor.create(ArmorPiece.CUIRASS));
+		assertEquals(Material.NETHERITE_CHESTPLATE, copy.getType());
+		assertNull(BloodArmor.typeOf(copy));
+		assertNull(copy.getItemMeta().getAttributeModifiers(), "no stats");
+	}
+
 	// ---- armory, commands, config ------------------------------------------------------------
 
 	@Test
@@ -783,10 +922,12 @@ class BloodbathPluginTest {
 		plugin.getConfig().set("recipes.enabled", true);
 		plugin.saveConfig();
 		player.performCommand("bloodbath reload");
-		assertEquals(WeaponType.values().length, Recipes.count());
+		assertEquals(WeaponType.values().length + ArmorPiece.values().length, Recipes.count());
 		ShapedRecipe recipe = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "riftblade"));
 		assertNotNull(recipe);
 		assertEquals(WeaponType.RIFTBLADE, Weapons.typeOf(recipe.getResult()));
+		ShapedRecipe helm = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "blood_knight_helm"));
+		assertEquals(ArmorPiece.HELM, BloodArmor.typeOf(helm.getResult()));
 		plugin.getConfig().set("recipes.enabled", false);
 		plugin.saveConfig();
 		player.performCommand("bloodbath reload");

@@ -13,6 +13,8 @@ import net.unchartedsmp.bloodbath.BloodbathPlugin;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.armor.ArmorPiece;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
@@ -41,10 +43,10 @@ public final class BloodbathCommand implements TabExecutor {
 	private static final List<Sub> SUBS = List.of(
 		new Sub("armory", "armory", "Browse every weapon", ARMORY),
 		new Sub("list", "list", "List the weapons", null),
-		new Sub("info", "info <weapon>", "What a weapon does", null),
+		new Sub("info", "info <weapon|armor>", "What a weapon or armor piece does", null),
 		new Sub("hud", "hud [on|off]", "Toggle the cooldown line", null),
 		new Sub("pack", "pack", "Get the 3D resource pack again", null),
-		new Sub("give", "give <player> <weapon|all>", "Give weapons", GIVE),
+		new Sub("give", "give <player> <weapon|armor|all>", "Give weapons and Blood Knight armor", GIVE),
 		new Sub("reset", "reset [player]", "Clear cooldowns and clots", ADMIN),
 		new Sub("status", "status", "Pack server, recipes, effects", ADMIN),
 		new Sub("reload", "reload", "Reload config.yml", ADMIN));
@@ -129,9 +131,27 @@ public final class BloodbathCommand implements TabExecutor {
 			}
 			sender.sendMessage(line);
 		}
+		sender.sendMessage(Component.text(" Blood Knight armor", settings.armorEnabled ? NamedTextColor.DARK_RED : NamedTextColor.DARK_GRAY)
+			.append(Component.text(settings.armorEnabled ? "  (set bonus at 2 and 4 pieces)" : "  (disabled)", NamedTextColor.GRAY)));
+		for (ArmorPiece piece : ArmorPiece.values()) {
+			Component line = Component.text(" ▪ ", NamedTextColor.DARK_RED)
+				.append(Component.text(piece.displayName(), settings.armorEnabled ? NamedTextColor.RED : NamedTextColor.DARK_GRAY)
+					.hoverEvent(BloodArmor.create(piece).asHoverEvent())
+					.clickEvent(ClickEvent.runCommand("/bloodbath info " + piece.id())));
+			if (settings.armorEnabled && canGive) {
+				line = line.append(Component.text("  [take]", NamedTextColor.DARK_RED)
+					.clickEvent(ClickEvent.runCommand("/bloodbath give " + sender.getName() + " " + piece.id())));
+			}
+			sender.sendMessage(line);
+		}
 	}
 
 	private void info(CommandSender sender, String[] args) {
+		ArmorPiece piece = args.length == 0 ? null : ArmorPiece.find(String.join(" ", args));
+		if (piece != null) {
+			sendInfo(sender, piece);
+			return;
+		}
 		WeaponType type = args.length == 0 ? null : WeaponType.find(String.join(" ", args));
 		if (type == null && args.length == 0 && sender instanceof Player player) {
 			type = Weapons.typeOf(player.getInventory().getItemInMainHand());
@@ -141,6 +161,23 @@ public final class BloodbathCommand implements TabExecutor {
 			return;
 		}
 		sendInfo(sender, type);
+	}
+
+	/** An armour piece's name (hover for the item), what it does and the set bonus. */
+	public static void sendInfo(CommandSender sender, ArmorPiece piece) {
+		Settings settings = Settings.get();
+		ItemStack item = BloodArmor.create(piece);
+		sender.sendMessage(settings.prefix.append(Component.text(piece.displayName(), NamedTextColor.RED).hoverEvent(item.asHoverEvent()))
+			.append(settings.armorEnabled ? Component.empty() : Component.text("  (disabled)", NamedTextColor.DARK_GRAY)));
+		sender.sendMessage(Component.text(" " + String.join(" ", piece.description()), NamedTextColor.GRAY));
+		sender.sendMessage(Component.text(" Netherite protection +" + (int) piece.armor() + " armor, plus 1 heart.", NamedTextColor.DARK_GRAY));
+		for (Component line : item.getItemMeta().lore().subList(piece.description().size() + 1, item.getItemMeta().lore().size())) {
+			sender.sendMessage(Component.text(" ").append(line));
+		}
+		if (sender instanceof Player && sender.hasPermission(GIVE) && settings.armorEnabled) {
+			sender.sendMessage(Component.text(" [take one]", NamedTextColor.RED)
+				.clickEvent(ClickEvent.runCommand("/bloodbath give " + sender.getName() + " " + piece.id())));
+		}
 	}
 
 	/** A weapon's name (hover for the item), what it does, its ability and stats. */
@@ -223,42 +260,69 @@ public final class BloodbathCommand implements TabExecutor {
 				return;
 			}
 		}
-		List<WeaponType> types;
-		if (what.equalsIgnoreCase("all")) {
-			types = Arrays.stream(WeaponType.values()).filter(Settings.get()::enabled).toList();
+		Settings settings = Settings.get();
+		List<WeaponType> types = new ArrayList<>();
+		List<ArmorPiece> pieces = new ArrayList<>();
+		String key = what.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+		if (key.equals("all")) {
+			types.addAll(Arrays.stream(WeaponType.values()).filter(settings::enabled).toList());
+			if (settings.armorEnabled) {
+				pieces.addAll(List.of(ArmorPiece.values()));
+			}
+		} else if (key.equals("armor") || key.equals("armour") || key.equals("blood_knight") || key.equals("set")) {
+			pieces.addAll(List.of(ArmorPiece.values()));
+		} else if (ArmorPiece.find(what) != null) {
+			pieces.add(ArmorPiece.find(what));
 		} else {
 			WeaponType type = WeaponType.find(what);
 			if (type == null) {
-				error(sender, "No weapon called '" + what + "'. Try /" + label + " list");
+				error(sender, "No weapon or armor called '" + what + "'. Try /" + label + " list");
 				return;
 			}
-			if (!Settings.get().enabled(type)) {
+			if (!settings.enabled(type)) {
 				error(sender, "The " + type.displayName() + " is disabled in config.yml.");
 				return;
 			}
-			types = List.of(type);
+			types.add(type);
+		}
+		if (!pieces.isEmpty() && !settings.armorEnabled) {
+			error(sender, "Blood Knight armor is disabled in config.yml.");
+			return;
 		}
 		for (Player target : targets) {
 			for (WeaponType type : types) {
 				giveTo(target, type);
 			}
+			for (ArmorPiece piece : pieces) {
+				giveTo(target, piece);
+			}
 		}
-		String weapons = types.size() == 1 ? "a " + types.get(0).displayName() : types.size() + " weapons";
+		int count = types.size() + pieces.size();
+		String things = count == 1 ? "a " + (types.isEmpty() ? pieces.get(0).displayName() : types.get(0).displayName())
+			: pieces.size() == 4 && types.isEmpty() ? "the Blood Knight set" : count + " items";
 		String who = targets.size() == 1 ? targets.get(0).getName() : targets.size() + " players";
 		if (!(targets.size() == 1 && targets.get(0) == sender)) {
-			reply(sender, "Gave " + weapons + " to " + who + ".");
+			reply(sender, "Gave " + things + " to " + who + ".");
 		}
 	}
 
 	/** Puts a fresh weapon in the player's inventory (or at their feet, only they can pick it up). */
 	public static void giveTo(Player player, WeaponType type) {
-		for (ItemStack overflow : player.getInventory().addItem(Weapons.create(type)).values()) {
+		give(player, Weapons.create(type), type.displayName());
+	}
+
+	public static void giveTo(Player player, ArmorPiece piece) {
+		give(player, BloodArmor.create(piece), piece.displayName());
+	}
+
+	private static void give(Player player, ItemStack stack, String name) {
+		for (ItemStack overflow : player.getInventory().addItem(stack.clone()).values()) {
 			player.getWorld().dropItem(player.getLocation(), overflow, item -> item.setOwner(player.getUniqueId()));
 		}
 		BloodFx.gather(Hud.handPos(player, false), 1.2, 6, 10);
 		BloodFx.play(player, BloodFx.HEARTBEAT, 0.8F, 1.2F);
 		player.sendMessage(Settings.get().prefix.append(Component.text("You take up the ", NamedTextColor.GRAY))
-			.append(Component.text(type.displayName(), NamedTextColor.RED).hoverEvent(Weapons.create(type).asHoverEvent()))
+			.append(Component.text(name, NamedTextColor.RED).hoverEvent(stack.asHoverEvent()))
 			.append(Component.text(".", NamedTextColor.GRAY)));
 	}
 
@@ -340,7 +404,7 @@ public final class BloodbathCommand implements TabExecutor {
 		String sub = args[0].toLowerCase(Locale.ROOT);
 		String last = args[args.length - 1];
 		return switch (sub) {
-			case "info" -> args.length == 2 ? matching(last, weaponIds()) : List.of();
+			case "info" -> args.length == 2 ? matching(last, Stream.concat(weaponIds(), armorIds())) : List.of();
 			case "hud" -> args.length == 2 ? matching(last, Stream.of("on", "off")) : List.of();
 			case "pack", "reset" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, playerNames(true)) : List.of();
 			case "give" -> {
@@ -348,12 +412,16 @@ public final class BloodbathCommand implements TabExecutor {
 					yield List.of();
 				}
 				if (args.length == 2) {
-					yield matching(last, Stream.concat(playerNames(false), Stream.concat(weaponIds(), Stream.of("all"))));
+					yield matching(last, Stream.concat(playerNames(false), Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight"))));
 				}
-				yield args.length == 3 ? matching(last, Stream.concat(weaponIds(), Stream.of("all"))) : List.of();
+				yield args.length == 3 ? matching(last, Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight"))) : List.of();
 			}
 			default -> List.of();
 		};
+	}
+
+	private static Stream<String> armorIds() {
+		return Arrays.stream(ArmorPiece.values()).map(ArmorPiece::id);
 	}
 
 	private static Stream<String> weaponIds() {

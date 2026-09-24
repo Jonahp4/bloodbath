@@ -16,7 +16,9 @@ public enum Ability {
 	VOID_SCYTHE("Harvest", 60),
 	PARADOX_BOW("Paradox Echo", 200),
 	VAMPIRE_FANG("Blood Dash", 160),
-	BLOOD_GRIMOIRE("Transfusion", 280);
+	BLOOD_GRIMOIRE("Transfusion", 280),
+	/** The Blood Knight set's bonus, not a weapon's. */
+	BLOOD_RAGE("Blood Rage", 1200);
 
 	public static final int COUNT = values().length;
 

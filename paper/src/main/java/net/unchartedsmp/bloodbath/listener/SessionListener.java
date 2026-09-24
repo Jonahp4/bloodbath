@@ -2,6 +2,7 @@ package net.unchartedsmp.bloodbath.listener;
 
 import java.util.UUID;
 import net.unchartedsmp.bloodbath.BloodbathPlugin;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -43,8 +44,8 @@ public final class SessionListener implements Listener {
 
 	public static void refreshInventory(Player player) {
 		for (ItemStack stack : player.getInventory().getContents()) {
-			if (stack != null) {
-				Weapons.refresh(stack);
+			if (stack != null && !Weapons.refresh(stack)) {
+				BloodArmor.refresh(stack);
 			}
 		}
 	}

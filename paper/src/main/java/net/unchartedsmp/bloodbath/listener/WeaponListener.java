@@ -6,6 +6,7 @@ import java.util.UUID;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
+import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.util.Damage;
@@ -198,7 +199,7 @@ public final class WeaponListener implements Listener {
 	public void onPickup(EntityPickupItemEvent event) {
 		Item item = event.getItem();
 		ItemStack stack = item.getItemStack();
-		if (Weapons.refresh(stack)) {
+		if (Weapons.refresh(stack) || BloodArmor.refresh(stack)) {
 			item.setItemStack(stack);
 		}
 	}
@@ -207,7 +208,7 @@ public final class WeaponListener implements Listener {
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
 	public void onItemSpawn(ItemSpawnEvent event) {
 		Item item = event.getEntity();
-		if (Settings.get().neverDespawn && Weapons.isWeapon(item.getItemStack())) {
+		if (Settings.get().neverDespawn && (Weapons.isWeapon(item.getItemStack()) || BloodArmor.isArmor(item.getItemStack()))) {
 			item.setUnlimitedLifetime(true);
 			item.setInvulnerable(true);
 		}
@@ -221,13 +222,13 @@ public final class WeaponListener implements Listener {
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onPrepareCraft(PrepareItemCraftEvent event) {
 		for (ItemStack ingredient : event.getInventory().getMatrix()) {
-			if (Weapons.isWeapon(ingredient)) {
+			if (Weapons.isWeapon(ingredient) || BloodArmor.isArmor(ingredient)) {
 				event.getInventory().setResult(null);
 				return;
 			}
 		}
 		ItemStack result = event.getInventory().getResult();
-		if (Weapons.isWeapon(result) && !event.getView().getPlayer().hasPermission("bloodbath.craft")) {
+		if ((Weapons.isWeapon(result) || BloodArmor.isArmor(result)) && !event.getView().getPlayer().hasPermission("bloodbath.craft")) {
 			event.getInventory().setResult(null);
 		}
 	}
