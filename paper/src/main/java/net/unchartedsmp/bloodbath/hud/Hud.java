@@ -121,9 +121,9 @@ public final class Hud {
 
 	/** Blood slowly dripping off whatever Bloodbath weapon is in hand. */
 	private static void aura(Player player, WeaponBehavior behavior, boolean offhand, long now) {
-		// Everyone else gets the full aura. The holder gets a quieter version of their own: drops
-		// falling off the weapon at the bottom corner of the view (full-size motes at hand height
-		// would sit right in front of the first-person camera).
+		// Everyone else gets the full aura. The holder gets a quieter version of their own, low by
+		// their side: blood running off the weapon onto the ground, seen when they look down.
+		// (Anything at hand height would sit a block from their camera and fill the screen.)
 		Location hand = handPos(player, offhand);
 		long step = now / INTERVAL_TICKS;
 		BloodFx.ambientForOthers(player, hand, BloodFx.DRIP, 1, 0.08);
@@ -134,7 +134,7 @@ public final class Hud {
 		if (step % 5 == 0 && ready) {
 			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.3, 0.0), BloodFx.BLOOD_FADE, 2, 0.2);
 		}
-		Location own = hand.add(0.0, -0.12, 0.0);
+		Location own = hand.add(0.0, -0.5, 0.0);
 		if (step % 2 == 0) {
 			BloodFx.ambientForSelf(player, own, BloodFx.DRIP, 1, 0.06);
 		}

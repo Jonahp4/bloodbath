@@ -51,6 +51,7 @@ public final class BloodbathCommand implements TabExecutor {
 		new Sub("info", "info <weapon|armor>", "What a weapon or armor piece does", null),
 		new Sub("hud", "hud [on|off]", "Toggle the cooldown line", null),
 		new Sub("pack", "pack", "Get the 3D resource pack again", null),
+		new Sub("visuals", "visuals [on|off|auto]", "Custom particles, boss model and icons for you", null),
 		new Sub("give", "give <player> <weapon|armor|core [n]|all>", "Give weapons, armor and Blood Cores", GIVE),
 		new Sub("reset", "reset [player]", "Clear cooldowns and clots", ADMIN),
 		new Sub("status", "status", "Pack server, recipes, effects", ADMIN),
@@ -83,6 +84,7 @@ public final class BloodbathCommand implements TabExecutor {
 			case "info" -> info(sender, rest);
 			case "hud" -> hud(sender, rest);
 			case "pack" -> pack(sender, rest);
+			case "visuals" -> visuals(sender, rest);
 			case "give" -> give(sender, rest, label);
 			case "reset" -> reset(sender, rest);
 			case "status" -> status(sender);
@@ -247,6 +249,30 @@ public final class BloodbathCommand implements TabExecutor {
 		reply(sender, "Sent the pack to " + sent + (sent == 1 ? " player." : " players."));
 	}
 
+	/**
+	 * The pack-only visuals for this player: on (they installed the pack themselves), off, or auto
+	 * (whatever their game reports). Remembered on the player.
+	 */
+	private void visuals(CommandSender sender, String[] args) {
+		if (!(sender instanceof Player player)) {
+			error(sender, "Only players see visuals.");
+			return;
+		}
+		if (args.length > 0) {
+			switch (args[0].toLowerCase(Locale.ROOT)) {
+				case "on" -> PackState.setOverride(player, Boolean.TRUE);
+				case "off" -> PackState.setOverride(player, Boolean.FALSE);
+				case "auto" -> PackState.setOverride(player, null);
+				default -> {
+					error(sender, "Usage: /bloodbath visuals [on|off|auto]");
+					return;
+				}
+			}
+			plugin.bosses().packChanged(player);
+		}
+		reply(sender, PackState.describe(player));
+	}
+
 	private void give(CommandSender sender, String[] args, String label) {
 		if (args.length == 0) {
 			error(sender, "Usage: /" + label + " give <player> <weapon|all>");
@@ -380,8 +406,8 @@ public final class BloodbathCommand implements TabExecutor {
 		Settings settings = Settings.get();
 		ResourcePackService packs = plugin.packs();
 		reply(sender, "Bloodbath " + plugin.getPluginMeta().getVersion());
-		line(sender, "Resource pack", packs.status() + (packs.isActive() && settings.packMode.equals("embedded")
-			? " · " + packs.downloads() + " downloads · " + packs.size() / 1024 + " KB · sha1 " + packs.sha1().substring(0, 10) : ""));
+		line(sender, "Resource pack", packs.status() + (packs.isActive() && !settings.packMode.equals("url")
+			? " · " + packs.downloads() + " served here · " + packs.size() / 1024 + " KB · sha1 " + packs.sha1().substring(0, 10) : ""));
 		if (sender instanceof Player player && packs.isActive()) {
 			line(sender, "Your pack address", String.valueOf(packs.address(player)));
 		}
@@ -481,6 +507,7 @@ public final class BloodbathCommand implements TabExecutor {
 		return switch (sub) {
 			case "info" -> args.length == 2 ? matching(last, Stream.concat(weaponIds(), armorIds())) : List.of();
 			case "hud" -> args.length == 2 ? matching(last, Stream.of("on", "off")) : List.of();
+			case "visuals" -> args.length == 2 ? matching(last, Stream.of("on", "off", "auto")) : List.of();
 			case "pack", "reset" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, playerNames(true)) : List.of();
 			case "boss" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, Stream.of("summon", "stop", "status")) : List.of();
 			case "give" -> {

@@ -1214,63 +1214,26 @@ def write_vanilla_overrides(definitions):
         json.dump(select(["paradox_bow"], vanilla_bow), f, indent=2)
 
 
-# The Blood Core: a nether star underneath, drawn as a thorned blood crystal whose heart beats
-# (lub-dub, rest). Animated item texture; the nether star definition swaps it in only for items
-# with custom_model_data "bloodbath:blood_core", so real nether stars keep their look.
-CORE_BEAT = [0.15, 0.95, 0.55, 1.0, 0.6, 0.35, 0.22, 0.15, 0.12, 0.12]
+# The Blood Core: a nether star underneath, drawn as a glossy blood orb ringed with thorns whose
+# heart beats (lub-dub, rest). The art is hand-made (assets/blood_core.png: 10 frames of 64x64,
+# top to bottom); the frames are blended into each other in game. The nether star definition swaps
+# it in only for items with custom_model_data "bloodbath:blood_core", so real nether stars keep
+# their look.
+CORE_ART = os.path.join(os.path.dirname(__file__), "assets", "blood_core.png")
 CORE_FRAME_TICKS = [4, 2, 2, 2, 2, 3, 3, 4, 6, 6]
-
-
-def _core_shape(x, y):
-    ax, ay = abs(x), abs(y)
-    body = ax + ay <= 5.0
-    arm_x = ax <= 7.5 and ay <= 2.3 * (1 - ax / 8.6) + 0.35
-    arm_y = ay <= 7.5 and ax <= 2.3 * (1 - ay / 8.6) + 0.35
-    diag = abs(ax - ay) <= 1.1 and ax + ay <= 8.6
-    return body or arm_x or arm_y or diag
-
-
-def _core_frame(p):
-    c = {k: ImageColor.getrgb(v) for k, v in {
-        "out": "#2a040a", "rim": "#6e0a15", "dark": "#4a0710", "mid": "#7d0c18", "red": "#b3121f",
-        "hi": "#e0303c", "shine": "#ff8a92", "white": "#ffe6e8"}.items()}
-    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-    inside = [[_core_shape(x - 7.5, y - 7.5) for x in range(16)] for y in range(16)]
-    inn = lambda x, y: 0 <= x < 16 and 0 <= y < 16 and inside[y][x]
-    for y in range(16):
-        for x in range(16):
-            if not inside[y][x]:
-                continue
-            dx, dy = x - 7.5, y - 7.5
-            if not (inn(x + 1, y) and inn(x - 1, y) and inn(x, y + 1) and inn(x, y - 1)):
-                lit = (not inn(x - 1, y) or not inn(x, y - 1)) and dx + dy < 0
-                img.putpixel((x, y), c["rim" if lit else "out"] + (255,))
-                continue
-            # Four facets lit from the top left, with ridges along the axes.
-            col = c["hi"] if dx < 0 and dy < 0 else c["red"] if dy < 0 else c["mid"] if dx < 0 else c["dark"]
-            if abs(dx) < 0.6 and dy < 0 or abs(dy) < 0.6 and dx < 0:
-                col = c["shine"] if abs(dx) + abs(dy) > 3 else c["hi"]
-            elif abs(dx) < 0.6 or abs(dy) < 0.6:
-                col = c["mid"]
-            d = abs(dx) + abs(dy)
-            r = 1.6 + 1.4 * p                      # the heart swells with each beat
-            if d <= r:
-                t = d / r
-                col = c["white"] if t < 0.35 and p > 0.5 else c["shine"] if t < 0.6 else c["hi"]
-            elif d <= r + 1.0 and p > 0.45:
-                col = tuple((a + b) // 2 for a, b in zip(col, c["hi"]))
-            img.putpixel((x, y), col + (255,))
-    return img
 
 
 def write_blood_core():
     tex = os.path.join(ASSETS, "textures", "item")
-    strip = Image.new("RGBA", (16, 16 * len(CORE_BEAT)))
-    for i, p in enumerate(CORE_BEAT):
-        strip.paste(_core_frame(p), (0, 16 * i))
-    strip.save(os.path.join(tex, "blood_core.png"))
+    strip = Image.open(CORE_ART).convert("RGBA")
+    size = strip.width
+    frames = strip.height // size
+    assert strip.height == size * frames and frames == len(CORE_FRAME_TICKS), \
+        f"{CORE_ART} must be {len(CORE_FRAME_TICKS)} square frames stacked vertically, not {strip.size}"
+    strip.save(os.path.join(tex, "blood_core.png"), optimize=True)
     with open(os.path.join(tex, "blood_core.png.mcmeta"), "w") as f:
-        json.dump({"animation": {"frames": [{"index": i, "time": t} for i, t in enumerate(CORE_FRAME_TICKS)]}}, f, indent=2)
+        json.dump({"animation": {"interpolate": True,
+                                 "frames": [{"index": i, "time": t} for i, t in enumerate(CORE_FRAME_TICKS)]}}, f, indent=2)
     with open(os.path.join(ASSETS, "models", "item", "blood_core.json"), "w") as f:
         json.dump({"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/blood_core"}}, f, indent=1)
     with open(os.path.join(ASSETS, "items", "blood_core.json"), "w") as f:

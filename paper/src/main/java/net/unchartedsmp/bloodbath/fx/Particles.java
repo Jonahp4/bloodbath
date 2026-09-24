@@ -48,12 +48,19 @@ public final class Particles {
 			for (int i = 0; i < players.length; i++) {
 				players[i].getLocation(scratch);
 				xyz[i * 3] = scratch.getX();
-				xyz[i * 3 + 1] = scratch.getY() + 1.6;
+				xyz[i * 3 + 1] = scratch.getY() + players[i].getEyeHeight(); // the camera
 				xyz[i * 3 + 2] = scratch.getZ();
 				pack[i] = PackState.hasPack(players[i]);
 			}
 		}
 	}
+
+	/**
+	 * No particle is sent to a player whose camera it would spawn this close to: there it would
+	 * fill the screen (your own rift flow leaving your hand, the burst when you step through).
+	 * Everyone else still sees it.
+	 */
+	private static final double CAMERA_GUARD_SQ = 1.0;
 
 	private static final Map<World, Snapshot> SNAPSHOTS = new IdentityHashMap<>();
 	private static long snapshotTick = Long.MIN_VALUE;
@@ -114,7 +121,7 @@ public final class Particles {
 			double ddy = xyz[i * 3 + 1] - y;
 			double ddz = xyz[i * 3 + 2] - z;
 			double distSq = ddx * ddx + ddy * ddy + ddz * ddz;
-			if (distSq > rangeSq) {
+			if (distSq > rangeSq || distSq < CAMERA_GUARD_SQ) {
 				continue;
 			}
 			int band = distSq <= nearSq ? 0 : distSq <= midSq ? 1 : 2;

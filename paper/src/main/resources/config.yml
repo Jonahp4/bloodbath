@@ -7,14 +7,26 @@ resource-pack:
   # download it) still get working weapons; they just look like netherite swords.
   enabled: true
 
-  # embedded: the plugin hosts the pack itself on the port below. Works out of the box on a home
-  #           server or VPS as long as that port is reachable (open it in your firewall/router).
+  # auto:     players download the pack from a public mirror (below), checked at startup to be
+  #           byte-for-byte the pack inside this plugin, and from the plugin's own little web
+  #           server when there's no mirror. No ports to open. If a player's download fails from
+  #           one, they're sent the other straight away.
+  # embedded: the plugin's own web server first (needs the port below open to the internet: in
+  #           your firewall/router, or as an extra port on your host's panel), the mirror if a
+  #           player can't reach it.
   # url:      send a pack you host yourself. The plugin exports the pack to
   #           plugins/Bloodbath/Bloodbath-ResourcePack.zip; upload it anywhere that gives a direct
   #           download link (or merge it into your server's own pack) and put the link in url.
-  mode: embedded
+  mode: auto
 
-  # embedded mode
+  # auto and embedded modes: public copies of the pack. {version} is the plugin's version. A mirror
+  # is only used after the plugin has downloaded it and checked it's identical to its own pack, so
+  # it can never hand players a different or outdated one. Remove them all to never use a mirror.
+  mirrors:
+    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/Bloodbath-ResourcePack-{version}.zip'
+    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/Bloodbath-ResourcePack-{version}.zip'
+
+  # The plugin's own web server (auto and embedded modes)
   port: 8163
   bind: 0.0.0.0
   # The address players download the pack from. Leave blank to use whatever address each player

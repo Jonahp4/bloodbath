@@ -63,6 +63,7 @@ public final class SessionListener implements Listener {
 		Hud.forget(id);
 		BloodKnightSet.forget(id);
 		PackState.forget(event.getPlayer());
+		plugin.packs().forget(id);
 		Damage.forget(id);
 		plugin.weaponListener().forget(id);
 	}

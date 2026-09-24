@@ -26,6 +26,8 @@ public final class Keys {
 	public static NamespacedKey BOSS;
 	/** On players, for this connection only: the hash of the Bloodbath pack their game loaded. */
 	public static NamespacedKey PACK;
+	/** On players, kept: "on" or "off" when they chose the pack visuals themselves (/bb visuals). */
+	public static NamespacedKey VISUALS;
 
 	private Keys() {
 	}
@@ -40,6 +42,7 @@ public final class Keys {
 		CORE = new NamespacedKey(plugin, "core");
 		BOSS = new NamespacedKey(plugin, "boss");
 		PACK = new NamespacedKey(plugin, "pack_loaded");
+		VISUALS = new NamespacedKey(plugin, "visuals");
 	}
 
 	/** A key in the resource pack's namespace, e.g. {@code unchartedsmp:riftblade}. */

@@ -26,7 +26,10 @@ public final class Settings {
 	private static Settings current = new Settings(null);
 
 	public final boolean packEnabled;
+	/** auto, embedded or url (see ResourcePackService). */
 	public final String packMode;
+	/** Public copies of the pack ({version} = the plugin version), used only when byte-identical. */
+	public final List<String> packMirrors;
 	public final int packPort;
 	public final String packBind;
 	public final String packPublicHost;
@@ -92,10 +95,17 @@ public final class Settings {
 
 	private final Map<WeaponType, ConfigurationSection> weapons = new EnumMap<>(WeaponType.class);
 
+	/** Where this plugin's own pack is published: its GitHub repository (default branch, then the release branch). */
+	public static final List<String> DEFAULT_MIRRORS = List.of(
+		"https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/Bloodbath-ResourcePack-{version}.zip",
+		"https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/Bloodbath-ResourcePack-{version}.zip");
+
 	private Settings(FileConfiguration config) {
 		ConfigurationSection c = config;
 		packEnabled = bool(c, "resource-pack.enabled", true);
-		packMode = str(c, "resource-pack.mode", "embedded").toLowerCase(Locale.ROOT);
+		packMode = str(c, "resource-pack.mode", "auto").trim().toLowerCase(Locale.ROOT);
+		packMirrors = c == null || !c.contains("resource-pack.mirrors") ? DEFAULT_MIRRORS
+			: c.getStringList("resource-pack.mirrors").stream().map(String::trim).filter(url -> !url.isEmpty()).toList();
 		packPort = c == null ? 8163 : c.getInt("resource-pack.port", 8163);
 		packBind = str(c, "resource-pack.bind", "0.0.0.0").trim();
 		packPublicHost = str(c, "resource-pack.public-host", "").trim();

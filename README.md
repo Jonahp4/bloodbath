@@ -9,18 +9,18 @@ a resource pack that the plugin hosts for you.
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.3.1.jar`](dist/paper/Bloodbath-1.3.1.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.3.1.zip`](dist/Bloodbath-ResourcePack-1.3.1.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.3.2.jar`](dist/paper/Bloodbath-1.3.2.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.3.2.zip`](dist/Bloodbath-ResourcePack-1.3.2.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.3.1.jar` into `plugins/` and restart.
-3. Let players download the 3D models: open **TCP port 8163** on your firewall/router. The plugin
-   serves the resource pack from there and players get a download prompt when they join. Can't
-   open a port? See [Resource pack](#resource-pack).
+2. Drop `Bloodbath-1.3.2.jar` into `plugins/` and restart.
+3. That's it for the 3D models: players get a download prompt when they join. The pack comes from
+   the plugin's public copy on GitHub (checked to be identical to the one inside the jar), so
+   there's no port to open. No other plugins are needed. See [Resource pack](#resource-pack).
 4. In game: `/bb armory` to browse everything, or `/bb give <you> all`.
 
 Players need a 1.21.4+ client to see the 3D models. Everyone else, and anyone who declines the
@@ -121,9 +121,9 @@ restart, the plugin being disabled, or his world unloading ends the fight cleanl
 
 ## Blood Core
 
-A reskinned nether star: a thorned blood crystal whose heart beats (animated, from the pack). It's
-the ingredient every Bloodbath recipe needs. Get it from the boss, craft one (nether star in the
-middle, ghast tears and redstone blocks around it) or `/bb give <you> core`.
+A reskinned nether star: a glossy blood orb ringed with thorns whose heart beats (animated, from
+the pack). It's the ingredient every Bloodbath recipe needs. Get it from the boss, craft one
+(nether star in the middle, ghast tears and redstone blocks around it) or `/bb give <you> core`.
 
 ## Commands
 
@@ -137,6 +137,7 @@ middle, ghast tears and redstone blocks around it) or `/bb give <you> core`.
 | `/bb info <weapon\|piece>` | everyone | Accepts ids or names ("scythe", "Clotblade", "helm"). No name: the weapon in your hand. |
 | `/bb hud [on\|off]` | everyone | Hide or show the action-bar line for yourself. Remembered. |
 | `/bb pack` | everyone | Get the resource pack again. |
+| `/bb visuals [on\|off\|auto]` | everyone | The custom particles, boss model and HUD icons for you. `on` if you installed the pack yourself and the download doesn't reach you; `auto` follows your pack. Remembered. |
 | `/bb give <player\|all> <weapon\|piece\|armor\|core [n]\|all>` | op | `/bb give <weapon>` gives it to yourself. `armor` is the whole set; `core 16` is 16 Blood Cores; `all` is every weapon plus the set. |
 | `/bb reset [player\|all]` | op | Clear cooldowns and clots. |
 | `/bb pack <player\|all>` | op | Send the pack to someone else. |
@@ -172,24 +173,43 @@ Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.ar
 
 ## Resource pack
 
-The pack is inside the plugin. By default (`mode: embedded`) the plugin runs a tiny web server on
-port 8163 that serves only that file, and sends each player a link using the same address they
-typed to join. There's nothing to configure if that port is reachable.
+The pack is inside the plugin, and players are sent it when they join. By default
+(`mode: auto`) they download it from its public copy on GitHub. The plugin downloads that copy
+at startup and only uses it if it's byte-for-byte identical to the pack inside the jar, so
+players can never get a different or outdated one. When there's no matching copy, the plugin
+serves the pack itself from a tiny web server on port 8163, which needs that port open to the
+internet. If a player's download fails from one, they're sent the other straight away.
 
-- **Behind BungeeCord/Velocity/TCPShield**, or players join through a different address than the
-  pack should use: set `resource-pack.public-host` to your server's domain or IP.
-- **Can't open a port** (most shared hosts only give you one): the plugin exports the pack to
-  `plugins/Bloodbath/Bloodbath-ResourcePack.zip`. Upload it anywhere that gives a direct download
-  link, set `mode: url` and put the link in `url`. Or merge it into your server's own pack.
-- `required: true` kicks players who decline. Only use it once the download works for everyone.
+- **`mode: embedded`**: the plugin's own server first, the GitHub copy only if a player can't
+  reach it. Behind BungeeCord/Velocity/TCPShield, or if players join through a different address
+  than the pack should use, set `resource-pack.public-host`.
+- **`mode: url`**: a pack you host yourself, e.g. if you merged Bloodbath into your server's own
+  pack. The plugin exports its pack to `plugins/Bloodbath/Bloodbath-ResourcePack.zip`; upload it
+  anywhere that gives a direct download link and put the link in `url`.
+- **`required: true`** kicks players who decline. Only use it once the download works for
+  everyone.
 - **Blood tooltip frame:** weapons and armour get a blood-red tooltip frame from the pack whenever
   the plugin sends the pack (`items.tooltip-frame: auto`). Players who decline the pack see a
   purple-and-black tooltip there instead; set it to `false` if that matters on your server.
-- **Pack-only visuals** (custom particles, the boss model, HUD icons, the armory art) go to players
-  whose game reported loading the pack. If you merged the pack into your server's own pack, set
-  `resource-pack.enabled: false` and it's picked up from server.properties. If players get it some
-  other way (installed by hand), set `effects.pack-visuals: always`. `/bb status` shows how many
-  players are getting them, and whether you are.
+
+**The custom visuals** (blood particles, the animated boss, HUD icons, the armory art) only go to
+players whose game reported loading the pack. Everyone else gets vanilla-safe versions: dust
+particles, and the boss as a giant wither skeleton in netherite. Nobody ever sees a missing
+texture.
+
+### Pack not showing up?
+
+1. **Check `/bb status`** (op). It shows where the pack comes from, whether the GitHub copy
+   checked out, how many online players get the custom visuals, and whether you do.
+2. **"The Bloodbath resource pack couldn't be downloaded"** means your game couldn't reach the pack.
+   On 1.3.2 that should only happen if GitHub is blocked where you are *and* the server's port 8163
+   isn't open. Open the port (on a hosting panel: add a port and set `resource-pack.port` to it), or
+   host the exported zip yourself (`mode: url`).
+3. **Installed the pack by hand?** The server can't see that. Run `/bb visuals on` (or click
+   *[I have it installed]* in the failure message) to get the custom visuals anyway. To give them
+   to everyone because the pack is forced some other way, set `effects.pack-visuals: always`.
+4. **Updated the plugin with `/reload` or a plugin manager?** Players online get the new pack
+   re-sent automatically. A full restart is still the cleanest.
 
 If a download fails, the player is told, and the console says why (usually the port).
 
@@ -219,6 +239,22 @@ Knight.
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.3.2
+
+- **The pack reaches players without opening a port.** 1.3.1 relied on the plugin's own web
+  server, so on hosts where port 8163 isn't reachable every download failed, and with it every
+  custom visual. The pack now comes from its public copy on GitHub, which the plugin checks at
+  startup is identical to its own, with the built-in server as the fallback. A failed download is
+  retried from the other source at once. Admins are told once if the built-in server isn't
+  reachable. Old configs on the untouched default are moved to the new mode automatically.
+- **`/bb visuals on`** for players who installed the pack by hand, plus *[Retry]* and *[I have it
+  installed]* buttons when a download fails.
+- **The Blood Core wears its new art**: a glossy blood orb ringed with thorns, 64×64, its
+  heartbeat blending smoothly between frames.
+- **No more giant blood squares in your face.** No particle is ever sent to a player when it would
+  spawn within a block of their own camera: your rift flow leaving your hand, or the burst when you
+  step through. Everyone else still sees them. Your own weapon aura now drips low by your side.
 
 ## What's new in 1.3.1
 
@@ -313,7 +349,7 @@ Knight.
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.1.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.2.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock

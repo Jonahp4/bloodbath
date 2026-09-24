@@ -1,5 +1,6 @@
 package net.unchartedsmp.bloodbath;
 
+import java.util.List;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
@@ -22,6 +23,7 @@ import net.unchartedsmp.bloodbath.weapon.Behaviors;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -47,6 +49,7 @@ public class BloodbathPlugin extends JavaPlugin {
 		Keys.init(this);
 		TickScheduler.setLogger(getLogger());
 		saveDefaultConfig();
+		migrateConfig();
 		applySettings();
 
 		packs = new ResourcePackService(this);
@@ -76,7 +79,7 @@ public class BloodbathPlugin extends JavaPlugin {
 		// Enabled late (or reloaded) with players online: set them up as if they'd just joined.
 		for (Player player : getServer().getOnlinePlayers()) {
 			if (!PackState.restore(player, packs.hash())) {
-				packs.send(player); // the plugin was updated in place: they have the old pack
+				packs.sendWhenReady(player); // the plugin was updated in place: they have the old pack
 			}
 			SessionListener.welcome(player);
 		}
@@ -120,6 +123,40 @@ public class BloodbathPlugin extends JavaPlugin {
 			Behaviors.prune();
 			weaponListener.prune();
 		}
+	}
+
+	/**
+	 * Brings a config.yml written by an older version up to date. Before 1.3.2 the default was
+	 * {@code resource-pack.mode: embedded}, which only works with the pack port open to the
+	 * internet; a config still on that untouched default moves to {@code auto}, which also uses the
+	 * published copy of the pack. Anything the owner changed is left alone.
+	 */
+	private void migrateConfig() {
+		FileConfiguration config = getConfig();
+		if (config.isSet("resource-pack.mirrors")) {
+			return;
+		}
+		boolean untouched = "embedded".equalsIgnoreCase(config.getString("resource-pack.mode", ""))
+			&& config.getString("resource-pack.public-host", "").isBlank();
+		config.set("resource-pack.mirrors", Settings.DEFAULT_MIRRORS);
+		config.setComments("resource-pack.mirrors", List.of(
+			"auto and embedded modes: public copies of the pack. {version} is the plugin's version. A mirror",
+			"is only used after the plugin has downloaded it and checked it's identical to its own pack, so",
+			"it can never hand players a different or outdated one. Remove them all to never use a mirror."));
+		if (untouched) {
+			config.set("resource-pack.mode", "auto");
+			config.setComments("resource-pack.mode", List.of(
+				"auto:     players download the pack from a public mirror (below), checked at startup to be",
+				"          byte-for-byte the pack inside this plugin, and from the plugin's own little web",
+				"          server when there's no mirror. No ports to open. If a player's download fails from",
+				"          one, they're sent the other straight away.",
+				"embedded: the plugin's own web server first (needs the port below open to the internet), the",
+				"          mirror if a player can't reach it.",
+				"url:      send a pack you host yourself (url and sha1 below)."));
+			getLogger().info("Updated config.yml: resource-pack.mode embedded -> auto, so players get the pack even when port "
+				+ config.getInt("resource-pack.port", 8163) + " isn't open to the internet.");
+		}
+		saveConfig();
 	}
 
 	/** Reads config.yml into {@link Settings} and bumps the item revision if weapon items change. */

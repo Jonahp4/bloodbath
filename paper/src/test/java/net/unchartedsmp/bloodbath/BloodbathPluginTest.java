@@ -10,6 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
+import java.io.OutputStream;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -137,6 +144,7 @@ class BloodbathPluginTest {
 			config.load(new InputStreamReader(in, StandardCharsets.UTF_8));
 		}
 		config.set("resource-pack.port", 0); // any free port, so tests never collide
+		config.set("resource-pack.mirrors", List.of()); // no network: tests serve their own mirror
 		plugin = MockBukkit.loadWithConfig(BloodbathPlugin.class, config);
 		plugin.getLogger().addHandler(errorCatcher);
 		player = server.addTestPlayer("Steve");
@@ -921,7 +929,7 @@ class BloodbathPluginTest {
 		assertFalse(PackState.hasPack(plain));
 
 		world.spawns.clear();
-		BloodFx.burst(new Location(world, 0.5, 6, 0.5), BloodFx.NOVA, 10, 0.2);
+		BloodFx.burst(new Location(world, 0.5, 6, 3.5), BloodFx.NOVA, 10, 0.2);
 		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.SONIC_BOOM && sp.receivers().equals(List.of(player))),
 			"the blood nova sprite, for the pack user only");
 		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.DUST && sp.receivers().equals(List.of(plain))),
@@ -943,7 +951,7 @@ class BloodbathPluginTest {
 		stand(plain, 2.5, 0.5, 0.0F, 0.0F);
 		loadPack(player);
 		world.spawns.clear();
-		Location at = new Location(world, 0.5, 6, 0.5);
+		Location at = new Location(world, 0.5, 6, 3.5);
 		BloodFx.burst(at, BloodFx.BLOOD_FADE, 10, 0.2);
 		BloodFx.burst(at, BloodFx.DRIP, 3, 0.2);
 		BloodFx.burst(at, BloodFx.EMBER, 3, 0.2);
@@ -993,6 +1001,208 @@ class BloodbathPluginTest {
 		player.performCommand("bloodbath reload");
 		loadPack(player);
 		assertFalse(PackState.hasPack(player));
+	}
+
+	@Test
+	void theMirrorIsOnlyUsedWhenItIsTheSamePackAndEachSourceBacksUpTheOther() throws Exception {
+		AtomicReference<byte[]> body = new AtomicReference<>("not the pack".getBytes(StandardCharsets.UTF_8));
+		HttpServer mirror = mirrorServing(body);
+		try {
+			String url = "http://127.0.0.1:" + mirror.getAddress().getPort() + "/pack.zip";
+			plugin.getConfig().set("resource-pack.mirrors", List.of(url));
+			plugin.saveConfig();
+			player.performCommand("bloodbath reload");
+			awaitMirrorCheck();
+			assertNull(plugin.packs().mirror(), "a mirror with a different pack is never used");
+			assertTrue(plugin.packs().status().contains("a different pack"), plugin.packs().status());
+
+			body.set(bundledPack());
+			player.performCommand("bloodbath reload");
+			awaitMirrorCheck();
+			assertEquals(URI.create(url), plugin.packs().mirror());
+
+			player.packs.clear();
+			plugin.packs().send(player);
+			assertEquals(url, lastPack(player).uri().toString(), "auto mode prefers the verified mirror");
+			assertEquals(plugin.packs().sha1(), lastPack(player).hash());
+
+			// The mirror can't be reached from this player's network: straight to this server's copy.
+			chat(player);
+			failDownload(player);
+			assertEquals("play.example.com", lastPack(player).uri().getHost());
+			assertTrue(any(chat(player), "trying again from this server"));
+
+			// That fails too: out of places to get it from, so they're told, with a way out.
+			failDownload(player);
+			List<String> lines = chat(player);
+			assertTrue(any(lines, "couldn't be downloaded"));
+			assertTrue(any(lines, "[I have it installed]"));
+
+			// A manual retry starts again from the top.
+			player.performCommand("bloodbath pack");
+			assertEquals(url, lastPack(player).uri().toString());
+		} finally {
+			mirror.stop(0);
+		}
+	}
+
+	@Test
+	void whenPlayersCantReachThisServerTheyGetTheMirrorAndAdminsAreTold() throws Exception {
+		HttpServer mirror = mirrorServing(new AtomicReference<>(bundledPack()));
+		try {
+			String url = "http://127.0.0.1:" + mirror.getAddress().getPort() + "/pack.zip";
+			plugin.getConfig().set("resource-pack.mode", "embedded");
+			plugin.getConfig().set("resource-pack.mirrors", List.of(url));
+			plugin.saveConfig();
+			player.performCommand("bloodbath reload");
+			awaitMirrorCheck();
+
+			player.packs.clear();
+			plugin.packs().send(player);
+			assertEquals("play.example.com", lastPack(player).uri().getHost(), "embedded mode tries this server first");
+			chat(player);
+			failDownload(player);
+			assertEquals(url, lastPack(player).uri().toString(), "then the mirror, at once");
+			assertTrue(any(chat(player), "isn't reachable from outside"), "the admin is told what happened");
+
+			TestPlayer next = server.addTestPlayer("Next");
+			ticks(21);
+			assertEquals(url, next.packs.get(0).packs().get(0).uri().toString(), "everyone after them goes straight to the mirror");
+			player.performCommand("bloodbath status");
+			assertTrue(any(chat(player), "built-in server unreachable for players"));
+		} finally {
+			mirror.stop(0);
+		}
+	}
+
+	@Test
+	void playersWhoJoinWhileTheMirrorIsCheckedGetThePackWhenItsDone() throws Exception {
+		CountDownLatch release = new CountDownLatch(1);
+		HttpServer mirror = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 4);
+		byte[] pack = bundledPack();
+		mirror.createContext("/pack.zip", exchange -> {
+			try {
+				release.await(10, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.sendResponseHeaders(200, pack.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(pack);
+			}
+		});
+		mirror.start();
+		try {
+			String url = "http://127.0.0.1:" + mirror.getAddress().getPort() + "/pack.zip";
+			plugin.getConfig().set("resource-pack.mirrors", List.of(url));
+			plugin.saveConfig();
+			player.performCommand("bloodbath reload");
+			TestPlayer early = server.addTestPlayer("Early");
+			ticks(40);
+			assertTrue(early.packs.isEmpty(), "not sent a source that's about to be replaced");
+			release.countDown();
+			awaitMirrorCheck();
+			ticks(2);
+			assertEquals(url, early.packs.get(0).packs().get(0).uri().toString());
+		} finally {
+			release.countDown();
+			mirror.stop(0);
+		}
+	}
+
+	@Test
+	void anOldConfigOnTheDefaultEmbeddedModeMovesToAuto() {
+		plugin.getConfig().set("resource-pack.enabled", false); // no mirror checks from a test
+		plugin.getConfig().set("resource-pack.mode", "embedded");
+		plugin.getConfig().set("resource-pack.mirrors", null);
+		plugin.saveConfig();
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertEquals("auto", plugin.getConfig().getString("resource-pack.mode"));
+		assertEquals(Settings.DEFAULT_MIRRORS, plugin.getConfig().getStringList("resource-pack.mirrors"));
+
+		// A config the owner set up themselves is left alone.
+		plugin.getConfig().set("resource-pack.mode", "embedded");
+		plugin.getConfig().set("resource-pack.public-host", "mc.example.com");
+		plugin.getConfig().set("resource-pack.mirrors", null);
+		plugin.saveConfig();
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertEquals("embedded", plugin.getConfig().getString("resource-pack.mode"));
+	}
+
+	@Test
+	void playersWhoInstalledThePackThemselvesCanTurnTheVisualsOn() {
+		assertFalse(PackState.hasPack(player));
+		chat(player);
+		player.performCommand("bloodbath visuals on");
+		assertTrue(PackState.hasPack(player));
+		assertTrue(any(chat(player), "Pack visuals ON (your choice)"));
+
+		server.getPluginManager().callEvent(new PlayerJoinEvent(player, Component.empty()));
+		assertTrue(PackState.hasPack(player), "kept when they reconnect");
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertTrue(PackState.hasPack(player), "and across a plugin reload");
+
+		loadPack(player);
+		player.performCommand("bloodbath visuals off");
+		assertFalse(PackState.hasPack(player), "off beats the pack being loaded");
+		player.performCommand("bloodbath visuals auto");
+		assertTrue(PackState.hasPack(player), "auto follows the pack again");
+		chat(player);
+		player.performCommand("bloodbath visuals");
+		assertTrue(any(chat(player), "your game loaded the Bloodbath pack"));
+	}
+
+	@Test
+	void nothingIsSentRightInFrontOfAPlayersCamera() {
+		TestPlayer alex = server.addTestPlayer("Alex");
+		stand(alex, 4.5, 0.5, 90.0F, 0.0F);
+		world.spawns.clear();
+		BloodFx.burst(player.getEyeLocation().add(0.3, -0.3, 0.2), BloodFx.BLOOD_LARGE, 10, 0.2);
+		assertFalse(world.spawns.stream().anyMatch(s -> s.receivers().contains(player)), "it would fill their screen");
+		assertTrue(world.spawns.stream().anyMatch(s -> s.receivers().contains(alex)), "everyone else still sees it");
+	}
+
+	private byte[] bundledPack() throws IOException {
+		try (InputStream in = plugin.getResource("resourcepack.zip")) {
+			return in.readAllBytes();
+		}
+	}
+
+	/** A stand-in for a public mirror: serves whatever {@code body} holds at /pack.zip. */
+	private static HttpServer mirrorServing(AtomicReference<byte[]> body) throws IOException {
+		HttpServer mirror = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 4);
+		mirror.createContext("/pack.zip", exchange -> {
+			byte[] bytes = body.get();
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(bytes);
+			}
+		});
+		mirror.start();
+		return mirror;
+	}
+
+	/** The mirror check runs off the main thread: tick until it has an answer. */
+	private void awaitMirrorCheck() throws InterruptedException {
+		for (int i = 0; i < 400 && plugin.packs().status().contains("checking"); i++) {
+			Thread.sleep(25);
+			ticks(1);
+		}
+		assertFalse(plugin.packs().status().contains("checking"), "the mirror check finished");
+		ticks(1);
+	}
+
+	private static ResourcePackInfo lastPack(TestPlayer who) {
+		ResourcePackRequest request = who.packs.get(who.packs.size() - 1);
+		return request.packs().get(0);
+	}
+
+	private void failDownload(Player who) {
+		server.getPluginManager().callEvent(new PlayerResourcePackStatusEvent(who, ResourcePackService.PACK_ID,
+			PlayerResourcePackStatusEvent.Status.FAILED_DOWNLOAD));
 	}
 
 	private void loadPack(Player who) {
