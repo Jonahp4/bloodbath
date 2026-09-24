@@ -42,7 +42,9 @@ pack, sees named netherite swords and a bow. Every weapon still works for them.
 | **Vampire Fang** *(new)* (`vampire_fang`) | **Blood Dash:** lunge along your aim, cutting and drinking from everything you pass through. | Every hit heals you for 25% of the damage. Fast 6 damage dagger. |
 | **Blood Grimoire** *(new)* (`blood_grimoire`) | **Transfusion:** a blood tether drains 6 health from a creature over 1.5s into you. | Sneak + right-click a player to give them 8 health (and Regeneration) for 4 of yours. Works with PvP off. |
 
-Every number above (cooldowns, damage, ranges, durations) is in `config.yml`.
+Every number above (cooldowns, damage, ranges, durations) is in `config.yml`. Right-clicking a
+door, chest or button with a weapon uses the block as usual; sneak to use the ability instead.
+Weapons work from the off hand too.
 
 While you hold a weapon, the action bar shows its cooldown and state (rift timer, bleed stacks,
 bow draw, hook range, mirror timer...). A bell and a blood ring tell you when an ability is ready.
