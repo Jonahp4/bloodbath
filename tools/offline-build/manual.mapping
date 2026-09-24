@@ -1,0 +1,43 @@
+# Mappings that aren't in Yarn's per-class .mapping files: enum constants and registry
+# constants (Yarn names those automatically at build time), plus a few members Yarn declares on
+# interfaces we don't fetch. Every intermediary name here is re-checked against the official
+# intermediary tiny file (or the original mod's bytecode) by Remap's verify step.
+#
+# METHOD|FIELD <yarn owner> <yarn name> <yarn descriptor> <intermediary name>
+
+# Entity members declared on small interfaces (UniquelyIdentifiable, EntityLike, etc.)
+METHOD net/minecraft/entity/Entity getUuid ()Ljava/util/UUID; method_5667
+METHOD net/minecraft/entity/Entity getBoundingBox ()Lnet/minecraft/util/math/Box; method_5829
+METHOD net/minecraft/entity/Entity getEntityPos ()Lnet/minecraft/util/math/Vec3d; method_73189
+METHOD net/minecraft/entity/Entity getEntityWorld ()Lnet/minecraft/world/World; method_73183
+
+# Text extends Brigadier's Message, so getString keeps its name.
+METHOD net/minecraft/text/Text getString ()Ljava/lang/String; getString
+
+# Registry constant (verified against the original Thunder Pike bytecode).
+FIELD net/minecraft/entity/EntityType LIGHTNING_BOLT Lnet/minecraft/entity/EntityType; field_6112
+
+# Enum constants, by declaration order in the intermediary tiny file.
+FIELD net/minecraft/entity/EquipmentSlot MAINHAND Lnet/minecraft/entity/EquipmentSlot; field_6173
+FIELD net/minecraft/entity/EquipmentSlot OFFHAND Lnet/minecraft/entity/EquipmentSlot; field_6171
+FIELD net/minecraft/entity/EquipmentSlot FEET Lnet/minecraft/entity/EquipmentSlot; field_6166
+FIELD net/minecraft/entity/EquipmentSlot LEGS Lnet/minecraft/entity/EquipmentSlot; field_6172
+FIELD net/minecraft/entity/EquipmentSlot CHEST Lnet/minecraft/entity/EquipmentSlot; field_6174
+FIELD net/minecraft/entity/EquipmentSlot HEAD Lnet/minecraft/entity/EquipmentSlot; field_6169
+FIELD net/minecraft/world/RaycastContext$ShapeType COLLIDER Lnet/minecraft/world/RaycastContext$ShapeType; field_17558
+FIELD net/minecraft/world/RaycastContext$ShapeType OUTLINE Lnet/minecraft/world/RaycastContext$ShapeType; field_17559
+FIELD net/minecraft/world/RaycastContext$FluidHandling NONE Lnet/minecraft/world/RaycastContext$FluidHandling; field_1348
+FIELD net/minecraft/util/hit/HitResult$Type MISS Lnet/minecraft/util/hit/HitResult$Type; field_1333
+FIELD net/minecraft/util/hit/HitResult$Type BLOCK Lnet/minecraft/util/hit/HitResult$Type; field_1332
+FIELD net/minecraft/util/hit/HitResult$Type ENTITY Lnet/minecraft/util/hit/HitResult$Type; field_1331
+FIELD net/minecraft/util/Formatting DARK_RED Lnet/minecraft/util/Formatting; field_1079
+FIELD net/minecraft/util/Formatting RED Lnet/minecraft/util/Formatting; field_1061
+FIELD net/minecraft/sound/SoundCategory PLAYERS Lnet/minecraft/sound/SoundCategory; field_15248
+FIELD net/minecraft/util/Hand MAIN_HAND Lnet/minecraft/util/Hand; field_5808
+FIELD net/minecraft/util/Hand OFF_HAND Lnet/minecraft/util/Hand; field_5810
+
+# Declared on ModifiableWorld (verified against the original mod's bytecode).
+METHOD net/minecraft/world/World spawnEntity (Lnet/minecraft/entity/Entity;)Z method_8649
+
+# Registry key constant (verified against the original ModItems bytecode).
+FIELD net/minecraft/registry/RegistryKeys ITEM Lnet/minecraft/registry/RegistryKey; field_41197

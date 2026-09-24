@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "unchartedsmp",
+  "version": "${version}",
+  "name": "Uncharted SMP: Bloodbath",
+  "description": "Ten blood-forged ability weapons for SMPs, with 3D models. Server-side: vanilla clients see the models through the resource pack.",
+  "authors": ["you"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/unchartedsmp/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["net.unchartedsmp.UnchartedSMP"]
+  },
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11",
+    "java": ">=21"
+  }
+}
