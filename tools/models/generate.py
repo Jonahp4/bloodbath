@@ -1155,6 +1155,8 @@ def main():
     write_knight_equipment()
     write_blood_core()
     write_blood_nova()
+    import particles  # the blood particle sprites (tools/models/particles.py)
+    particles.write(PACK, NS)
     write_boss_bar()
     write_hud_and_gui()
     import boss  # the Blood Knight boss model and rig (tools/models/boss.py)
@@ -1631,7 +1633,9 @@ class _Face:
             fy = (py - y0) / max(1, y1 - y0 - 1)
             for px in range(x0, x1):
                 fx = (px - x0) / max(1, x1 - x0 - 1)
-                g = 1.16 - 0.34 * fy - 0.08 * fx
+                # Curved, not flat: darker toward the side edges, a soft sheen a third of the way in.
+                g = (1.1 - 0.3 * fy) * (0.7 + 0.42 * math.sin(math.pi * (0.06 + 0.88 * fx))) \
+                    + 0.2 * math.exp(-((fx - 0.3) / 0.12) ** 2) * (1 - 0.5 * fy)
                 grain = 0.94 + 0.12 * value_noise((self.x * KS + px) * 0.35, (self.y * KS + py) * 2.1, 0.0, self.seed)
                 c = base * g * grain
                 if py == y0:
@@ -1665,19 +1669,27 @@ class _Face:
         self.put(px + 1, py + 1, WORN["o"])
 
     def trim(self, u0, v0, u1, v1):
-        """A crimson band: lit top edge, shadowed bottom, a notch every so often."""
+        """A thin inset crimson band: a dark groove above, the red line, a lit lip below."""
         x0, y0, x1, y1 = self._t(u0), self._t(v0), self._t(u1), self._t(v1)
         for py in range(y0, y1):
             for px in range(x0, x1):
-                f = (py - y0) / max(1, y1 - y0 - 1)
-                c = WORN["T"] * (1 - f) + WORN["t0"] * f if y1 - y0 > 2 else WORN["t"]
+                fx = (px - x0) / max(1, x1 - x0 - 1)
+                curve = 0.72 + 0.4 * math.sin(math.pi * (0.06 + 0.88 * fx))
                 if py == y0:
-                    c = WORN["T"] * 0.6 + WORN["G"] * 0.4
-                if py == y1 - 1:
-                    c = WORN["t0"] * 0.7
-                if (px - x0) % 10 == 5 and y0 < py < y1 - 1:
-                    c = WORN["t0"]
+                    c = WORN["o"]
+                elif py == y1 - 1 and y1 - y0 > 2:
+                    c = WORN["h"] * curve
+                else:
+                    c = (WORN["t"] if py == y0 + 1 else WORN["t0"]) * curve
                 self.put(px, py, c)
+
+    def cut(self, test):
+        """Clears the texels where test(u, v) is true (in units), for shaped edges."""
+        for py in range(self.th):
+            for px in range(self.tw):
+                if test((px + 0.5) / KS, (py + 0.5) / KS):
+                    gx, gy = self.x * KS + px, self.y * KS + py
+                    self.img[gy, gx] = 0
 
     def fill(self, u0, v0, u1, v1, key):
         for py in range(self._t(v0), self._t(v1)):
@@ -1763,148 +1775,138 @@ def _faces(img, u, v, w, h, d, seed):
 
 
 def _paint_helm(img):
+    """An open-faced bascinet: brow band, nasal guard, cheek guards, a neck guard behind. The face
+    shows, so it reads as a helmet on a head rather than a box."""
     f = _faces(img, 0, 0, 8, 8, 8, 11)
     front = f["front"]
-    front.plate(0, 0, 8, 2.1, "l")                        # brow
-    front.trim(0, 2.1, 8, 2.8)                            # the band
-    front.fill(0, 2.8, 8, 3.8, "k")                       # visor slit
-    for cu in (1.9, 6.1):                                 # burning eyes
-        for py in range(front._t(2.9), front._t(3.7)):
-            for px in range(front._t(cu - 1.0), front._t(cu + 1.0)):
-                d = math.hypot((px + 0.5) / KS - cu, ((py + 0.5) / KS - 3.3) * 2.2)
-                if d < 1.0:
-                    front.put(px, py, WORN["G"] * (1 - d) + WORN["g"] * d if d > 0.3 else WORN["G"])
-    front.plate(0, 3.8, 3.7, 8, "l", rivets=True)         # cheek plates, with a raised nose ridge
-    front.plate(4.3, 3.8, 8, 8, "m", rivets=True)
-    front.plate(3.7, 3.8, 4.3, 8, "h")
-    front.holes(0.9, 4.7, 3, 4, 0.8)
-    front.holes(5.0, 4.7, 3, 4, 0.8)
-    for face, near_front in (("right", True), ("left", False)):
+    front.plate(0, 0, 8, 2.5, "l")                        # brow
+    front.trim(0, 2.1, 8, 2.6)
+    front.engrave([(3.2, 1.6), (4.0, 0.7), (4.8, 1.6)])     # a widow's peak on the brow
+    front.plate(0, 2.6, 1.7, 7.4, "m")                    # cheek guards
+    front.plate(6.3, 2.6, 8, 7.4, "m")
+    front.rivet(front._t(0.7), front._t(3.4))
+    front.rivet(front._t(7.0), front._t(3.4))
+    front.plate(3.45, 2.6, 4.55, 5.4, "h")                # nasal guard
+    front.cut(lambda u, v: v > 2.6 and 1.7 <= u < 6.3 and not (3.45 <= u < 4.55 and v < 5.4 - abs(u - 4.0) * 1.2))
+    front.cut(lambda u, v: v > 6.2 and (u < 1.7 and v - 6.2 > (1.7 - u) * 0.9 or u >= 6.3 and v - 6.2 > (u - 6.3) * 0.9))
+    for face, front_at_hi in (("right", True), ("left", False)):
         side = f[face]
-        side.plate(0, 0, 8, 2.1, "m")
-        side.trim(0, 2.1, 8, 2.8)
-        side.plate(0, 2.8, 8, 8, "m")
-        lo, hi = (5.6, 8) if near_front else (0, 2.4)
-        side.fill(lo, 2.8, hi, 3.8, "k")                  # the slit wraps round
-        cheek = (4.6, 3.8, 8, 8) if near_front else (0, 3.8, 3.4, 8)
-        side.plate(*cheek, "l", rivets=True)              # cheek guard
-        side.engrave([(1.0, 5.0), (2.5, 4.4), (4.0, 5.2)] if near_front else [(4.0, 5.0), (5.5, 4.4), (7.0, 5.2)])
+        side.plate(0, 0, 8, 2.5, "m")
+        side.trim(0, 2.1, 8, 2.6)
+        side.plate(0, 2.6, 8, 8, "m")
+        side.engrave([(2.0, 4.0), (4.0, 3.4), (6.0, 4.0)])
+        side.rivet(side._t(6.4 if front_at_hi else 1.2), side._t(1.2))
+        # Cheek guard at the front, flaring down to the neck guard at the back.
+        side.cut(lambda u, v, hi=front_at_hi: v > 7.4 + (0.6 * ((8 - u) if hi else u) / 8) and ((u > 3.5) if hi else (u < 4.5)))
     back = f["back"]
-    back.plate(0, 0, 8, 2.1, "m")
-    back.trim(0, 2.1, 8, 2.8)
-    back.plate(0, 2.8, 8, 5.0, "m")
-    back.plate(0, 5.0, 8, 6.5, "l")                       # neck guard lames
-    back.plate(0, 6.5, 8, 8, "m")
+    back.plate(0, 0, 8, 2.5, "m")
+    back.trim(0, 2.1, 8, 2.6)
+    back.plate(0, 2.6, 8, 5.4, "m")
+    back.plate(0, 5.4, 8, 6.8, "l")                       # neck guard lames
+    back.plate(0, 6.8, 8, 8, "m")
     top = f["top"]
     top.plate(0, 0, 8, 8, "l")
-    top.trim(3.5, 0, 4.5, 8)                              # crest ridge
-    top.engrave([(1.5, 1.0), (1.2, 4.0), (1.8, 7.0)])
-    top.engrave([(6.5, 1.0), (6.8, 4.0), (6.2, 7.0)])
-    f["bottom"].fill(0, 0, 8, 8, "d")
+    top.fill(3.7, 0, 4.3, 8, "d")                         # crest groove
+    top.engrave([(1.6, 1.2), (1.3, 4.0), (1.8, 6.8)])
+    top.engrave([(6.4, 1.2), (6.7, 4.0), (6.2, 6.8)])
 
 
 def _paint_torso(img, u, v, seed, legs_only=False):
     f = _faces(img, u, v, 8, 12, 4, seed)
     if legs_only:
-        # Leggings only show the belt and faulds at the bottom of the body box.
+        # Leggings: the belt and the tassets at the bottom of the body box.
         for face in ("front", "back", "left", "right"):
             s = f[face]
-            s.fill(0, 8, s.w, 9.2, "leather")
+            s.fill(0, 8, s.w, 9.1, "leather")
             s.fill(0, 8, s.w, 8.3, "leather_hi")
-            s.plate(0, 9.2, s.w, 10.6, "m")
-            s.plate(0, 10.6, s.w, 12, "l")
-            s.trim(0, 11.5, s.w, 12)
+            s.plate(0, 9.1, s.w, 10.7, "m")
+            s.plate(0, 10.7, s.w, 12, "d")
         buckle = f["front"]
-        buckle.fill(3.1, 7.9, 4.9, 9.3, "h")
-        buckle.gem(4.0, 8.6, 0.45)
+        buckle.fill(3.2, 7.95, 4.8, 9.2, "h")
+        buckle.gem(4.0, 8.6, 0.42)
+        for face in ("front", "back"):                    # a groove between the two tassets
+            f[face].fill(3.85, 9.3, 4.15, 12, "o")
         return
+    # The cuirass stops above the hips, so the slimmer leggings layer shows: a waist.
     front = f["front"]
-    front.plate(0, 0, 8, 1.0, "d")                        # gorget
-    front.trim(0, 1.0, 8, 1.5)
-    front.plate(0, 1.5, 4.1, 6.8, "l", rivets=True)       # breastplate halves
-    front.plate(3.9, 1.5, 8, 6.8, "m", rivets=True)
-    front.swirl(2.0, 3.3, 1.2)
-    front.swirl(6.0, 3.3, 1.2, mirror=True)
-    front.gem(4.0, 4.3, 1.05)                             # the Knight's blood, still glowing
-    front.drip(4.55, 5.5, 1.3)
-    front.drip(2.6, 6.2, 0.9)
-    for v0 in (6.8, 8.5, 10.2):                           # lames
-        front.plate(0, v0, 8, v0 + 1.8, "m" if v0 != 8.5 else "l")
-    front.trim(0, 11.5, 8, 12)
+    front.plate(0, 0, 8, 1.2, "d")                        # gorget
+    front.trim(0, 0.9, 8, 1.4)
+    front.plate(0, 1.4, 8, 7.4, "l", rivets=True)         # breastplate
+    front.engrave([(0.8, 2.4), (2.4, 3.6), (4.0, 2.6), (5.6, 3.6), (7.2, 2.4)])   # pectoral ridge
+    front.swirl(2.1, 5.0, 0.9)
+    front.swirl(5.9, 5.0, 0.9, mirror=True)
+    front.gem(4.0, 4.4, 0.95)
+    front.drip(4.5, 5.4, 1.2)
+    front.plate(0, 7.4, 8, 8.8, "m")                      # fauld lame
+    front.trim(0, 8.4, 8, 8.8)
+    front.cut(lambda uu, vv: vv > 8.8)
     back = f["back"]
-    back.plate(0, 0, 8, 6.8, "m", rivets=True)
-    back.trim(3.6, 0.5, 4.4, 6.5)                         # spine
-    back.engrave([(1.0, 1.5), (2.2, 3.2), (1.2, 5.5)])
-    back.engrave([(7.0, 1.5), (5.8, 3.2), (6.8, 5.5)])
-    for v0 in (6.8, 8.5, 10.2):
-        back.plate(0, v0, 8, v0 + 1.8, "m")
-    back.trim(0, 11.5, 8, 12)
+    back.plate(0, 0, 8, 7.4, "m", rivets=True)
+    back.fill(3.75, 1.0, 4.25, 7.0, "d")                  # spine groove
+    back.engrave([(1.0, 1.8), (2.2, 3.6), (1.2, 5.8)])
+    back.engrave([(7.0, 1.8), (5.8, 3.6), (6.8, 5.8)])
+    back.plate(0, 7.4, 8, 8.8, "m")
+    back.trim(0, 8.4, 8, 8.8)
+    back.cut(lambda uu, vv: vv > 8.8)
     for face in ("left", "right"):
         s = f[face]
-        s.plate(0, 0, 4, 6.8, "m")
-        for v0 in (6.8, 8.5, 10.2):
-            s.plate(0, v0, 4, v0 + 1.8, "m")
-        s.trim(0, 11.5, 4, 12)
+        s.plate(0, 0, 4, 7.4, "m")
+        s.plate(0, 7.4, 4, 8.8, "m")
+        s.trim(0, 8.4, 4, 8.8)
+        s.cut(lambda uu, vv: vv > 8.8)
     top = f["top"]
     top.plate(0, 0, 8, 4, "l")
-    top.fill(2.5, 0, 5.5, 1.2, "d")                       # collar
-    f["bottom"].fill(0, 0, 8, 4, "d")
+    top.fill(2.6, 0.4, 5.4, 1.4, "d")                     # collar
 
 
 def _paint_arm(img):
+    """Pauldron, mail, elbow cop, vambrace; the hand stays bare."""
     f = _faces(img, 40, 16, 4, 12, 4, 37)
     for face in ("front", "back", "left", "right"):
         s = f[face]
-        s.plate(0, 0, 4, 2.2, "l")                        # pauldron, two layers
-        s.trim(0, 2.2, 4, 2.7)
-        s.plate(0, 2.7, 4, 4.3, "m")
-        s.fill(0, 4.3, 4, 4.6, "t0")
-        s.mail(0, 4.6, 4, 7.0)                            # upper arm
-        s.trim(0, 7.0, 4, 7.5)
-        s.plate(0, 7.5, 4, 12, "m")                       # vambrace
-        s.engrave([(0.6, 8.2), (2.0, 8.8), (3.4, 8.2)])
-        if face in ("front", "right"):
-            for px in range(s._t(1.0), s._t(3.0)):
-                for py in range(s._t(9.6), s._t(10.0)):
-                    s.put(px, py, WORN["g"] if s._t(1.4) <= px < s._t(2.6) else WORN["t"])
-        s.trim(0, 11.6, 4, 12)
+        s.plate(0, 0, 4, 2.4, "l")                        # pauldron, two lames
+        s.plate(0, 2.4, 4, 3.8, "m")
+        s.trim(0, 3.4, 4, 3.8)
+        s.mail(0, 3.8, 4, 6.6)                            # upper arm
+        s.plate(0, 6.6, 4, 7.8, "l")                      # elbow cop
+        s.plate(0, 7.8, 4, 10.6, "m")                     # vambrace
+        s.engrave([(0.6, 8.5), (2.0, 9.1), (3.4, 8.5)])
+        s.cut(lambda u, v: v > 10.6)
     top = f["top"]
     top.plate(0, 0, 4, 4, "l", rivets=True)
-    top.trim(0, 0, 4, 0.35)
-    f["bottom"].fill(0, 0, 4, 4, "d")
 
 
 def _paint_boots(img):
+    """Low sabatons: only the bottom 3.6 units of the leg."""
     f = _faces(img, 0, 16, 4, 12, 4, 53)
     for face in ("front", "back", "left", "right"):
-        s = f[face]                                       # only the lowest 5 units show
-        s.trim(0, 7.0, 4, 7.8)                            # cuff
-        s.plate(0, 7.8, 4, 10.0, "m")
-        s.plate(0, 10.0, 4, 12, "l" if face == "front" else "m", rivets=face == "front")
+        s = f[face]
+        s.plate(0, 8.4, 4, 10.2, "m")
+        s.trim(0, 8.4, 4, 8.9)
+        s.plate(0, 10.2, 4, 12, "l" if face == "front" else "m")
         s.fill(0, 11.6, 4, 12, "o")                       # sole edge
     toe = f["front"]
-    toe.gem(2.0, 10.9, 0.4)
-    f["right"].rivet(f["right"]._t(3.0), f["right"]._t(9.0))
-    f["left"].rivet(f["left"]._t(0.8), f["left"]._t(9.0))
+    toe.plate(1.6, 10.2, 2.4, 12, "h")                    # toe ridge
+    f["right"].rivet(f["right"]._t(3.0), f["right"]._t(9.6))
+    f["left"].rivet(f["left"]._t(0.8), f["left"]._t(9.6))
     f["bottom"].fill(0, 0, 4, 4, "d")
 
 
 def _paint_legs(img):
+    """Cuisse, knee cop and the top of the greave; the sabatons cover the rest."""
     f = _faces(img, 0, 16, 4, 12, 4, 79)
     for face in ("front", "back", "left", "right"):
         s = f[face]
-        s.plate(0, 0, 4, 5.0, "m")                        # thigh
-        s.plate(0, 5.0, 4, 7.4, "l" if face == "front" else "m")   # knee cop
-        s.plate(0, 7.4, 4, 12, "m")                       # greave
-    for face in ("front", "left", "right"):
-        f[face].trim(0, 4.5, 4, 5.0)                      # above the knee
+        s.plate(0, 0, 4, 4.8, "m")                        # cuisse
+        s.plate(0, 4.8, 4, 6.9, "l" if face == "front" else "m")   # knee cop
+        s.plate(0, 6.9, 4, 9.2, "m")                      # greave
+        s.cut(lambda u, v: v > 9.2)
     knee = f["front"]
-    knee.swirl(1.0, 1.4, 0.8)
-    knee.swirl(3.0, 1.4, 0.8, mirror=True)
-    knee.gem(2.0, 6.2, 0.55)
-    knee.plate(1.7, 8.0, 2.3, 11.5, "h")                  # shin ridge
-    knee.drip(1.2, 7.4, 0.8)
-    f["bottom"].fill(0, 0, 4, 4, "d")
+    knee.trim(0, 4.4, 4, 4.8)
+    knee.swirl(1.0, 1.5, 0.75)
+    knee.swirl(3.0, 1.5, 0.75, mirror=True)
+    knee.engrave([(1.0, 5.2), (2.0, 6.4), (3.0, 5.2)])
+    knee.drip(1.2, 6.9, 0.8)
 
 
 def write_knight_equipment():

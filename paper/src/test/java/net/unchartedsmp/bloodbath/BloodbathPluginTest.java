@@ -88,6 +88,8 @@ import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
@@ -325,10 +327,11 @@ class BloodbathPluginTest {
 				assertTrue(meta.isUnbreakable(), type.id());
 			}
 			assertFalse(meta.getEnchantmentGlintOverride(), type.id());
-			assertNull(meta.getTooltipStyle(), "the tooltip frame needs a required pack by default");
 		}
 		assertEquals(WeaponType.values().length + ArmorPiece.values().length,
 			chat(player).stream().filter(line -> line.startsWith("☠ You take up the")).count());
+		// (MockBukkit drops the tooltip_style component when copying item meta, so check the rule.)
+		assertTrue(Settings.get().tooltipFrame(), "the blood tooltip frame is on whenever the plugin sends the pack");
 	}
 
 	@Test
@@ -932,6 +935,69 @@ class BloodbathPluginTest {
 		assertNull(top.getItem(0), "no glass panes: the backdrop frames the slots");
 		plain.performCommand("bloodbath armory");
 		assertEquals(Material.RED_STAINED_GLASS_PANE, plain.getOpenInventory().getTopInventory().getItem(0).getType());
+	}
+
+	@Test
+	void packUsersGetBloodSpritesInPlaceOfDust() {
+		TestPlayer plain = server.addTestPlayer("Plain");
+		stand(plain, 2.5, 0.5, 0.0F, 0.0F);
+		loadPack(player);
+		world.spawns.clear();
+		Location at = new Location(world, 0.5, 6, 0.5);
+		BloodFx.burst(at, BloodFx.BLOOD_FADE, 10, 0.2);
+		BloodFx.burst(at, BloodFx.DRIP, 3, 0.2);
+		BloodFx.burst(at, BloodFx.EMBER, 3, 0.2);
+		BloodFx.burst(at, BloodFx.RING, 1, 0.0);
+		for (Particle sprite : List.of(Particle.SCULK_CHARGE, Particle.FALLING_OBSIDIAN_TEAR, Particle.SCULK_CHARGE_POP, Particle.SHRIEK)) {
+			assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == sprite && sp.receivers().equals(List.of(player))),
+				sprite + " for the pack user");
+			assertFalse(world.spawns.stream().anyMatch(sp -> sp.particle() == sprite && sp.receivers().contains(plain)),
+				"never " + sprite + " without the pack");
+		}
+		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.DUST_COLOR_TRANSITION && sp.receivers().equals(List.of(plain))));
+		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.FALLING_DUST && sp.receivers().equals(List.of(plain))));
+	}
+
+	@Test
+	void whoHasThePackSurvivesAPluginReload() {
+		loadPack(player);
+		assertTrue(PackState.hasPack(player));
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertTrue(PackState.hasPack(player), "their game won't report the pack again after a reload");
+
+		// An updated plugin in place: their game still has the old pack, so it's sent again.
+		player.getPersistentDataContainer().set(Keys.PACK, PersistentDataType.STRING, "an older pack");
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertFalse(PackState.hasPack(player), "the old pack doesn't have the new art");
+		assertFalse(player.getPersistentDataContainer().has(Keys.PACK));
+
+		server.getPluginManager().callEvent(new PlayerJoinEvent(player, Component.empty()));
+		assertFalse(PackState.hasPack(player), "a fresh connection starts from nothing");
+	}
+
+	@Test
+	void packVisualsCanBeForcedForEveryone() {
+		TestPlayer plain = server.addTestPlayer("Plain");
+		assertFalse(PackState.hasPack(plain));
+		plugin.getConfig().set("effects.pack-visuals", "always");
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		assertTrue(PackState.hasPack(plain), "the pack is installed some other way");
+		chat(player);
+		player.performCommand("bloodbath status");
+		assertTrue(any(chat(player), "2 of 2 online get them"));
+		plugin.getConfig().set("effects.pack-visuals", "off");
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		loadPack(player);
+		assertFalse(PackState.hasPack(player));
+	}
+
+	private void loadPack(Player who) {
+		server.getPluginManager().callEvent(new PlayerResourcePackStatusEvent(who, ResourcePackService.PACK_ID,
+			PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED));
 	}
 
 	// ---- kills ---------------------------------------------------------------------------------

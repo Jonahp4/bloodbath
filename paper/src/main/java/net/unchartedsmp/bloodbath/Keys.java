@@ -24,6 +24,8 @@ public final class Keys {
 	public static NamespacedKey CORE;
 	/** On every entity that makes up a Blood Knight boss (its body and its model's parts). */
 	public static NamespacedKey BOSS;
+	/** On players, for this connection only: the hash of the Bloodbath pack their game loaded. */
+	public static NamespacedKey PACK;
 
 	private Keys() {
 	}
@@ -37,6 +39,7 @@ public final class Keys {
 		HUD_OFF = new NamespacedKey(plugin, "hud_off");
 		CORE = new NamespacedKey(plugin, "core");
 		BOSS = new NamespacedKey(plugin, "boss");
+		PACK = new NamespacedKey(plugin, "pack_loaded");
 	}
 
 	/** A key in the resource pack's namespace, e.g. {@code unchartedsmp:riftblade}. */

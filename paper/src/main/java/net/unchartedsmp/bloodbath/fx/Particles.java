@@ -136,7 +136,7 @@ public final class Particles {
 			if (!packed.isEmpty()) {
 				BloodFx.Fx variant = fx.packVariant();
 				int packCount = Math.max(1, (int) Math.round(n * variant.countScale()));
-				world.spawnParticle(variant.particle(), packed, subject, x, y, z, packCount, dx, dy, dz, variant.speed() < 0 ? speed : variant.speed(),
+				world.spawnParticle(variant.particle(), packed, subject, x, y, z, packCount, dx, dy, dz, variant.speed() < 0 ? speed * -variant.speed() : variant.speed(),
 					variant.data(), force);
 			}
 		}

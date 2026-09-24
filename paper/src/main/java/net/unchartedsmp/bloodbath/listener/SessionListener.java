@@ -35,6 +35,7 @@ public final class SessionListener implements Listener {
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onJoin(PlayerJoinEvent event) {
 		Player player = event.getPlayer();
+		PackState.joined(player);
 		welcome(player);
 		plugin.packs().sendOnJoin(player);
 	}
@@ -61,7 +62,7 @@ public final class SessionListener implements Listener {
 		Behaviors.forget(id);
 		Hud.forget(id);
 		BloodKnightSet.forget(id);
-		PackState.forget(id);
+		PackState.forget(event.getPlayer());
 		Damage.forget(id);
 		plugin.weaponListener().forget(id);
 	}

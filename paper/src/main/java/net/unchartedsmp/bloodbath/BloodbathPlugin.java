@@ -75,6 +75,9 @@ public class BloodbathPlugin extends JavaPlugin {
 		ticker = getServer().getScheduler().runTaskTimer(this, this::tick, 1L, 1L);
 		// Enabled late (or reloaded) with players online: set them up as if they'd just joined.
 		for (Player player : getServer().getOnlinePlayers()) {
+			if (!PackState.restore(player, packs.hash())) {
+				packs.send(player); // the plugin was updated in place: they have the old pack
+			}
 			SessionListener.welcome(player);
 		}
 		getLogger().info("Bloodbath ready: " + WeaponType.values().length + " weapons. Resource pack: " + packs.status() + ".");

@@ -140,6 +140,7 @@ public final class BloodKnightSet implements Listener {
 		BloodFx.splash(chest, 10);
 		BloodFx.spray(chest, settings.rageRadius, 18, 10);
 		BloodFx.ring(center.clone().add(0.0, 0.1, 0.0), BloodFx.CLOT, settings.rageRadius, 32);
+		BloodFx.burst(center.clone().add(0.0, 0.2, 0.0), BloodFx.RING, 1, 0.0);
 		BloodFx.play(player, BloodFx.ROAR, 0.8F, 1.3F);
 		BloodFx.play(player, BloodFx.HEARTBEAT, 1.2F, 0.8F);
 		player.showTitle(Title.title(Component.empty(), Component.text("☠ BLOOD RAGE ☠", NamedTextColor.DARK_RED),

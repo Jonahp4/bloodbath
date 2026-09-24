@@ -85,6 +85,7 @@ final class BossFx {
 		BloodFx.play(center, ROAR, 1.6F, 0.6F);
 		BloodFx.play(center, GROWL, 1.2F, 0.5F);
 		Shapes.shockwave(center.clone().add(0, 0.15, 0), BloodFx.CLOT, 7.0, 10);
+		BloodFx.burst(center.clone().add(0, 0.3, 0), BloodFx.RING, 3, 1.2);
 	}
 
 	// ---- attacks ------------------------------------------------------------------------------

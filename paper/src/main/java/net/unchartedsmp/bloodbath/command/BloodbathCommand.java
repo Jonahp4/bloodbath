@@ -20,6 +20,7 @@ import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
 import net.unchartedsmp.bloodbath.hud.Hud;
+import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.pack.ResourcePackService;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -384,6 +385,9 @@ public final class BloodbathCommand implements TabExecutor {
 		if (sender instanceof Player player && packs.isActive()) {
 			line(sender, "Your pack address", String.valueOf(packs.address(player)));
 		}
+		line(sender, "Pack visuals", settings.packVisuals + " · " + PackState.count() + " of "
+			+ Bukkit.getOnlinePlayers().size() + " online get them"
+			+ (sender instanceof Player player ? (PackState.hasPack(player) ? " (you do)" : " (you don't: rejoin, /bb pack, or set pack-visuals: always)") : ""));
 		line(sender, "Tooltip frame", settings.tooltipFrame() ? "on" : "off (" + settings.tooltipFrame + ")");
 		line(sender, "Recipes", settings.recipesEnabled ? Recipes.count() + " registered" : "off");
 		line(sender, "Live effects", TickScheduler.pending() + " scheduled · " + Behaviors.MIRRORFANG.liveCount() + " blood mirrors");

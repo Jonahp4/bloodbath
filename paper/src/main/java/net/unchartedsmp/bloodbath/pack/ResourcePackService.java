@@ -250,7 +250,7 @@ public final class ResourcePackService {
 				+ "Set resource-pack.public-host to your server's domain or IP.");
 			return false;
 		}
-		String hash = settings.packMode.equals("url") ? remoteHash : zipSha1;
+		String hash = hash();
 		ResourcePackRequest request = ResourcePackRequest.resourcePackRequest()
 			.packs(ResourcePackInfo.resourcePackInfo(PACK_ID, uri, hash))
 			.required(settings.packRequired)
@@ -303,14 +303,22 @@ public final class ResourcePackService {
 		return out;
 	}
 
+	/** The hash of the pack players are sent now. */
+	public String hash() {
+		return Settings.get().packMode.equals("url") ? remoteHash : zipSha1;
+	}
+
 	public void onStatus(Player player, UUID packId, PlayerResourcePackStatusEvent.Status status) {
-		if (!PACK_ID.equals(packId)) {
+		boolean ours = PACK_ID.equals(packId);
+		PackState.status(player, ours, status == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED,
+			switch (status) {
+				case DECLINED, FAILED_DOWNLOAD, INVALID_URL, FAILED_RELOAD, DISCARDED -> true;
+				default -> false;
+			}, hash());
+		if (!ours) {
 			return;
 		}
 		Settings settings = Settings.get();
-		PackState.set(player.getUniqueId(), status == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED
-			|| status == PlayerResourcePackStatusEvent.Status.ACCEPTED && PackState.hasPack(player)
-			|| status == PlayerResourcePackStatusEvent.Status.DOWNLOADED && PackState.hasPack(player));
 		switch (status) {
 			case DECLINED -> player.sendMessage(settings.prefix
 				.append(Component.text("No pack, no 3D weapons: they'll look like netherite swords. ", NamedTextColor.GRAY))

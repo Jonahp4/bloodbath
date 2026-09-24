@@ -116,6 +116,7 @@ public final class SetBonus implements Listener {
 		BloodFx.play(player, BloodFx.ARMOR_SET, 0.9F, 0.7F);
 		BloodFx.play(player, BloodFx.HEARTBEAT, 0.8F, 0.9F);
 		Shapes.spiral(player.getLocation().add(0, 0.1, 0), BloodFx.EMBER, 0.8, 2.0, 2.0, 26, 0.0);
+		BloodFx.burst(player.getLocation().add(0, 0.2, 0), BloodFx.RING, 1, 0.0);
 		BloodFx.ring(player.getLocation().add(0, 0.05, 0), BloodFx.BLOOD_FADE, 0.9, 16);
 	}
 

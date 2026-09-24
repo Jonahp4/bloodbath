@@ -35,9 +35,10 @@ resource-pack:
   prompt: '<dark_red><bold>Bloodbath</bold></dark_red> <gray>uses a resource pack for its 3D weapons.'
 
 items:
-  # The blood-red tooltip frame on weapons. It comes from the resource pack, and players without
-  # the pack would see a purple-and-black missing texture instead, so:
-  # auto = only when resource-pack.required is true, true = always, false = never.
+  # The blood-red tooltip frame on weapons and armour. It comes from the resource pack; players who
+  # decline the pack see a purple-and-black missing texture there instead.
+  # auto = whenever the plugin sends the pack (or pack-visuals is always), true = always,
+  # false = never.
   tooltip-frame: auto
 
 hud:
@@ -56,9 +57,13 @@ effects:
   # full-detail-distance they see every particle, up to twice that half, beyond that a quarter.
   view-distance: 64
   full-detail-distance: 24
-  # Custom sprites (blood nova impacts), HUD icons and the armory's artwork for players who
-  # loaded the resource pack. Everyone else always gets the vanilla-safe version.
-  pack-visuals: true
+  # The pack-only visuals: custom blood particles, the animated boss model, HUD icons and the
+  # armory's artwork. Players without the pack get vanilla-safe versions instead.
+  # auto   = players whose game reported loading the pack (Bloodbath's own, or the server's pack
+  #          from server.properties when resource-pack.enabled is false because you merged it)
+  # always = everyone (the pack is forced some other way, or installed on every client by hand)
+  # off    = nobody
+  pack-visuals: auto
   # Blood dripping from a held weapon.
   held-aura: true
   # Gore burst and blood streams into the killer when a weapon kills.

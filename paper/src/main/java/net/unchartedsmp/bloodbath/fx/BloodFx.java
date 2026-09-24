@@ -31,7 +31,11 @@ public final class BloodFx {
 			this(particle, data, null, 1.0, -1.0);
 		}
 
-		/** This effect, but players with the pack see {@code variant} ({@code countScale} as many, at {@code speed}). */
+		/**
+		 * This effect, but players with the pack see {@code variant}, {@code countScale} as many.
+		 * {@code speed} 0 or more is the variant's own speed; a negative one scales the original
+		 * (-1 keeps it, -0.1 is a tenth: dust slows itself to a tenth, the custom sprites don't).
+		 */
 		public Fx withPack(Fx variant, double countScale, double speed) {
 			return new Fx(particle, data, variant, countScale, speed);
 		}
@@ -41,16 +45,36 @@ public final class BloodFx {
 	public static final Color BRIGHT_RED = Color.fromRGB(0xFF2A35);
 	public static final Color CLOT_RED = Color.fromRGB(0x4A0006);
 
-	public static final Fx BLOOD = new Fx(Particle.DUST, new Particle.DustOptions(BLOOD_RED, 1.1F));
-	public static final Fx BLOOD_LARGE = new Fx(Particle.DUST, new Particle.DustOptions(BLOOD_RED, 2.2F));
-	public static final Fx BLOOD_FADE = new Fx(Particle.DUST_COLOR_TRANSITION, new Particle.DustTransition(BRIGHT_RED, CLOT_RED, 1.6F));
-	public static final Fx CLOT = new Fx(Particle.DUST, new Particle.DustOptions(CLOT_RED, 1.8F));
-	public static final Fx SPLATTER = new Fx(Particle.BLOCK, Material.REDSTONE_BLOCK.createBlockData());
-	public static final Fx GORE = new Fx(Particle.BLOCK, Material.NETHER_WART_BLOCK.createBlockData());
-	/** Blood dripping: red falling dust (it used to be falling lava, which read as orange). */
-	public static final Fx DRIP = new Fx(Particle.FALLING_DUST, Material.REDSTONE_BLOCK.createBlockData());
+	// The pack's blood sprites (tools/models/particles.py), drawn over vanilla particles that are
+	// rare in normal play and not recoloured by the game. Only ever sent to players with the pack.
+	/** A drop that bursts into a splash and dries (the pack's sculk charge). */
+	private static final Fx PACK_SPLAT = new Fx(Particle.SCULK_CHARGE, 0.0F);
+	/** A hot glowing fleck of blood (the pack's sculk charge pop). */
+	private static final Fx PACK_SPARK = new Fx(Particle.SCULK_CHARGE_POP, null);
+	/** A drop of blood that falls and splashes where it lands (the pack's obsidian tear). */
+	private static final Fx PACK_DROP = new Fx(Particle.FALLING_OBSIDIAN_TEAR, null);
+	/** A ring of blood rising off the ground (the pack's shriek). */
+	private static final Fx PACK_RING = new Fx(Particle.SHRIEK, 0);
+
+	public static final Fx BLOOD = new Fx(Particle.DUST, new Particle.DustOptions(BLOOD_RED, 1.1F))
+		.withPack(PACK_SPLAT, 0.8, -0.1);
+	public static final Fx BLOOD_LARGE = new Fx(Particle.DUST, new Particle.DustOptions(BLOOD_RED, 2.2F))
+		.withPack(PACK_SPLAT, 1.0, -0.1);
+	public static final Fx BLOOD_FADE = new Fx(Particle.DUST_COLOR_TRANSITION, new Particle.DustTransition(BRIGHT_RED, CLOT_RED, 1.6F))
+		.withPack(PACK_SPLAT, 0.8, -0.1);
+	public static final Fx CLOT = new Fx(Particle.DUST, new Particle.DustOptions(CLOT_RED, 1.8F))
+		.withPack(PACK_SPLAT, 0.7, -0.1);
+	/** Chunks of blood flung out of a wound (block particles pop out at their own speed). */
+	public static final Fx SPLATTER = new Fx(Particle.BLOCK, Material.REDSTONE_BLOCK.createBlockData())
+		.withPack(PACK_SPLAT, 0.6, 0.06);
+	public static final Fx GORE = new Fx(Particle.BLOCK, Material.NETHER_WART_BLOCK.createBlockData())
+		.withPack(PACK_SPLAT, 0.5, 0.05);
+	/** Blood dripping: red falling dust; with the pack, real drops that splash on the ground. */
+	public static final Fx DRIP = new Fx(Particle.FALLING_DUST, Material.REDSTONE_BLOCK.createBlockData())
+		.withPack(PACK_DROP, 1.0, 0.0);
 	/** A fine, small blood mote for trails that pass close to the camera. */
-	public static final Fx MOTE = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 0.7F));
+	public static final Fx MOTE = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 0.7F))
+		.withPack(PACK_SPARK, 1.0, -0.1);
 	public static final Fx HURT = new Fx(Particle.DAMAGE_INDICATOR, null);
 	public static final Fx SPORE = new Fx(Particle.CRIMSON_SPORE, null);
 	public static final Fx SOUL = new Fx(Particle.SCULK_SOUL, null);
@@ -63,7 +87,11 @@ public final class BloodFx {
 	/** Low, heavy, dark-red haze: the Blood Mist. */
 	public static final Fx MIST = new Fx(Particle.DUST_COLOR_TRANSITION, new Particle.DustTransition(Color.fromRGB(0x3A0008), Color.fromRGB(0x12000A), 3.2F));
 	/** Tiny bright sparks of blood, for rising and orbiting streams. */
-	public static final Fx EMBER = new Fx(Particle.DUST, new Particle.DustOptions(Color.fromRGB(0xFF4050), 0.55F));
+	public static final Fx EMBER = new Fx(Particle.DUST, new Particle.DustOptions(Color.fromRGB(0xFF4050), 0.55F))
+		.withPack(PACK_SPARK, 1.0, -0.1);
+	/** A ring of blood rising off the ground: rage, the boss's roar. Dust for players without the pack. */
+	public static final Fx RING = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 1.4F))
+		.withPack(PACK_RING, 1.0, 0.0);
 	/**
 	 * An impact flash. Players with the pack see the "blood nova" sprite animation (the pack
 	 * redraws the warden's sonic boom, which nothing else uses); everyone else a dust burst.

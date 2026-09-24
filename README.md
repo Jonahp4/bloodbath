@@ -9,15 +9,15 @@ a resource pack that the plugin hosts for you.
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.3.0.jar`](dist/paper/Bloodbath-1.3.0.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.3.0.zip`](dist/Bloodbath-ResourcePack-1.3.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.3.1.jar`](dist/paper/Bloodbath-1.3.1.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.3.1.zip`](dist/Bloodbath-ResourcePack-1.3.1.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.3.0.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.3.1.jar` into `plugins/` and restart.
 3. Let players download the 3D models: open **TCP port 8163** on your firewall/router. The plugin
    serves the resource pack from there and players get a download prompt when they join. Can't
    open a port? See [Resource pack](#resource-pack).
@@ -79,8 +79,10 @@ The boss's armour, worn by players: **Blood Knight Helm, Cuirass, Greaves and Sa
 | **4 pieces, Blood Rage** | When a hit leaves you at 40% health or less: Strength II and Resistance for 8s and a blood shockwave that hurls everything within 4 blocks away. Your screen edges run red and your heart pounds until it fades. 60s cooldown, shown on the action bar. A clot (Clotblade) stops it. |
 
 The Sabatons leave bloody footprints and a full set drips blood (you see it too). The worn armour
-is painted at 4x vanilla resolution: brushed gunmetal plates with bevels and rivets, a grilled
-faceplate, engraved crimson filigree, a gem at the heart and a chainmail band. The worn armour and the icons come from the resource pack. **Without the
+is painted at 4x vanilla resolution and shaped so it doesn't read as a box: an open-faced helm
+(brow band, nasal guard, cheek guards), a cuirass that stops above the hips so the waist tapers
+into the belt, pauldrons, mail and vambraces that leave the hands bare, and low sabatons. Curved
+shading on every plate, engraved crimson filigree, and one glowing heart-gem. The worn armour and the icons come from the resource pack. **Without the
 pack, the pieces look like netherite in the inventory but are invisible when worn** (vanilla has
 no model for them). Keep that in mind if the pack is optional on your server, or turn the set off
 with `armor.enabled: false`.
@@ -180,14 +182,26 @@ typed to join. There's nothing to configure if that port is reachable.
   `plugins/Bloodbath/Bloodbath-ResourcePack.zip`. Upload it anywhere that gives a direct download
   link, set `mode: url` and put the link in `url`. Or merge it into your server's own pack.
 - `required: true` kicks players who decline. Only use it once the download works for everyone.
-- **Blood tooltip frame:** weapons can get a blood-red tooltip frame from the pack, but players
-  without the pack would see a broken purple-and-black tooltip instead. So it's on only when the
-  pack is required (`items.tooltip-frame: auto`); set it to `true` or `false` to force it.
+- **Blood tooltip frame:** weapons and armour get a blood-red tooltip frame from the pack whenever
+  the plugin sends the pack (`items.tooltip-frame: auto`). Players who decline the pack see a
+  purple-and-black tooltip there instead; set it to `false` if that matters on your server.
+- **Pack-only visuals** (custom particles, the boss model, HUD icons, the armory art) go to players
+  whose game reported loading the pack. If you merged the pack into your server's own pack, set
+  `resource-pack.enabled: false` and it's picked up from server.properties. If players get it some
+  other way (installed by hand), set `effects.pack-visuals: always`. `/bb status` shows how many
+  players are getting them, and whether you are.
 
 If a download fails, the player is told, and the console says why (usually the port).
 
 The pack overrides the vanilla netherite sword, bow and netherite armour models only for Bloodbath
 items (matched by `custom_model_data`); every other item, armour trims included, is untouched.
+
+A pack can't add new particles, only redraw vanilla ones, so the blood sprites take over particles
+that are rare in normal play: the warden's sonic boom (blood nova), sculk charge (blood splat),
+sculk charge pop (blood spark), sculk soul (crimson wisp), the shrieker's ring (blood ring), and
+crying obsidian's tears (drops of blood that splash where they land). With the pack, sculk spreading
+in the deep dark and crying obsidian look bloody too. The yellow boss bar is redrawn for the Blood
+Knight.
 
 ## Dupe and exploit safety
 
@@ -205,6 +219,22 @@ items (matched by `custom_model_data`); every other item, armour trims included,
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.3.1
+
+- **The custom visuals actually show up.** They only went to players the plugin had seen load its
+  pack, and it forgot them on a plugin reload (hot-swapped jar, `/reload`, PlugManX) and never saw
+  packs that arrived another way. So players got the vanilla fallbacks: the boss as a wither
+  skeleton in netherite, plain dust, no HUD icons. The plugin now remembers who has the pack across
+  reloads, re-sends it when the plugin was updated in place, picks up a pack merged into the
+  server's own, and has `effects.pack-visuals: always` for everything else.
+- **Real blood particles.** Custom sprites for pack users on every blood effect: drops that burst
+  into splashes and dry, glowing sparks, crimson wisps, falling drops that splash on the ground,
+  and a rising blood ring on Blood Rage, set completion and the boss's roar. Everyone else still
+  gets the dust versions.
+- **Tooltip frame on by default** whenever the plugin sends the pack.
+- **Armour reshaped**: open-faced helm, tapered waist, bare hands, low sabatons, curved shading,
+  far fewer stripes and gems. Much less of a box.
 
 ## What's new in 1.3.0
 
@@ -283,7 +313,7 @@ items (matched by `custom_model_data`); every other item, armour trims included,
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.0.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.1.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock

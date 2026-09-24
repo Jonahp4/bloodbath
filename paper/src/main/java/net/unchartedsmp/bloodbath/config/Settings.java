@@ -46,7 +46,8 @@ public final class Settings {
 	/** Within this, full detail; up to twice this, half; beyond, a quarter. */
 	public final double fullDetailDistance;
 	/** Custom sprites, HUD icons and GUI art for players who loaded the pack. */
-	public final boolean packVisuals;
+	/** auto, always or off (see PackState). */
+	public final String packVisuals;
 	/** Scales every Bloodbath sound. */
 	public final double soundVolume;
 	/** Sound id -> replacement id ("" mutes it). */
@@ -113,7 +114,11 @@ public final class Settings {
 		double defaultView = bool(c, "effects.long-range", true) ? 64.0 : 32.0;
 		particleViewDistance = Math.max(8.0, Math.min(256.0, c == null ? defaultView : c.getDouble("effects.view-distance", defaultView)));
 		fullDetailDistance = Math.max(4.0, Math.min(particleViewDistance, c == null ? 24.0 : c.getDouble("effects.full-detail-distance", 24.0)));
-		packVisuals = bool(c, "effects.pack-visuals", true);
+		packVisuals = switch (str(c, "effects.pack-visuals", "auto").trim().toLowerCase(Locale.ROOT)) {
+			case "always" -> "always";
+			case "off", "false", "no", "never" -> "off";
+			default -> "auto";
+		};
 		soundVolume = Math.max(0.0, Math.min(4.0, c == null ? 1.0 : c.getDouble("sounds.volume", 1.0)));
 		Map<String, String> replace = new HashMap<>();
 		ConfigurationSection swaps = c == null ? null : c.getConfigurationSection("sounds.replace");
@@ -200,7 +205,7 @@ public final class Settings {
 		return switch (tooltipFrame) {
 			case "true", "yes", "on", "always" -> true;
 			case "false", "no", "off", "never" -> false;
-			default -> packEnabled && packRequired;
+			default -> packEnabled || packVisuals.equals("always");
 		};
 	}
 
