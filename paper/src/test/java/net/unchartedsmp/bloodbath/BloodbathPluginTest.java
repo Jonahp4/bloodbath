@@ -735,7 +735,7 @@ class BloodbathPluginTest {
 		List<TestWorld.Spawn> mine = world.spawns.stream().filter(s -> s.receivers() != null && s.receivers().contains(player)).toList();
 		assertFalse(mine.isEmpty(), "the holder sees their weapon drip");
 		for (TestWorld.Spawn spawn : mine) {
-			assertTrue(spawn.particle() == Particle.FALLING_DUST || spawn.particle() == Particle.DUST, spawn.particle() + " for the holder");
+			assertTrue(spawn.particle() == Particle.BLOCK || spawn.particle() == Particle.DUST, spawn.particle() + " for the holder");
 			assertTrue(eyes.getY() - spawn.at().getY() > 0.8, "below the line of sight: " + spawn.at());
 			assertEquals(List.of(player), spawn.receivers(), "the holder's own version is theirs alone");
 		}
@@ -956,14 +956,17 @@ class BloodbathPluginTest {
 		BloodFx.burst(at, BloodFx.DRIP, 3, 0.2);
 		BloodFx.burst(at, BloodFx.EMBER, 3, 0.2);
 		BloodFx.burst(at, BloodFx.RING, 1, 0.0);
-		for (Particle sprite : List.of(Particle.SCULK_CHARGE, Particle.FALLING_OBSIDIAN_TEAR, Particle.SCULK_CHARGE_POP, Particle.SHRIEK)) {
+		BloodFx.burst(at, BloodFx.WISP, 2, 0.2);
+		for (Particle sprite : List.of(Particle.SCULK_CHARGE, Particle.FALLING_DRIPSTONE_LAVA, Particle.SCULK_CHARGE_POP, Particle.SHRIEK,
+			Particle.SCULK_SOUL)) {
 			assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == sprite && sp.receivers().equals(List.of(player))),
 				sprite + " for the pack user");
 			assertFalse(world.spawns.stream().anyMatch(sp -> sp.particle() == sprite && sp.receivers().contains(plain)),
 				"never " + sprite + " without the pack");
 		}
 		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.DUST_COLOR_TRANSITION && sp.receivers().equals(List.of(plain))));
-		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.FALLING_DUST && sp.receivers().equals(List.of(plain))));
+		assertTrue(world.spawns.stream().anyMatch(sp -> sp.particle() == Particle.BLOCK && sp.receivers().equals(List.of(plain))),
+			"drops that fall like drops, not dust drifting down like snow");
 	}
 
 	@Test

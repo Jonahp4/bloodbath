@@ -136,7 +136,7 @@ public final class Particles {
 			int n = band == 0 ? full : Math.max(1, (int) Math.round(full / (band == 1 ? 2.0 : 4.0)));
 			boolean force = band > 0; // beyond the client's own 32-block particle cut-off
 			List<Player> plain = BANDS.get(band * 2);
-			if (!plain.isEmpty()) {
+			if (!plain.isEmpty() && fx.particle() != null) { // null: an effect only players with the pack get
 				world.spawnParticle(fx.particle(), plain, subject, x, y, z, n, dx, dy, dz, speed, fx.data(), force);
 			}
 			List<Player> packed = BANDS.get(band * 2 + 1);

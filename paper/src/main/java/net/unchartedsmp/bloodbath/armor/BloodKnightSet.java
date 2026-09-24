@@ -232,12 +232,15 @@ public final class BloodKnightSet implements Listener {
 				continue;
 			}
 			Location at = player.getLocation().add(0.0, 0.9, 0.0);
-			BloodFx.ambientForOthers(player, at, BloodFx.DRIP, 2, 0.3);
+			// A drop every second or so: each one splashes and plips, so more would be a patter.
+			if (now % (AURA_INTERVAL_TICKS * 2) == 0) {
+				BloodFx.ambientForOthers(player, at, BloodFx.DRIP, 1, 0.3);
+			}
 			if (now % (AURA_INTERVAL_TICKS * 3) == 0) {
 				BloodFx.ambientForOthers(player, at, BloodFx.BLOOD_FADE, 2, 0.35);
+				// The wearer sees it running down their legs to the ground, below their line of sight.
+				BloodFx.ambientForSelf(player, at.clone().add(0.0, -0.55, 0.0), BloodFx.DRIP, 1, 0.22);
 			}
-			// The wearer sees it running down their legs to the ground, below their line of sight.
-			BloodFx.ambientForSelf(player, at.add(0.0, -0.55, 0.0), BloodFx.DRIP, 1, 0.22);
 		}
 	}
 

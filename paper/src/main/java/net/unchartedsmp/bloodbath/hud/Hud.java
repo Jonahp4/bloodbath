@@ -124,19 +124,25 @@ public final class Hud {
 		// Everyone else gets the full aura. The holder gets a quieter version of their own, low by
 		// their side: blood running off the weapon onto the ground, seen when they look down.
 		// (Anything at hand height would sit a block from their camera and fill the screen.)
+		// A slow drip, drop... drop..., not a stream: each drop falls, splashes and plips.
 		Location hand = handPos(player, offhand);
 		long step = now / INTERVAL_TICKS;
-		BloodFx.ambientForOthers(player, hand, BloodFx.DRIP, 1, 0.08);
-		if (step % 3 == 0) {
+		// Drops fall from a little further along the blade, jittered so they don't land in one spot.
+		int phase = Math.floorMod(player.getUniqueId().hashCode(), 3);
+		if ((step + phase) % 3 == 0) {
+			BloodFx.ambientForOthers(player, hand.clone().add(0.0, -0.1, 0.0), BloodFx.DRIP, 1, 0.05);
+		}
+		if (step % 3 == 1) {
 			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.2, 0.0), behavior.auraAccent(), 1, 0.15);
 		}
 		boolean ready = Cooldowns.isReady(player, behavior.ability());
-		if (step % 5 == 0 && ready) {
+		if (ready && step % 5 == 0) {
 			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.3, 0.0), BloodFx.BLOOD_FADE, 2, 0.2);
+			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.25, 0.0), BloodFx.WISP, 1, 0.1);
 		}
 		Location own = hand.add(0.0, -0.5, 0.0);
-		if (step % 2 == 0) {
-			BloodFx.ambientForSelf(player, own, BloodFx.DRIP, 1, 0.06);
+		if ((step + phase) % 4 == 0) {
+			BloodFx.ambientForSelf(player, own, BloodFx.DRIP, 1, 0.04);
 		}
 		if (step % (ready ? 3 : 6) == 0) {
 			BloodFx.ambientForSelf(player, own, BloodFx.EMBER, 1, 0.1);

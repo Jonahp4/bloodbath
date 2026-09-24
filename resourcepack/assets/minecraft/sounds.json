@@ -1,0 +1,13 @@
+{
+  "block.pointed_dripstone.drip_lava": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "block.pointed_dripstone.drip_water",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.72
+      }
+    ]
+  }
+}

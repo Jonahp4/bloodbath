@@ -9,15 +9,15 @@ a resource pack that the plugin hosts for you.
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.3.2.jar`](dist/paper/Bloodbath-1.3.2.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.3.2.zip`](dist/Bloodbath-ResourcePack-1.3.2.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.3.3.jar`](dist/paper/Bloodbath-1.3.3.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.3.3.zip`](dist/Bloodbath-ResourcePack-1.3.3.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.3.2.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.3.3.jar` into `plugins/` and restart.
 3. That's it for the 3D models: players get a download prompt when they join. The pack comes from
    the plugin's public copy on GitHub (checked to be identical to the one inside the jar), so
    there's no port to open. No other plugins are needed. See [Resource pack](#resource-pack).
@@ -218,9 +218,11 @@ items (matched by `custom_model_data`); every other item, armour trims included,
 
 A pack can't add new particles, only redraw vanilla ones, so the blood sprites take over particles
 that are rare in normal play: the warden's sonic boom (blood nova), sculk charge (blood splat),
-sculk charge pop (blood spark), sculk soul (crimson wisp), the shrieker's ring (blood ring), and
-crying obsidian's tears (drops of blood that splash where they land). With the pack, sculk spreading
-in the deep dark and crying obsidian look bloody too. The yellow boss bar is redrawn for the Blood
+sculk charge pop (blood spark), sculk soul (crimson wisp), the shrieker's ring (blood ring), the
+creaking heart's trail (glowing blood streams), and pointed dripstone's lava drops (drops of blood
+that fall at full weight and splash with a soft plip where they land). With the pack, sculk
+spreading in the deep dark, creaking trails, dripstone lava drips and lava drip splashes look bloody
+too, and dripstone lava drips plip instead of sizzling. The yellow boss bar is redrawn for the Blood
 Knight.
 
 ## Dupe and exploit safety
@@ -239,6 +241,17 @@ Knight.
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.3.3
+
+- **Dripping that looks like dripping.** Drops used to be crying obsidian's tears, which the game
+  lets drift down like snow (and players without the pack got slow falling dust). Now they're
+  drops that fall at full weight, splash where they land and make a soft plip. A held weapon drips
+  drop... drop... instead of streaming; a full armour set about once a second.
+- **New and redrawn particles**: a glowing blood trail sprite for every stream of blood (kills,
+  tethers, rifts, the grimoire), crimson wisps rising off a ready weapon and out of the dead, a
+  beaded blood ring, splashes that run and dry. Kills rain blood around the body.
+- Crying obsidian is purple again.
 
 ## What's new in 1.3.2
 
@@ -349,7 +362,7 @@ Knight.
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.2.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.3.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock

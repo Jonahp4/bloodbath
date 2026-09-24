@@ -51,8 +51,11 @@ public final class BloodFx {
 	private static final Fx PACK_SPLAT = new Fx(Particle.SCULK_CHARGE, 0.0F);
 	/** A hot glowing fleck of blood (the pack's sculk charge pop). */
 	private static final Fx PACK_SPARK = new Fx(Particle.SCULK_CHARGE_POP, null);
-	/** A drop of blood that falls and splashes where it lands (the pack's obsidian tear). */
-	private static final Fx PACK_DROP = new Fx(Particle.FALLING_OBSIDIAN_TEAR, null);
+	/**
+	 * A drop of blood that falls at full weight and splashes, with a soft plip, where it lands (the
+	 * pack's dripstone lava drop).
+	 */
+	private static final Fx PACK_DROP = new Fx(Particle.FALLING_DRIPSTONE_LAVA, null);
 	/** A ring of blood rising off the ground (the pack's shriek). */
 	private static final Fx PACK_RING = new Fx(Particle.SHRIEK, 0);
 
@@ -69,9 +72,14 @@ public final class BloodFx {
 		.withPack(PACK_SPLAT, 0.6, 0.06);
 	public static final Fx GORE = new Fx(Particle.BLOCK, Material.NETHER_WART_BLOCK.createBlockData())
 		.withPack(PACK_SPLAT, 0.5, 0.05);
-	/** Blood dripping: red falling dust; with the pack, real drops that splash on the ground. */
-	public static final Fx DRIP = new Fx(Particle.FALLING_DUST, Material.REDSTONE_BLOCK.createBlockData())
+	/**
+	 * Blood dripping. With the pack: real drops that fall and splash on the ground. Without it:
+	 * little flecks of blood that fall just as fast (falling dust would drift down like snow).
+	 */
+	public static final Fx DRIP = new Fx(Particle.BLOCK, Material.REDSTONE_BLOCK.createBlockData())
 		.withPack(PACK_DROP, 1.0, 0.0);
+	/** A crimson soul rising and burning out. Players with the pack only: there's no vanilla-safe look. */
+	public static final Fx WISP = new Fx(null, null).withPack(new Fx(Particle.SCULK_SOUL, null), 1.0, -1.0);
 	/** A fine, small blood mote for trails that pass close to the camera. */
 	public static final Fx MOTE = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 0.7F))
 		.withPack(PACK_SPARK, 1.0, -0.1);
@@ -253,6 +261,10 @@ public final class BloodFx {
 		burst(chest, BLOOD_FADE, 40, 0.8);
 		burst(chest, HURT, 8, 0.4, 0.1);
 		ring(victim.getLocation().add(0.0, 0.05, 0.0), CLOT, 1.2, 18);
+		// It rains blood around the body for a moment, and the soul burns out of it.
+		burst(chest.clone().add(0.0, 0.6, 0.0), DRIP, 10, 0.7, 0.0);
+		burst(victim.getLocation().add(0.0, 0.2, 0.0), RING, 1, 0.0);
+		burst(chest, WISP, 5, 0.3, 0.02);
 		// The weapon drinks: blood streams from the corpse into the killer.
 		Location killerChest = killer.getLocation().add(0.0, killer.getHeight() * 0.6, 0.0);
 		for (int i = 0; i < 6; i++) {
