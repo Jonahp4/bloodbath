@@ -1,0 +1,38 @@
+name: Bloodbath
+version: '${version}'
+main: net.unchartedsmp.bloodbath.BloodbathPlugin
+api-version: '1.21.4'
+description: Twelve blood-soaked 3D ability weapons, an armory, and a self-hosted resource pack.
+authors: [Uncharted SMP]
+website: https://github.com/jonahp4/bloodbath
+
+commands:
+  bloodbath:
+    description: Bloodbath weapons - armory, give, info, HUD and resource pack.
+    usage: /<command> help
+    aliases: [bb, blood]
+    permission: bloodbath.command
+
+permissions:
+  bloodbath.command:
+    description: Use /bloodbath (help, list, info, hud, pack for yourself).
+    default: true
+  bloodbath.use:
+    description: Use weapon abilities and on-hit powers.
+    default: true
+  bloodbath.armory:
+    description: Open the armory menu (view only without bloodbath.give).
+    default: true
+  bloodbath.craft:
+    description: Craft weapons when recipes are enabled in config.yml.
+    default: true
+  bloodbath.give:
+    description: Give weapons with /bloodbath give and take them from the armory.
+    default: op
+  bloodbath.admin:
+    description: Reload, reset cooldowns, check status and send the pack to others.
+    default: op
+    children:
+      bloodbath.give: true
+      bloodbath.command: true
+      bloodbath.armory: true

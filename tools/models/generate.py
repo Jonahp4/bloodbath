@@ -15,9 +15,12 @@ Each weapon gets its own texture atlas, painted per face at 1 texel per model un
 sampled in model space, so patterns run continuously across neighbouring cubes.
 
 Outputs (relative to the repo root):
-  src/main/resources/assets/unchartedsmp/items/<id>.json           item model definitions
-  src/main/resources/assets/unchartedsmp/models/item/<id>.json     3D models (+ bow pull stages)
-  src/main/resources/assets/unchartedsmp/textures/item/<id>.png    painted atlases
+  resourcepack/pack.mcmeta, resourcepack/pack.png                  resource pack metadata
+  resourcepack/assets/unchartedsmp/items/<id>.json                 item model definitions
+  resourcepack/assets/minecraft/items/{netherite_sword,bow}.json   Paper: custom_model_data overrides
+  resourcepack/assets/unchartedsmp/textures/gui/sprites/tooltip/   the blood tooltip frame
+  resourcepack/assets/unchartedsmp/models/item/<id>.json           3D models (+ bow pull stages)
+  resourcepack/assets/unchartedsmp/textures/item/<id>.png          painted atlases
   docs/preview/models.json, docs/preview/textures/                 data for the web preview
 
 Usage: python3 tools/models/generate.py   (needs numpy + pillow)
@@ -32,7 +35,8 @@ import numpy as np
 from PIL import Image
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ASSETS = os.path.join(ROOT, "src", "main", "resources", "assets", "unchartedsmp")
+PACK = os.path.join(ROOT, "resourcepack")          # shared by the Paper plugin and the Fabric mod
+ASSETS = os.path.join(PACK, "assets", "unchartedsmp")
 NS = "unchartedsmp"
 
 
@@ -98,6 +102,8 @@ GOLD = pal("#4a3208", "#76561a", "#a07c2a", "#caa441", "#f2d98a")
 STONE = pal("#1f1e22", "#2d2b30", "#3c3a40", "#4d4a51", "#615d65")
 MIRROR = pal("#3a1016", "#6e2831", "#a44b56", "#d98e97", "#fbe3e6")
 CLOT = pal("#120103", "#240306", "#38060b", "#520912", "#7a0f1a")
+PARCHMENT = pal("#6b5a3e", "#8f7a55", "#b39d70", "#d4c192", "#efe2b8")
+HIDE = pal("#1c0205", "#33050b", "#520912", "#721020", "#95192c")
 STRING = pal("#5a0a10", "#8c1019", "#bf1c28", "#ef4a57", "#ffb0b6")
 STAIN = hexrgb("#7a0d18")
 STAIN_DARK = hexrgb("#4a0610")
@@ -231,6 +237,20 @@ def paint_texel(mat, face, u, v, w, h, p, el):
         c = ramp(CLOT, 0.2 + 0.7 * fbm(x * 0.9, y * 0.9, z * 0.9, seed))
         if _hash(int(x * 3), int(y * 3), int(z * 3), seed) > 0.93:
             c = ramp(BLOOD, 0.85)
+        return c
+    if mat == "parchment":
+        # Page edges: stacked lines, with the odd red scribble bleeding through.
+        c = ramp(PARCHMENT, 0.45 + 0.35 * fbm(x * 0.8, y * 0.8, z * 0.8, seed))
+        if not broad and int(math.floor((z if face in ("east", "west", "up", "down") else y) * 3)) % 2 == 0:
+            c = c * 0.86
+        if broad and fbm(x * 1.3, y * 2.5, z, 91) > 0.62:
+            c = ramp(BLOOD, 0.45)
+        return c
+    if mat == "hide":
+        # Crimson leather binding with a stitched border.
+        c = ramp(HIDE, 0.3 + 0.55 * fbm(x * 0.9, y * 0.9, z * 0.9, seed, 3))
+        if edge and w > 3 and h > 3:
+            c = ramp(GOLD, 0.55) if (u + v) % 2 == 0 else ramp(HIDE, 0.1)
         return c
     if mat == "string":
         return ramp(STRING, 0.4 + 0.5 * fbm(x, y * 2, z, seed))
@@ -453,6 +473,40 @@ def void_scythe():
     return m
 
 
+def vampire_fang():
+    m = Model()
+    m.gem(8, -2.6, 2.8, name="pommel")
+    m.centered(8, -1.3, 3.8, 1.8, 1.8, "grip", name="grip")
+    m.centered(8, 3.6, 4.8, 4.6, 2.2, "gold", name="guard")
+    # Two little bone fangs hanging off the guard, like a vampire's bite.
+    m.path(6.2, 4.2, [(247.5, 1.8), (270, 1.4)], lambda i: (1.1, 0.8)[i], 1.0, "bone", "fang_l")
+    m.path(9.8, 4.2, [(292.5, 1.8), (270, 1.4)], lambda i: (1.1, 0.8)[i], 1.0, "bone", "fang_r")
+    m.gem(8, 4.2, 2.4, depth=2.6, name="guard_gem")
+    x, y = m.path(8.0, 4.8, [(90, 5.0), (67.5, 3.4), (45, 2.4)], lambda i: (3.0, 2.4, 1.6)[i], 1.0, "blade", "blade", edge=-1.0)
+    m.path(x, y, [(22.5, 1.8)], 1.0, 1.1, "bone", "tip")
+    m.diamond(10.4, 2.4, 1.2, 1.2, "glow", name="blood_drop")
+    return m
+
+
+def blood_grimoire():
+    m = Model()
+    x1, x2, y1, y2 = 4.5, 11.5, 3.5, 12.5
+    m.box(x1 + 0.4, y1 + 0.4, 7.0, x2 - 0.2, y2 - 0.4, 9.0, "parchment", name="pages")
+    m.box(x1, y1, 9.0, x2, y2, 9.6, "hide", name="front_cover")
+    m.box(x1, y1, 6.4, x2, y2, 7.0, "hide", name="back_cover")
+    m.box(x1 - 0.5, y1, 6.4, x1 + 0.4, y2, 9.6, "hide", name="spine")
+    for i, y in enumerate((y1 + 1.2, (y1 + y2) / 2 - 0.4, y2 - 2.0)):
+        m.box(x1 - 0.7, y, 6.2, x1 + 0.5, y + 0.8, 9.8, "gold", name=f"spine_band_{i}")
+    for i, (cx, cy) in enumerate(((x2 - 0.5, y1 + 0.5), (x2 - 0.5, y2 - 0.5), (x1 + 0.9, y1 + 0.5), (x1 + 0.9, y2 - 0.5))):
+        m.box(cx - 0.6, cy - 0.6, 9.4, cx + 0.6, cy + 0.6, 9.9, "gold", name=f"corner_front_{i}")
+        m.box(cx - 0.6, cy - 0.6, 6.1, cx + 0.6, cy + 0.6, 6.6, "gold", name=f"corner_back_{i}")
+    m.gem(8.3, 8.4, 3.4, depth=0.8, cz=9.8, name="cover_gem")
+    m.box(7.9, 3.0, 9.6, 8.7, 6.2, 9.95, "glow", name="blood_run")
+    m.box(9.6, 0.6, 7.7, 10.2, 3.6, 8.1, "string", name="bookmark")
+    m.diamond(9.9, 0.6, 0.9, 0.5, "glow", name="bookmark_drop")
+    return m
+
+
 def paradox_bow(stage):
     """stage 0 = idle (no arrow), 1..3 = pulling_0..pulling_2."""
     m = Model()
@@ -504,6 +558,8 @@ WEAPONS = {
     "mirrorfang": ("Blood Mirrorfang", mirrorfang),
     "void_scythe": ("Hemorrhage Scythe", void_scythe),
     "paradox_bow": ("Sanguine Paradox Bow", lambda: paradox_bow(0)),
+    "vampire_fang": ("Vampire Fang", vampire_fang),
+    "blood_grimoire": ("Blood Grimoire", blood_grimoire),
 }
 BOW_IDLE = None  # set in main(): framing reference for the bow's pull stages
 BOW_STAGES = {"paradox_bow_pulling_0": 1, "paradox_bow_pulling_1": 2, "paradox_bow_pulling_2": 3}
@@ -717,9 +773,17 @@ def display(model, weapon):
         disp["gui"] = {"rotation": [25, -35, 0], "translation": [0, 0, 0], "scale": v3(0.9)}
         disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
         disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(0.9)}
+    if weapon == "blood_grimoire":
+        # Held like a book (vanilla item/generated poses), shown cover-first in the inventory.
+        disp["thirdperson_righthand"] = {"rotation": [0, 0, 0], "translation": [0, 3, 1], "scale": v3(0.55)}
+        disp["firstperson_righthand"] = {"rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68)}
+        disp["gui"] = {"rotation": [15, -25, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
+        disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
+        disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
+        disp["head"] = {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
     # The bow's pull stages must keep the idle model's framing, or the icon would jump around.
     framing = BOW_IDLE if weapon.startswith("paradox_bow") else model
-    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon == "meteor_gauntlet" else 1.0)
+    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon in ("meteor_gauntlet", "blood_grimoire") else 1.0)
     fit_to_slot(disp["fixed"], framing, fill=14.0)
     fit_to_slot(disp["ground"], framing, fill=7.0, max_scale=0.5, base=(0.0, 2.0, 0.0))
     return disp
@@ -769,6 +833,7 @@ def main():
         os.remove(os.path.join(prev_dir, "textures", f))
 
     preview = {"textures": {}, "weapons": {}}
+    definitions = {}
     global BOW_IDLE
     BOW_IDLE = paradox_bow(0)
     for weapon, (title, build) in WEAPONS.items():
@@ -794,11 +859,125 @@ def main():
                 json.dump(model_json, f, indent=1)
             preview["weapons"][name] = {"title": title, "texture": weapon, "elements": elements}
             print(f"{name:24s} {len(elements):3d} cubes  atlas {size}x{size}")
+        definitions[weapon] = item_definition(weapon)
         with open(os.path.join(items_out, f"{weapon}.json"), "w") as f:
-            json.dump(item_definition(weapon), f, indent=2)
+            json.dump(definitions[weapon], f, indent=2)
 
     with open(os.path.join(prev_dir, "models.json"), "w") as f:
         json.dump(preview, f, separators=(",", ":"))
+    write_vanilla_overrides(definitions)
+    write_tooltip_sprites()
+    write_pack_meta()
+
+
+def vanilla_model(path):
+    return {"type": "minecraft:model", "model": f"minecraft:item/{path}"}
+
+
+# The Paper plugin's weapons are real netherite swords and bows carrying a custom_model_data string
+# "bloodbath:<id>". Overriding the vanilla definitions (rather than pointing the item_model
+# component at our own) means a player without the pack sees a normal netherite sword or bow
+# instead of a missing-model cube. Everything else falls through to the vanilla model.
+def write_vanilla_overrides(definitions):
+    out = os.path.join(PACK, "assets", "minecraft", "items")
+    os.makedirs(out, exist_ok=True)
+
+    def select(cases, fallback):
+        return {"model": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "index": 0,
+            "cases": [{"when": f"bloodbath:{w}", "model": definitions[w]["model"]} for w in cases],
+            "fallback": fallback,
+        }}
+
+    swords = [w for w in definitions if w != "paradox_bow"]
+    vanilla_bow = {
+        "type": "minecraft:condition",
+        "property": "minecraft:using_item",
+        "on_false": vanilla_model("bow"),
+        "on_true": {
+            "type": "minecraft:range_dispatch",
+            "property": "minecraft:use_duration",
+            "scale": 0.05,
+            "entries": [
+                {"threshold": 0.65, "model": vanilla_model("bow_pulling_1")},
+                {"threshold": 0.9, "model": vanilla_model("bow_pulling_2")},
+            ],
+            "fallback": vanilla_model("bow_pulling_0"),
+        },
+    }
+    with open(os.path.join(out, "netherite_sword.json"), "w") as f:
+        json.dump(select(swords, vanilla_model("netherite_sword")), f, indent=2)
+    with open(os.path.join(out, "bow.json"), "w") as f:
+        json.dump(select(["paradox_bow"], vanilla_bow), f, indent=2)
+
+
+def lerp_rgba(a, b, t):
+    return tuple(int(round(a[i] + (b[i] - a[i]) * t)) for i in range(4))
+
+
+# Tooltip style "unchartedsmp:bloodbath": same geometry as vanilla's tooltip/background and
+# tooltip/frame (a 100x100 nine-slice with the box 8px in from each edge), in blood colours.
+# Decoration only goes in the corner cells: edges and centre are stretched to the tooltip's size.
+def write_tooltip_sprites():
+    out = os.path.join(ASSETS, "textures", "gui", "sprites", "tooltip")
+    os.makedirs(out, exist_ok=True)
+    size, lo, hi = 100, 8, 91
+
+    bg = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    px = bg.load()
+    for y in range(lo, hi + 1):
+        for x in range(lo, hi + 1):
+            if (x in (lo, hi)) and (y in (lo, hi)):
+                continue  # trimmed corner, like vanilla
+            px[x, y] = lerp_rgba((30, 4, 9, 242), (11, 1, 3, 242), (y - lo) / (hi - lo))
+    bg.save(os.path.join(out, "bloodbath_background.png"))
+    with open(os.path.join(out, "bloodbath_background.png.mcmeta"), "w") as f:
+        json.dump({"gui": {"scaling": {"type": "nine_slice", "width": size, "height": size, "border": 9,
+                                       "stretch_inner": True}}}, f, indent=2)
+
+    frame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    px = frame.load()
+    top_outer, bottom_outer = (122, 6, 16, 235), (58, 2, 8, 225)
+    top_inner, bottom_inner = (236, 38, 52, 230), (120, 6, 18, 215)
+    for y in range(lo, hi + 1):
+        t = (y - lo) / (hi - lo)
+        for x in range(lo, hi + 1):
+            ring = min(x - lo, hi - x, y - lo, hi - y)
+            if ring > 1:
+                continue
+            corner = min(x - lo, hi - x) + min(y - lo, hi - y)
+            if corner < 2:
+                continue  # rounded corner
+            px[x, y] = lerp_rgba(top_inner, bottom_inner, t) if ring == 1 else lerp_rgba(top_outer, bottom_outer, t)
+    # A small gem riveted into each corner, kept inside the 10px corner cells.
+    gem = {(0, 0): (255, 60, 72, 255), (0, -1): (255, 200, 205, 255), (-1, 0): (255, 200, 205, 255),
+           (1, 0): (150, 8, 20, 255), (0, 1): (150, 8, 20, 255)}
+    for cx, cy in ((7, 7), (92, 7), (7, 92), (92, 92)):
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                if abs(dx) + abs(dy) <= 2:
+                    px[cx + dx, cy + dy] = gem.get((dx, dy), (255, 214, 122, 255))  # gold rim
+    frame.save(os.path.join(out, "bloodbath_frame.png"))
+    with open(os.path.join(out, "bloodbath_frame.png.mcmeta"), "w") as f:
+        json.dump({"gui": {"scaling": {"type": "nine_slice", "width": size, "height": size, "border": 10,
+                                       "stretch_inner": True}}}, f, indent=2)
+
+
+PACK_DESCRIPTION = "\u00a74Bloodbath\u00a7r 3D weapons"
+
+
+def write_pack_meta():
+    # 1.21.4 (46) is the first version with item model definitions; 1.21.11 is 75 and 26.3 is 97.
+    # pack_format + supported_formats are read by 1.21.4-1.21.8, min/max_format by 1.21.9+.
+    meta = {"pack": {"description": PACK_DESCRIPTION, "pack_format": 75, "supported_formats": [46, 99],
+                     "min_format": 46, "max_format": 99}}
+    with open(os.path.join(PACK, "pack.mcmeta"), "w") as f:
+        json.dump(meta, f, indent=2)
+    icon = os.path.join(ROOT, "fabric", "src", "main", "resources", "assets", "unchartedsmp", "icon.png")
+    if os.path.exists(icon):
+        shutil.copy(icon, os.path.join(PACK, "pack.png"))
 
 
 if __name__ == "__main__":

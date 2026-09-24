@@ -5,6 +5,6 @@ run/
 *.iml
 .idea/
 .vscode/
-tools/offline-build/.cache/
-tools/offline-build/.work/
+*/offline-build/.cache/
+*/offline-build/.work/
 __pycache__/

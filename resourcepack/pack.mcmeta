@@ -1,0 +1,12 @@
+{
+  "pack": {
+    "description": "\u00a74Bloodbath\u00a7r 3D weapons",
+    "pack_format": 75,
+    "supported_formats": [
+      46,
+      99
+    ],
+    "min_format": 46,
+    "max_format": 99
+  }
+}

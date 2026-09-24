@@ -1,0 +1,90 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "cases": [
+      {
+        "when": "bloodbath:riftblade",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/riftblade"
+        }
+      },
+      {
+        "when": "bloodbath:bloodhook",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/bloodhook"
+        }
+      },
+      {
+        "when": "bloodbath:nullblade",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/nullblade"
+        }
+      },
+      {
+        "when": "bloodbath:meteor_gauntlet",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/meteor_gauntlet"
+        }
+      },
+      {
+        "when": "bloodbath:gravestone",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/gravestone"
+        }
+      },
+      {
+        "when": "bloodbath:chronos",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/chronos"
+        }
+      },
+      {
+        "when": "bloodbath:thunder_pike",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/thunder_pike"
+        }
+      },
+      {
+        "when": "bloodbath:mirrorfang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/mirrorfang"
+        }
+      },
+      {
+        "when": "bloodbath:void_scythe",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/void_scythe"
+        }
+      },
+      {
+        "when": "bloodbath:vampire_fang",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/vampire_fang"
+        }
+      },
+      {
+        "when": "bloodbath:blood_grimoire",
+        "model": {
+          "type": "minecraft:model",
+          "model": "unchartedsmp:item/blood_grimoire"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/netherite_sword"
+    }
+  }
+}

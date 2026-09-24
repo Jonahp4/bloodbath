@@ -1,0 +1,194 @@
+# ☠ Bloodbath
+# /bloodbath reload applies changes without a restart.
+# Times are in seconds, damage and health in half-hearts (20 = a full health bar).
+
+resource-pack:
+  # Send players the resource pack with the 3D models. Players who decline it (or can't
+  # download it) still get working weapons; they just look like netherite swords.
+  enabled: true
+
+  # embedded: the plugin hosts the pack itself on the port below. Works out of the box on a home
+  #           server or VPS as long as that port is reachable (open it in your firewall/router).
+  # url:      send a pack you host yourself. The plugin exports the pack to
+  #           plugins/Bloodbath/Bloodbath-ResourcePack.zip; upload it anywhere that gives a direct
+  #           download link (or merge it into your server's own pack) and put the link in url.
+  mode: embedded
+
+  # embedded mode
+  port: 8163
+  bind: 0.0.0.0
+  # The address players download the pack from. Leave blank to use whatever address each player
+  # typed to join, which is right unless you're behind BungeeCord/Velocity/TCPShield. Can be a host
+  # name ("mc.example.com"), host:port, or a full base URL for a reverse proxy
+  # ("https://example.com/packs").
+  public-host: ''
+
+  # url mode
+  url: ''
+  # SHA-1 of the file at url, so clients can cache it. Blank = the plugin downloads it once at
+  # startup to work it out.
+  sha1: ''
+
+  # Kick players who decline the pack. Only turn this on if the download works for everyone.
+  required: false
+  # Shown on the download prompt. MiniMessage format.
+  prompt: '<dark_red><bold>Bloodbath</bold></dark_red> <gray>uses a resource pack for its 3D weapons.'
+
+items:
+  # The blood-red tooltip frame on weapons. It comes from the resource pack, and players without
+  # the pack would see a purple-and-black missing texture instead, so:
+  # auto = only when resource-pack.required is true, true = always, false = never.
+  tooltip-frame: auto
+
+hud:
+  # The action-bar line while holding a weapon (cooldown bar, rift timer, bleed stacks, ...).
+  # Players can hide it for themselves with /bloodbath hud.
+  enabled: true
+  # The bell and blood ring when an ability comes off cooldown.
+  ready-ping: true
+
+effects:
+  # Scales every particle count. 0.5 halves them for weaker PCs, 0 turns them off.
+  particle-multiplier: 1.0
+  # Ability particles visible from far away (512 blocks instead of 32).
+  long-range: true
+  # Blood dripping from a held weapon.
+  held-aura: true
+  # Gore burst and blood streams into the killer when a weapon kills.
+  kill-effects: true
+
+gameplay:
+  # Worlds where abilities don't work (the weapons still hit like weapons).
+  disabled-worlds: []
+  # Abilities can't hurt, pull or launch players in worlds with PvP off.
+  respect-world-pvp: true
+  # Dropped weapons never despawn and survive cactus and explosions.
+  weapons-never-despawn: true
+
+kill-tracking:
+  # Weapons count their kills and rank up: Blooded 5, Crimson 25, Sanguine 100, Bloodbath 250.
+  enabled: true
+  # Count mob kills too, not just players.
+  count-mobs: true
+
+messages:
+  prefix: '<dark_red>☠</dark_red> '
+
+# Per-weapon switches and numbers. enabled: false hides a weapon from the armory, /bloodbath give
+# and recipes, and turns off its powers (existing copies still work as plain weapons).
+weapons:
+  riftblade:            # Bloodrift Blade
+    enabled: true
+    cooldown: 15
+    range: 14           # how far ahead the rift opens
+    pull-radius: 3.5
+    window: 6           # time to step through
+  bloodhook:
+    enabled: true
+    cooldown: 6
+    range: 10
+    range-per-hook: 3   # extra range for hooking the same target again within 12s
+    max-range: 28
+  nullblade:            # Clotblade
+    enabled: true
+    cooldown: 20
+    hit-clot: 4         # how long a hit suppresses a player's abilities
+    field-radius: 4
+    field-duration: 8
+  meteor_gauntlet:      # Blood Meteor Gauntlet
+    enabled: true
+    cooldown: 14
+    range: 24
+    damage: 5
+    radius: 4.5
+    delay: 2
+  gravestone:           # Crimson Gravestone
+    enabled: true
+    cooldown: 20
+    radius: 6
+    duration: 3
+  chronos:              # Bleeding Chronos
+    enabled: true
+    cooldown: 18
+    window: 8           # time to recall
+  thunder_pike:         # Crimson Thunder Pike
+    enabled: true
+    cooldown: 12
+    range: 22
+    damage: 5
+    radius: 3
+  mirrorfang:           # Blood Mirrorfang
+    enabled: true
+    cooldown: 20
+    duration: 7
+    damage: 4           # per slash, every half second
+    range: 3.5
+  void_scythe:          # Hemorrhage Scythe
+    enabled: true
+    cooldown: 3         # Harvest (right-click)
+    bleed-hits: 5       # hits to hemorrhage
+    damage: 10          # hemorrhage damage to the target
+    splash-damage: 8    # ...and to everything around it
+    radius: 4
+    reap-damage: 4      # Harvest damage
+  paradox_bow:          # Sanguine Paradox Bow
+    enabled: true
+    cooldown: 10
+    damage: 7
+    delay: 3
+    range: 24
+  vampire_fang:
+    enabled: true
+    cooldown: 8
+    lifesteal: 0.25     # share of melee damage healed
+    dash-speed: 1.7
+    dash-damage: 4
+  blood_grimoire:
+    enabled: true
+    cooldown: 14
+    range: 12
+    drain: 6            # health drained over 1.5s
+    gift-cost: 4        # health you pay to give (never takes you below 1 heart)
+    gift-heal: 8
+    gift-regeneration: 4
+
+# Crafting recipes. Off by default: most servers hand weapons out with /bloodbath give or the
+# armory. Bloodbath weapons can never be used as crafting ingredients.
+recipes:
+  enabled: false
+  riftblade:
+    shape: [' E ', 'RSR', ' P ']
+    ingredients: {E: ENDER_EYE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, P: ENDER_PEARL}
+  bloodhook:
+    shape: [' H ', 'RNR', ' L ']
+    ingredients: {H: TRIPWIRE_HOOK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, L: LEAD}
+  nullblade:
+    shape: [' W ', 'RSR', ' F ']
+    ingredients: {W: WITHER_ROSE, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, F: FERMENTED_SPIDER_EYE}
+  meteor_gauntlet:
+    shape: [' M ', 'RNR', ' F ']
+    ingredients: {M: MAGMA_BLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, F: FIRE_CHARGE}
+  gravestone:
+    shape: [' O ', 'RNR', ' D ']
+    ingredients: {O: CRYING_OBSIDIAN, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, D: SOUL_SAND}
+  chronos:
+    shape: [' C ', 'RNR', ' E ']
+    ingredients: {C: CLOCK, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, E: ECHO_SHARD}
+  thunder_pike:
+    shape: [' L ', 'RNR', ' B ']
+    ingredients: {L: LIGHTNING_ROD, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, B: BLAZE_ROD}
+  mirrorfang:
+    shape: [' G ', 'RNR', ' A ']
+    ingredients: {G: TINTED_GLASS, R: REDSTONE_BLOCK, N: NETHERITE_INGOT, A: AMETHYST_SHARD}
+  void_scythe:
+    shape: [' W ', 'RSR', ' B ']
+    ingredients: {W: WITHER_SKELETON_SKULL, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, B: BONE_BLOCK}
+  paradox_bow:
+    shape: [' E ', 'RBR', ' N ']
+    ingredients: {E: ECHO_SHARD, R: REDSTONE_BLOCK, B: BOW, N: NETHERITE_INGOT}
+  vampire_fang:
+    shape: [' T ', 'RSR', ' A ']
+    ingredients: {T: GHAST_TEAR, R: REDSTONE_BLOCK, S: NETHERITE_SWORD, A: GOLDEN_APPLE}
+  blood_grimoire:
+    shape: [' N ', 'RBR', ' T ']
+    ingredients: {N: NETHERITE_INGOT, R: REDSTONE_BLOCK, B: BOOK, T: TOTEM_OF_UNDYING}
