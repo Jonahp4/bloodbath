@@ -59,7 +59,7 @@ public final class TestWorld extends WorldMock {
 		spawns.add(new Spawn(particle, new Location(this, x, y, z), receivers == null ? null : List.copyOf(receivers)));
 	}
 
-	/** MockBukkit's wither skeleton lacks the mob controls the Blood Knight uses: spawn ours instead. */
+	/** MockBukkit's ravager and wither skeleton lack the mob controls the Blood Knight uses: spawn ours instead. */
 	@Override
 	@SuppressWarnings("unchecked")
 	public <T extends Entity> T spawn(Location location, Class<T> clazz, java.util.function.Consumer<? super T> function,
@@ -72,6 +72,15 @@ public final class TestWorld extends WorldMock {
 			}
 			getServer().registerEntity(skeleton);
 			return (T) skeleton;
+		}
+		if (clazz == org.bukkit.entity.Ravager.class) {
+			TestKnightRavager ravager = new TestKnightRavager(getServer());
+			ravager.setLocation(location.clone());
+			if (function != null) {
+				function.accept((T) ravager);
+			}
+			getServer().registerEntity(ravager);
+			return (T) ravager;
 		}
 		if (clazz == org.bukkit.entity.ItemDisplay.class) {
 			TestItemDisplay display = new TestItemDisplay(getServer());

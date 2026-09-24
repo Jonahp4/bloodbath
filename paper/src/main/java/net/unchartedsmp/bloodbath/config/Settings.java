@@ -85,10 +85,13 @@ public final class Settings {
 	public final BossSettings boss;
 
 	/** The Blood Knight boss fight ({@code boss:} in config.yml). Times are already in ticks. */
-	public record BossSettings(boolean enabled, double health, double armor, double meleeDamage, double scale, double arenaRadius,
-		int maxActive, boolean ritual, int warningTicks, int leaveTimeoutTicks, int animationInterval, int attackCooldownTicks,
-		double cleaveDamage, double slamDamage, double spikeDamage, double chargeDamage, double phaseTwoAt, boolean atmosphere,
-		int coresMin, int coresMax, double armorChance, int experience, boolean announce) {
+	public record BossSettings(boolean enabled, double health, double healthPerPlayer, double armor, double armorToughness,
+		double meleeDamage, double scale, double arenaRadius, int maxActive, boolean ritual, int warningTicks, int leaveTimeoutTicks,
+		int animationInterval, int attackCooldownTicks, double cleaveDamage, double slamDamage, double spikeDamage, double chargeDamage,
+		double leapDamage, double graspDamage, double rainDamage, double whirlwindDamage, double phaseTwoAt, double phaseThreeAt,
+		double damageCap, double projectileDamage, double killHeal, double lifesteal, double regen, int thralls, int berserkAfterTicks,
+		int bleedStacks, double bleedDamage, boolean atmosphere, int coresMin, int coresMax, double armorChance, int experience,
+		boolean announce) {
 	}
 	public final ConfigurationSection recipes;
 	public final Component prefix;
@@ -166,9 +169,11 @@ public final class Settings {
 		recipesEnabled = bool(c, "recipes.enabled", true);
 		boss = new BossSettings(
 			bool(c, "boss.enabled", true),
-			num(c, "boss.health", 600, 20, 100000),
-			num(c, "boss.armor", 12, 0, 30),
-			num(c, "boss.melee-damage", 9, 0, 1000),
+			num(c, "boss.health", 2000, 20, 100000),
+			num(c, "boss.health-per-extra-player", 0.6, 0, 10),
+			num(c, "boss.armor", 20, 0, 30),
+			num(c, "boss.armor-toughness", 12, 0, 20),
+			num(c, "boss.melee-damage", 18, 0, 1000),
 			num(c, "boss.scale", 1.0, 0.5, 3.0),
 			num(c, "boss.arena-radius", 32, 12, 128),
 			(int) num(c, "boss.max-active", 1, 1, 10),
@@ -176,17 +181,31 @@ public final class Settings {
 			(int) Math.round(num(c, "boss.warning-seconds", 6, 1, 30) * 20),
 			(int) Math.round(num(c, "boss.leave-timeout", 60, 5, 3600) * 20),
 			(int) num(c, "boss.animation-interval", 2, 1, 5),
-			(int) Math.round(num(c, "boss.attacks.cooldown", 3.5, 0.5, 30) * 20),
-			num(c, "boss.attacks.cleave-damage", 12, 0, 1000),
-			num(c, "boss.attacks.slam-damage", 10, 0, 1000),
-			num(c, "boss.attacks.spike-damage", 9, 0, 1000),
-			num(c, "boss.attacks.charge-damage", 8, 0, 1000),
-			num(c, "boss.phase-two-at", 0.5, 0.05, 0.95),
+			(int) Math.round(num(c, "boss.attacks.cooldown", 2.2, 0.5, 30) * 20),
+			num(c, "boss.attacks.cleave-damage", 28, 0, 1000),
+			num(c, "boss.attacks.slam-damage", 24, 0, 1000),
+			num(c, "boss.attacks.spike-damage", 20, 0, 1000),
+			num(c, "boss.attacks.charge-damage", 24, 0, 1000),
+			num(c, "boss.attacks.leap-damage", 26, 0, 1000),
+			num(c, "boss.attacks.grasp-damage", 10, 0, 1000),
+			num(c, "boss.attacks.rain-damage", 14, 0, 1000),
+			num(c, "boss.attacks.whirlwind-damage", 12, 0, 1000),
+			num(c, "boss.phase-two-at", 0.6, 0.05, 0.95),
+			Math.min(num(c, "boss.phase-two-at", 0.6, 0.05, 0.95), num(c, "boss.phase-three-at", 0.25, 0.0, 0.95)),
+			num(c, "boss.damage-cap", 40, 0, 100000),
+			num(c, "boss.projectile-damage", 0.5, 0, 1),
+			num(c, "boss.kill-heal", 0.08, 0, 1),
+			num(c, "boss.lifesteal", 0.3, 0, 5),
+			num(c, "boss.regen", 0.01, 0, 1),
+			(int) num(c, "boss.thralls", 3, 0, 20),
+			(int) Math.round(num(c, "boss.berserk-after", 480, 0, 36000) * 20),
+			(int) num(c, "boss.bleed.stacks", 2, 0, 20),
+			num(c, "boss.bleed.damage", 1.0, 0, 100),
 			bool(c, "boss.atmosphere", true),
-			(int) num(c, "boss.loot.cores-min", 2, 0, 64),
-			(int) Math.max(num(c, "boss.loot.cores-min", 2, 0, 64), num(c, "boss.loot.cores-max", 4, 0, 64)),
-			num(c, "boss.loot.armor-chance", 0.35, 0, 1),
-			(int) num(c, "boss.loot.experience", 500, 0, 100000),
+			(int) num(c, "boss.loot.cores-min", 3, 0, 64),
+			(int) Math.max(num(c, "boss.loot.cores-min", 3, 0, 64), num(c, "boss.loot.cores-max", 6, 0, 64)),
+			num(c, "boss.loot.armor-chance", 0.6, 0, 1),
+			(int) num(c, "boss.loot.experience", 1500, 0, 100000),
 			bool(c, "boss.announce", true));
 		recipes = c == null ? null : c.getConfigurationSection("recipes");
 		prefix = MiniMessage.miniMessage().deserialize(str(c, "messages.prefix", "<dark_red>☠</dark_red> "));

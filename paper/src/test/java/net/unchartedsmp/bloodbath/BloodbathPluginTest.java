@@ -64,7 +64,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -74,6 +73,8 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.WitherSkeleton;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.entity.Ravager;
 import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -813,10 +814,23 @@ class BloodbathPluginTest {
 
 	// ---- the Blood Knight ----------------------------------------------------------------------
 
-	private WitherSkeleton knight() {
-		return world.getEntitiesByClass(WitherSkeleton.class).stream()
-			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)).findFirst().orElse(null);
+	private Ravager knight() {
+		return world.getEntitiesByClass(Ravager.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE) && e.isValid()).findFirst().orElse(null);
 	}
+
+	/** The netherite stand-in players without the pack see in the model's place. */
+	private WitherSkeleton standIn() {
+		return world.getEntitiesByClass(WitherSkeleton.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE) && e.isValid()).findFirst().orElse(null);
+	}
+
+	private List<WitherSkeleton> thralls() {
+		return world.getEntitiesByClass(WitherSkeleton.class).stream()
+			.filter(e -> e.getPersistentDataContainer().has(Keys.THRALL, PersistentDataType.BYTE) && e.isValid()).toList();
+	}
+
+	private static final int RISE = 73;
 
 	private long bossParts() {
 		return world.getEntitiesByClass(ItemDisplay.class).stream()
@@ -832,18 +846,22 @@ class BloodbathPluginTest {
 	@Test
 	void theBloodKnightRisesFightsAndFalls() {
 		summonKnight();
-		WitherSkeleton knight = knight();
+		Ravager knight = knight();
 		assertNotNull(knight, "it rose");
 		assertTrue(knight.isInvisible(), "the model is its body");
 		assertFalse(knight.isPersistent(), "never saved to disk");
 		assertEquals(38, bossParts(), "one display per model part");
 		assertTrue(knight.isInvulnerable(), "untouchable while it rises");
-		ticks(61);
+		ticks(RISE);
 		assertFalse(knight.isInvulnerable());
+		assertEquals(2000.0, knight.getHealth(), 1.0E-6, "one fighter: base health");
 
 		double before = knight.getHealth();
-		Damage.deal(knight, 50.0, player, WeaponType.RIFTBLADE);
-		assertEquals(before - 50.0, knight.getHealth(), 1.0E-6);
+		Damage.deal(knight, 30.0, player, WeaponType.RIFTBLADE);
+		assertEquals(before - 30.0, knight.getHealth(), 1.0E-6);
+		Damage.deal(knight, 10000.0, player, WeaponType.RIFTBLADE);
+		assertEquals(before - 70.0, knight.getHealth(), 1.0E-6, "no single hit takes more than the cap");
+		knight.setHealth(20.0);
 		Damage.deal(knight, 10000.0, player, WeaponType.RIFTBLADE);
 		assertTrue(knight.isDead());
 		ticks(56);
@@ -860,11 +878,11 @@ class BloodbathPluginTest {
 		stand(player, 0.5, 4.5, 0.0F, 0.0F); // two blocks from it
 		ItemDisplay part = world.getEntitiesByClass(ItemDisplay.class).stream()
 			.filter(e -> e.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)).findFirst().orElseThrow();
-		ticks(61);
+		ticks(RISE);
 		var before = part.getTransformation();
 		double health = player.getHealth();
 		ticks(160);
-		assertTrue(player.getHealth() < health, "a cleave or a slam landed");
+		assertTrue(player.getHealth() < health, "an attack landed");
 		assertFalse(before.equals(part.getTransformation()), "the model is animated");
 		assertFalse(part.isVisibleByDefault(), "only players with the pack see the model");
 	}
@@ -873,7 +891,7 @@ class BloodbathPluginTest {
 	@SuppressWarnings("removal") // building the death event by hand is the point
 	void dyingInTheArenaIsMarked() {
 		summonKnight();
-		ticks(61);
+		ticks(RISE);
 		chat(player);
 		player.setHealth(0.0);
 		server.getPluginManager().callEvent(new org.bukkit.event.entity.PlayerDeathEvent(player,
@@ -887,7 +905,7 @@ class BloodbathPluginTest {
 		plugin.saveConfig();
 		player.performCommand("bloodbath reload");
 		summonKnight();
-		ticks(61);
+		ticks(RISE);
 		player.setGameMode(GameMode.CREATIVE); // not a fighter
 		ticks(5 * 20 + 70);
 		assertNull(knight());
@@ -913,9 +931,93 @@ class BloodbathPluginTest {
 	void disablingThePluginRemovesTheKnight() {
 		summonKnight();
 		assertNotNull(knight());
+		assertNotNull(standIn());
 		server.getPluginManager().disablePlugin(plugin);
 		assertNull(knight());
+		assertNull(standIn());
 		assertEquals(0, bossParts());
+	}
+
+	@Test
+	void theKnightsBodyFillsItsModelAndPlayersWithoutThePackSeeTheStandIn() {
+		TestPlayer plain = server.addTestPlayer("Plain");
+		stand(plain, 3.5, 0.5, 0.0F, 0.0F);
+		loadPack(player);
+		summonKnight();
+		ticks(20);
+		// The body is a ravager (MockBukkit models no scale attribute for it, so its width can't be read here).
+		assertNotNull(knight(), "the ravager body");
+		WitherSkeleton standIn = standIn();
+		assertNotNull(standIn);
+		assertFalse(standIn.isVisibleByDefault());
+		assertFalse(standIn.hasAI(), "only a look: the body does the moving");
+		assertTrue(plain.canSee(standIn), "without the pack: the netherite knight");
+		assertFalse(player.canSee(standIn), "with the pack: the model instead");
+	}
+
+	@Test
+	@SuppressWarnings("removal") // building the hit event by hand is the point
+	void aHitOnTheStandInLandsOnTheKnight() {
+		summonKnight();
+		ticks(RISE);
+		Ravager knight = knight();
+		double before = knight.getHealth();
+		EntityDamageByEntityEvent hit = new EntityDamageByEntityEvent(player, standIn(), EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+			attackBy(player), 12.0);
+		server.getPluginManager().callEvent(hit);
+		assertTrue(hit.isCancelled(), "the stand-in itself never takes damage");
+		assertEquals(before - 12.0, knight.getHealth(), 1.0E-6);
+	}
+
+	@Test
+	void theKnightGrowsStrongerWithMoreFighters() {
+		TestPlayer second = server.addTestPlayer("Second");
+		stand(second, 2.5, 0.5, 0.0F, 0.0F);
+		summonKnight();
+		ticks(RISE);
+		assertEquals(2000.0 * 1.6, knight().getHealth(), 1.0E-6, "+60% for the second player");
+	}
+
+	@Test
+	void aWholeFightRunsEveryAttackCleanly() {
+		player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(5000.0); // a player who can take the whole fight
+		summonKnight();
+		ticks(RISE);
+		Ravager knight = knight();
+		double max = knight.getAttribute(Attribute.MAX_HEALTH).getValue();
+		for (double share : new double[] {1.0, 0.5, 0.2}) { // each phase
+			knight.setHealth(max * share);
+			for (double z : new double[] {4.5, 18.5, 4.5, 24.5}) { // close, mid-range, close, far
+				stand(player, 0.5, z, 180.0F, 0.0F);
+				for (int i = 0; i < 160; i++) {
+					player.setHealth(5000.0);
+					ticks(1);
+				}
+			}
+		}
+		assertFalse(knight.isDead(), "it fought on through every phase");
+		assertEquals(3, plugin.bosses().describe().get(0).contains("phase 3") ? 3 : 0, plugin.bosses().describe().get(0));
+	}
+
+	@Test
+	void itsLastStandRaisesThrallsThatShieldIt() {
+		summonKnight();
+		ticks(RISE);
+		Ravager knight = knight();
+		knight.setHealth(knight.getHealth() * 0.2);
+		ticks(150); // bloodied, then its last stand
+		List<WitherSkeleton> thralls = thralls();
+		assertEquals(3, thralls.size(), "its thralls rise");
+		double before = knight.getHealth();
+		Damage.deal(knight, 20.0, player, WeaponType.RIFTBLADE);
+		assertEquals(before - 10.0, knight.getHealth(), 1.0E-6, "half damage while they stand");
+		thralls.forEach(thrall -> thrall.setHealth(0.0));
+		before = knight.getHealth();
+		Damage.deal(knight, 20.0, player, WeaponType.RIFTBLADE);
+		assertTrue(before - knight.getHealth() > 10.0, "full damage once they're down");
+		plugin.bosses().stop(null, 0);
+		ticks(60);
+		assertTrue(thralls().isEmpty(), "thralls never outlive the fight");
 	}
 
 

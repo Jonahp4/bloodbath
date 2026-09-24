@@ -97,6 +97,9 @@ public final class BloodFx {
 	/** Tiny bright sparks of blood, for rising and orbiting streams. */
 	public static final Fx EMBER = new Fx(Particle.DUST, new Particle.DustOptions(Color.fromRGB(0xFF4050), 0.55F))
 		.withPack(PACK_SPARK, 1.0, -0.1);
+	/** The glowing edge a great blade leaves in the air as it swings: sparks with the pack, dust without. */
+	public static final Fx SLASH = new Fx(Particle.DUST_COLOR_TRANSITION, new Particle.DustTransition(BRIGHT_RED, CLOT_RED, 1.3F))
+		.withPack(PACK_SPARK, 1.0, 0.0);
 	/** A ring of blood rising off the ground: rage, the boss's roar. Dust for players without the pack. */
 	public static final Fx RING = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 1.4F))
 		.withPack(PACK_RING, 1.0, 0.0);

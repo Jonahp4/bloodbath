@@ -5,15 +5,15 @@ import java.lang.reflect.Proxy;
 import java.util.UUID;
 import org.bukkit.damage.DamageSource;
 import org.mockbukkit.mockbukkit.ServerMock;
-import org.mockbukkit.mockbukkit.entity.WitherSkeletonMock;
+import org.mockbukkit.mockbukkit.entity.RavagerMock;
 
-/** A wither skeleton with the mob controls MockBukkit leaves out (awareness, pathfinding, body yaw). */
-public final class TestKnightSkeleton extends WitherSkeletonMock {
+/** The Blood Knight's body: a ravager with the mob controls MockBukkit leaves out (awareness, pathfinding, body yaw). */
+public final class TestKnightRavager extends RavagerMock {
 	private boolean aware = true;
 	private boolean removeWhenFarAway = true;
 	private double lastDamage;
 
-	public TestKnightSkeleton(ServerMock server) {
+	public TestKnightRavager(ServerMock server) {
 		super(server, UUID.randomUUID());
 	}
 
@@ -51,68 +51,19 @@ public final class TestKnightSkeleton extends WitherSkeletonMock {
 
 	@Override
 	public float getBodyYaw() {
-		return bodyYaw != 0.0F ? bodyYaw : getLocation().getYaw();
-	}
-	private boolean ai = true;
-	private boolean collidable = true;
-	private boolean gravity = true;
-	private boolean visibleByDefault = true;
-	private float bodyYaw;
-
-	@Override
-	public void setAI(boolean ai) {
-		this.ai = ai;
+		return getLocation().getYaw();
 	}
 
-	@Override
-	public boolean hasAI() {
-		return ai;
-	}
-
-	@Override
-	public void setCollidable(boolean collidable) {
-		this.collidable = collidable;
-	}
-
-	@Override
-	public boolean isCollidable() {
-		return collidable;
-	}
-
-	@Override
-	public void setGravity(boolean gravity) {
-		this.gravity = gravity;
-	}
-
-	@Override
-	public boolean hasGravity() {
-		return gravity;
-	}
-
-	@Override
-	public void setVisibleByDefault(boolean visible) {
-		visibleByDefault = visible;
-	}
-
-	@Override
-	public boolean isVisibleByDefault() {
-		return visibleByDefault;
-	}
-
-	@Override
-	public void setBodyYaw(float yaw) {
-		bodyYaw = yaw;
-	}
-
-	@Override
-	public void swingMainHand() {
-	}
-
+	/** Whether its pathfinder can reach whatever it's asked about (tests set false for a player out of reach). */
+	public boolean reachable = true;
 
 	@Override
 	public Pathfinder getPathfinder() {
+		Pathfinder.PathResult path = (Pathfinder.PathResult) Proxy.newProxyInstance(Pathfinder.class.getClassLoader(),
+			new Class<?>[] {Pathfinder.PathResult.class},
+			(proxy, method, args) -> method.getName().equals("canReachFinalPoint") ? reachable : method.getReturnType() == boolean.class ? false : null);
 		return (Pathfinder) Proxy.newProxyInstance(Pathfinder.class.getClassLoader(), new Class<?>[] {Pathfinder.class},
-			(proxy, method, args) -> method.getReturnType() == boolean.class ? false : null);
+			(proxy, method, args) -> method.getName().equals("findPath") ? path : method.getReturnType() == boolean.class ? false : null);
 	}
 
 	@Override

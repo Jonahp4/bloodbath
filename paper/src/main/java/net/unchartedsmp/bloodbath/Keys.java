@@ -24,6 +24,8 @@ public final class Keys {
 	public static NamespacedKey CORE;
 	/** On every entity that makes up a Blood Knight boss (its body and its model's parts). */
 	public static NamespacedKey BOSS;
+	/** On the Blood Knight's thralls (raised in its last stand), so they go when it does. */
+	public static NamespacedKey THRALL;
 	/** On players, for this connection only: the hash of the Bloodbath pack their game loaded. */
 	public static NamespacedKey PACK;
 	/** On players, kept: "on" or "off" when they chose the pack visuals themselves (/bb visuals). */
@@ -41,6 +43,7 @@ public final class Keys {
 		HUD_OFF = new NamespacedKey(plugin, "hud_off");
 		CORE = new NamespacedKey(plugin, "core");
 		BOSS = new NamespacedKey(plugin, "boss");
+		THRALL = new NamespacedKey(plugin, "thrall");
 		PACK = new NamespacedKey(plugin, "pack_loaded");
 		VISUALS = new NamespacedKey(plugin, "visuals");
 	}

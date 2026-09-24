@@ -207,29 +207,47 @@ armor:
 boss:
   enabled: true
   summon-ritual: true
-  health: 600
-  armor: 12
-  melee-damage: 9         # its ordinary sword hits
-  scale: 1.0              # model size (1 = about 3 blocks tall)
+  health: 2000
+  health-per-extra-player: 0.6  # +60% health for each extra player in the arena when it rises
+  armor: 20
+  armor-toughness: 12
+  melee-damage: 18        # its ordinary sword hits (each leaves bleed stacks, below)
+  scale: 1.0              # model size (1 = about 3 blocks tall, a 2.4-block-wide body)
   arena-radius: 32        # it fights (and is leashed) within this of where it rose
   max-active: 1           # Blood Knights (and summonings) at once, server-wide
   warning-seconds: 6      # the omens before it rises
   leave-timeout: 60       # seconds with nobody left in the arena before it sinks back down
-  phase-two-at: 0.5       # health share at which it's bloodied: faster, harder hitting
+  phase-two-at: 0.6       # health share at which it's bloodied: faster, harder hitting, Blood Rain
+  phase-three-at: 0.25    # its last stand: thralls, Whirlwind, lifesteal
+  damage-cap: 40          # the most any single hit can take off it (0 = no cap): no one-shots
+  projectile-damage: 0.5  # arrows and tridents do this share: no winning from a tower
+  kill-heal: 0.08         # share of its health it drinks back when it kills a player
+  lifesteal: 0.3          # in its last stand, share of the damage it deals that heals it
+  regen: 0.01             # share of its health regained per second once nobody has hurt it for 15s
+  thralls: 3              # Blood Thralls raised in its last stand (+1 per extra player); it takes half
+                          # damage while any stand
+  berserk-after: 480      # seconds of fighting before it goes berserk: 50% harder, faster (0 = never)
+  bleed:
+    stacks: 2             # bleed stacks each of its hits leaves (bleeding ignores armour)
+    damage: 1.0           # per stack, every second
   animation-interval: 2   # ticks between model updates: 1 smoothest, 3 lightest on bandwidth
   atmosphere: true        # blood mist around players in the arena while it fights
   announce: true          # tell nearby players when it falls
   attacks:
-    cooldown: 3.5         # seconds between special attacks (bloodied: 30% less)
-    cleave-damage: 12     # a wide arc in front of it: get out of the arc
-    slam-damage: 10       # a shockwave along the ground: jump over it
-    spike-damage: 9       # eruptions under up to 3 players: step off the ring
-    charge-damage: 8      # a shield charge along a telegraphed line: sidestep it
+    cooldown: 2.2         # seconds between special attacks (bloodied: 30% less, last stand: 50% less)
+    cleave-damage: 28     # a wide sweep in front of it: get out of the arc, or behind a wall
+    slam-damage: 24       # a shockwave along the ground: jump it, or put a wall between you
+    spike-damage: 20      # eruptions under players, walls or not: step off the ring
+    charge-damage: 24     # a shield charge along a telegraphed line: sidestep it
+    leap-damage: 26       # it jumps to you and crashes down: get out of the circle
+    grasp-damage: 10      # a blood tether drags you to it, then it hammers down: break line of sight
+    rain-damage: 14       # bloodied: blood falls in marked circles, a roof stops it
+    whirlwind-damage: 12  # last stand: three turns with the sword out, hitting everything close
   loot:
-    cores-min: 2
-    cores-max: 4
-    armor-chance: 0.35    # chance of one Blood Knight armour piece
-    experience: 500
+    cores-min: 3
+    cores-max: 6
+    armor-chance: 0.6     # chance of one Blood Knight armour piece
+    experience: 1500
 
 # Every Bloodbath sound can be made quieter, swapped or muted.
 sounds:

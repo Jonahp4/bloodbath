@@ -1,13 +1,10 @@
 package net.unchartedsmp.bloodbath.boss;
 
-import io.papermc.paper.event.player.PlayerTrackEntityEvent;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
@@ -16,7 +13,6 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
-import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
@@ -36,8 +32,8 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
@@ -45,7 +41,6 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffectType;
 
 /**
  * Every Blood Knight in the world, from the first omen to the last bell.
@@ -66,8 +61,6 @@ public final class BossManager implements Listener {
 	private Animations animations;
 	private final List<BloodKnightBoss> bosses = new ArrayList<>();
 	private final List<Summoning> summonings = new ArrayList<>();
-	/** Players the Knight hit this tick, so its skeleton's wither effect can be refused. */
-	private final Map<UUID, Long> hitThisTick = new HashMap<>();
 
 	public BossManager(JavaPlugin plugin) {
 		this.plugin = plugin;
@@ -157,7 +150,7 @@ public final class BossManager implements Listener {
 			out.add("rising at " + format(summoning.center()));
 		}
 		for (BloodKnightBoss boss : bosses) {
-			out.add(boss.state().name().toLowerCase() + " at " + format(boss.center()) + ", "
+			out.add(boss.state().name().toLowerCase() + " (phase " + boss.phase() + ") at " + format(boss.center()) + ", "
 				+ Math.round(boss.healthFraction() * 100) + "% health, " + boss.participants().size() + " fighting");
 		}
 		return out;
@@ -170,9 +163,6 @@ public final class BossManager implements Listener {
 	// ---- the loop -------------------------------------------------------------------------------
 
 	public void tick(long now) {
-		if (!hitThisTick.isEmpty()) {
-			hitThisTick.values().removeIf(tick -> tick < now);
-		}
 		if (!summonings.isEmpty()) {
 			Iterator<Summoning> it = summonings.iterator();
 			while (it.hasNext()) {
@@ -227,12 +217,26 @@ public final class BossManager implements Listener {
 		}
 	}
 
+	/** The fight whose body this is. */
 	private BloodKnightBoss bossOf(Entity entity) {
 		if (!(entity instanceof LivingEntity) || !entity.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)) {
 			return null;
 		}
 		for (BloodKnightBoss boss : bosses) {
 			if (boss.brain() == entity) {
+				return boss;
+			}
+		}
+		return null;
+	}
+
+	/** The fight whose stand-in (the look players without the pack get) this is. */
+	private BloodKnightBoss standInOf(Entity entity) {
+		if (!(entity instanceof LivingEntity) || !entity.getPersistentDataContainer().has(Keys.BOSS, PersistentDataType.BYTE)) {
+			return null;
+		}
+		for (BloodKnightBoss boss : bosses) {
+			if (boss.puppet() == entity) {
 				return boss;
 			}
 		}
@@ -271,6 +275,15 @@ public final class BossManager implements Listener {
 
 	@EventHandler(priority = EventPriority.HIGH)
 	public void onBossDamaged(EntityDamageEvent event) {
+		BloodKnightBoss standIn = standInOf(event.getEntity());
+		if (standIn != null) {
+			// The stand-in is only a look: a player's hit on it lands on the Knight itself.
+			event.setCancelled(true);
+			if (event instanceof EntityDamageByEntityEvent && event.getDamageSource().getCausingEntity() instanceof Player player) {
+				standIn.hitThroughStandIn(player, event.getDamage());
+			}
+			return;
+		}
 		BloodKnightBoss boss = bossOf(event.getEntity());
 		if (boss == null) {
 			return;
@@ -290,6 +303,16 @@ public final class BossManager implements Listener {
 		}
 		if (!boss.vulnerable()) {
 			event.setCancelled(true);
+			return;
+		}
+		boss.shapeIncoming(event);
+	}
+
+	/** No name tags, leads or saddles on the Knight or its stand-in. */
+	@EventHandler(priority = EventPriority.HIGH)
+	public void onInteract(PlayerInteractEntityEvent event) {
+		if (bossOf(event.getRightClicked()) != null || standInOf(event.getRightClicked()) != null) {
+			event.setCancelled(true);
 		}
 	}
 
@@ -303,22 +326,18 @@ public final class BossManager implements Listener {
 		}
 		BloodKnightBoss hitter = bossOf(event.getDamager());
 		if (hitter != null) {
-			hitter.onMelee(now());
-			hitThisTick.put(event.getEntity().getUniqueId(), now());
-		}
-	}
-
-	/** A wither skeleton's hit withers: not the Knight's. */
-	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-	public void onWither(EntityPotionEffectEvent event) {
-		if (event.getCause() == EntityPotionEffectEvent.Cause.ATTACK && event.getModifiedType() == PotionEffectType.WITHER
-			&& hitThisTick.containsKey(event.getEntity().getUniqueId())) {
-			event.setCancelled(true);
+			hitter.onMelee(event.getEntity(), now());
 		}
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onBossDeath(EntityDeathEvent event) {
+		if (event.getEntity().getPersistentDataContainer().has(Keys.THRALL, PersistentDataType.BYTE)) {
+			event.getDrops().clear(); // a thrall leaves nothing but a little experience
+			event.setDroppedExp(5);
+			BossFx.hit(event.getEntity().getLocation().add(0, 1.0, 0));
+			return;
+		}
 		BloodKnightBoss boss = bossOf(event.getEntity());
 		if (boss == null) {
 			return;
@@ -344,27 +363,12 @@ public final class BossManager implements Listener {
 		}
 	}
 
-	/** A pack user starts tracking the Knight: blank out its fallback armour for them (next tick, after the spawn). */
-	@EventHandler(priority = EventPriority.MONITOR)
-	public void onTrack(PlayerTrackEntityEvent event) {
-		BloodKnightBoss boss = bossOf(event.getEntity());
-		if (boss != null && net.unchartedsmp.bloodbath.pack.PackState.hasPack(event.getPlayer())) {
-			Player player = event.getPlayer();
-			TickScheduler.schedule(1, () -> {
-				if (player.isOnline() && !boss.done()) {
-					boss.hideGearFrom(player);
-				}
-			});
-		}
-	}
-
 	@EventHandler(priority = EventPriority.MONITOR)
 	public void onQuit(PlayerQuitEvent event) {
 		UUID id = event.getPlayer().getUniqueId();
 		for (BloodKnightBoss boss : bosses) {
 			boss.forgetViewer(id);
 		}
-		hitThisTick.remove(id);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)
@@ -395,6 +399,5 @@ public final class BossManager implements Listener {
 		}
 		bosses.clear();
 		summonings.clear();
-		hitThisTick.clear();
 	}
 }

@@ -1,11 +1,14 @@
 package net.unchartedsmp.bloodbath.boss;
 
 import com.google.common.collect.ImmutableMultimap;
+import com.destroystokyo.paper.entity.Pathfinder;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,76 +28,119 @@ import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.fx.Particles;
 import net.unchartedsmp.bloodbath.pack.PackState;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.block.Block;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ExperienceOrb;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Ravager;
 import org.bukkit.entity.WitherSkeleton;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /**
  * One Blood Knight fight, from the moment it breaks the ground to its last bell.
  *
- * <p>The Knight is two things: an invisible wither skeleton (its hitbox, health and pathfinding,
- * scaled to the model's size) and the {@link BossModel} drawn over it for players with the
- * resource pack. Players without the pack see the skeleton's netherite armour and sword floating
- * with nothing inside: an empty suit of armour that fights.
+ * <p>The Knight is three things. Its <b>body</b> is an invisible ravager scaled to the model's
+ * footprint (2.4 blocks wide at scale 1): that's what collides with walls, pathfinds, takes hits
+ * and swings its sword, so the model can't walk into walls and hits land where the model is. The
+ * <b>model</b> ({@link BossModel}) is drawn over the body for players with the resource pack. For
+ * everyone else a <b>stand-in</b>, a netherite wither skeleton with no mind of its own, walks
+ * where the body walks; players with the pack never receive it, and a hit on it counts as a hit
+ * on the body.
+ *
+ * <p>The fight has three phases. Bloodied (60% health): faster, harder, Blood Rain. Last stand
+ * (25%): it kneels, rises roaring, raises thralls that halve the damage it takes while they stand,
+ * and fights with Whirlwind and lifesteal. It drinks from anyone it kills, never takes more than a
+ * capped amount from one hit, shrugs off half of every arrow, regenerates if left alone, and goes
+ * berserk if the fight drags on. Every attack is telegraphed on the ground and has a counter; the
+ * sword, the shockwaves and the charge are stopped by walls, but the ground (spikes) and the sky
+ * (rain) don't care where you hide.
  *
  * <p>Everything runs from {@link #tick}, called by the {@link BossManager} once a tick, so there
  * are no tasks of its own to leak: when the fight ends, the manager simply stops calling it.
  */
 final class BloodKnightBoss {
 	enum State {
-		RISING, FIGHTING, ATTACKING, ENRAGING, DYING, RETREATING, DONE
+		RISING, FIGHTING, ATTACKING, ENRAGING, LAST_STAND, DYING, RETREATING, DONE
 	}
 
 	enum Attack {
-		CLEAVE, SLAM, SPIKES, CHARGE
+		CLEAVE, SLAM, SPIKES, CHARGE, LEAP, GRASP, RAIN, WHIRLWIND
 	}
 
-	private static final int RISE_TICKS = 60;
-	private static final int ENRAGE_TICKS = 42;
+	private static final int ENRAGE_TICKS = 44;
 	private static final int DEATH_TICKS = 150;
 	private static final int RETREAT_TICKS = 52;
-	private static final double CLEAVE_RADIUS = 5.5;
-	private static final double CLEAVE_HALF_ANGLE = Math.toRadians(65);
-	private static final double SLAM_RADIUS = 9.5;
-	private static final double CHARGE_LENGTH = 13.0;
-	private static final double BRAIN_HEIGHT = 2.4;
-	/** The model is 3 blocks tall at scale 1; the skeleton's hitbox is scaled to match. */
+	private static final int BLEED_SECONDS = 6;
+	private static final int MAX_BLEED_STACKS = 6;
+	private static final double CLEAVE_RADIUS = 6.0;
+	private static final double CLEAVE_HALF_ANGLE = Math.toRadians(70);
+	private static final double SLAM_RADIUS = 10.0;
+	private static final double CHARGE_LENGTH = 16.0;
+	private static final double LEAP_RADIUS = 4.5;
+	private static final double WHIRL_RADIUS = 4.5;
+	private static final double GRASP_RANGE = 22.0;
+	private static final double RAIN_RADIUS = 2.0;
+	/** The body: a ravager (1.95 wide) scaled to this width at scale 1, about the model's footprint. */
+	private static final double RAVAGER_WIDTH = 1.95;
+	private static final double BODY_WIDTH = 2.4;
+	/** The stand-in: a wither skeleton (2.4 tall) scaled to the model's 3 blocks. */
+	private static final double SKELETON_HEIGHT = 2.4;
 	private static final double MODEL_HEIGHT = 3.0;
+	/** The sword's tip and the middle of its blade, in the sword hand's frame (model units). */
+	private static final Vector3f SWORD_TIP = new Vector3f(0.012F, -1.32F, -1.594F);
 
 	private final BossManager manager;
 	private final Plugin plugin;
 	private final Settings.BossSettings config;
+	private final Rig rig;
 	private final Animations animations;
 	private final Location center;
 	private final World world;
-	private final WitherSkeleton brain;
+	private final Ravager brain;
+	private final WitherSkeleton puppet;
 	private final BossModel model;
 	private final Pose pose;
+	private final Pose trailPose;
+	private final Matrix4f[] trailBones;
+	private final Matrix4f trailRoot = new Matrix4f();
+	private final Vector3f scratch = new Vector3f();
+	private final int swordHand;
 	private final float scale;
 	private final BossBar packBar;
 	private final BossBar plainBar;
 	private final Set<UUID> barViewers = new HashSet<>();
 	private final Set<UUID> modelViewers = new HashSet<>();
+	/** Who has been shown (true) or hidden from (false) the stand-in. */
+	private final Map<UUID, Boolean> puppetViewers = new HashMap<>();
 	private final Set<UUID> participants = new HashSet<>();
 	private final Set<UUID> struck = new HashSet<>();
-	private final List<Location> spikes = new ArrayList<>();
+	private final List<Location> spots = new ArrayList<>();
+	private final List<WitherSkeleton> thralls = new ArrayList<>();
+	/** Bleeding players: stacks and the tick it stops. */
+	private final Map<UUID, int[]> bleeding = new HashMap<>();
 
 	private State state = State.RISING;
 	private long stateStart;
@@ -108,26 +154,51 @@ final class BloodKnightBoss {
 	private float modelYaw;
 	private float walkPhase;
 	private float walkWeight;
+	private float lookYaw;
+	private float lookPitch;
+	private float lastStepSign;
 	private float sink;
 	private Location feet;
-	private boolean bloodied;
+	private int phase = 1;
+	private boolean berserk;
+	private long fightStart;
+	private long lastHurt;
+	private long lastFlinch;
+	private int unreachableTicks;
 	private long emptySince = -1;
 	private String killer;
+	// the attack in progress
+	private Location leapSpot;
+	private boolean landed;
+	private int landedAt;
+	private boolean grasped;
+	// the sword trail
+	private Location lastTip;
+	private float lastTipTime;
+	private Clip trailClip;
 
 	BloodKnightBoss(BossManager manager, Plugin plugin, Rig rig, Animations animations, Location at) {
 		this.manager = manager;
 		this.plugin = plugin;
 		this.config = Settings.get().boss;
+		this.rig = rig;
 		this.animations = animations;
 		this.center = at.clone();
 		this.world = at.getWorld();
 		this.scale = (float) config.scale();
 		this.pose = new Pose(rig.bones().size());
+		this.trailPose = new Pose(rig.bones().size());
+		this.trailBones = new Matrix4f[rig.bones().size()];
+		for (int i = 0; i < trailBones.length; i++) {
+			trailBones[i] = new Matrix4f();
+		}
+		this.swordHand = rig.bone("r_hand");
 		long now = manager.now();
 		this.stateStart = now;
 		this.modelYaw = at.getYaw();
 		this.feet = at.clone();
-		this.brain = world.spawn(at, WitherSkeleton.class, this::configure);
+		this.brain = world.spawn(at, Ravager.class, this::configureBody);
+		this.puppet = world.spawn(at, WitherSkeleton.class, this::configureStandIn);
 		this.model = new BossModel(rig, plugin, at, scale, config.animationInterval());
 		this.packBar = BossBar.bossBar(title(), 1.0F, BossBar.Color.YELLOW, BossBar.Overlay.PROGRESS);
 		this.plainBar = BossBar.bossBar(title(), 1.0F, BossBar.Color.RED, BossBar.Overlay.NOTCHED_10);
@@ -136,35 +207,53 @@ final class BloodKnightBoss {
 		updateViewers(now);
 	}
 
-	private void configure(WitherSkeleton skeleton) {
+	private void configureBody(Ravager body) {
+		body.setPersistent(false);
+		body.setRemoveWhenFarAway(false);
+		body.setCanPickupItems(false);
+		body.setSilent(true);
+		body.setInvisible(true);
+		body.setInvulnerable(true);
+		body.setAware(false);
+		body.setCanJoinRaid(false);
+		body.customName(Component.text("Blood Knight", NamedTextColor.DARK_RED));
+		body.setCustomNameVisible(false);
+		body.getPersistentDataContainer().set(Keys.BOSS, PersistentDataType.BYTE, (byte) 1);
+		base(body, Attribute.MAX_HEALTH, config.health());
+		body.setHealth(config.health());
+		base(body, Attribute.ARMOR, config.armor());
+		base(body, Attribute.ARMOR_TOUGHNESS, config.armorToughness());
+		base(body, Attribute.ATTACK_DAMAGE, config.meleeDamage());
+		base(body, Attribute.ATTACK_KNOCKBACK, 1.2);
+		base(body, Attribute.KNOCKBACK_RESISTANCE, 1.0);
+		base(body, Attribute.MOVEMENT_SPEED, 0.3);
+		base(body, Attribute.FOLLOW_RANGE, config.arenaRadius() + 16);
+		base(body, Attribute.STEP_HEIGHT, 1.1);
+		base(body, Attribute.SCALE, BODY_WIDTH * scale / RAVAGER_WIDTH);
+	}
+
+	/** What players without the resource pack see: the Knight's armour, sword and shield, walking. */
+	private void configureStandIn(WitherSkeleton skeleton) {
 		skeleton.setPersistent(false);
 		skeleton.setRemoveWhenFarAway(false);
 		skeleton.setCanPickupItems(false);
+		skeleton.setAI(false);
 		skeleton.setSilent(true);
 		skeleton.setInvisible(true);
-		skeleton.setInvulnerable(true);
-		skeleton.setAware(false);
+		skeleton.setCollidable(false);
+		skeleton.setGravity(false);
+		skeleton.setVisibleByDefault(false);
 		skeleton.customName(Component.text("Blood Knight", NamedTextColor.DARK_RED));
 		skeleton.setCustomNameVisible(false);
 		skeleton.getPersistentDataContainer().set(Keys.BOSS, PersistentDataType.BYTE, (byte) 1);
-		base(skeleton, Attribute.MAX_HEALTH, config.health());
-		skeleton.setHealth(config.health());
-		base(skeleton, Attribute.ARMOR, config.armor());
-		base(skeleton, Attribute.ARMOR_TOUGHNESS, 4.0);
-		base(skeleton, Attribute.ATTACK_DAMAGE, config.meleeDamage());
-		base(skeleton, Attribute.KNOCKBACK_RESISTANCE, 1.0);
-		base(skeleton, Attribute.MOVEMENT_SPEED, 0.27);
-		base(skeleton, Attribute.FOLLOW_RANGE, config.arenaRadius() + 16);
-		base(skeleton, Attribute.STEP_HEIGHT, 1.1);
-		base(skeleton, Attribute.SCALE, MODEL_HEIGHT * scale / BRAIN_HEIGHT);
-		// What players without the resource pack see: the armour, the sword and the shield.
+		base(skeleton, Attribute.SCALE, MODEL_HEIGHT * scale / SKELETON_HEIGHT);
 		EntityEquipment gear = skeleton.getEquipment();
 		gear.setHelmet(new ItemStack(Material.NETHERITE_HELMET), true);
 		gear.setChestplate(new ItemStack(Material.NETHERITE_CHESTPLATE), true);
 		gear.setLeggings(new ItemStack(Material.NETHERITE_LEGGINGS), true);
 		gear.setBoots(new ItemStack(Material.NETHERITE_BOOTS), true);
 		ItemStack sword = new ItemStack(Material.NETHERITE_SWORD);
-		sword.editMeta(meta -> meta.setAttributeModifiers(ImmutableMultimap.of())); // its damage is the attribute above
+		sword.editMeta(meta -> meta.setAttributeModifiers(ImmutableMultimap.of()));
 		gear.setItemInMainHand(sword, true);
 		gear.setItemInOffHand(new ItemStack(Material.SHIELD), true);
 		for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HAND, EquipmentSlot.OFF_HAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST,
@@ -173,8 +262,8 @@ final class BloodKnightBoss {
 		}
 	}
 
-	private static void base(WitherSkeleton skeleton, Attribute attribute, double value) {
-		AttributeInstance instance = skeleton.getAttribute(attribute);
+	private static void base(LivingEntity entity, Attribute attribute, double value) {
+		AttributeInstance instance = entity.getAttribute(attribute);
 		if (instance != null) {
 			instance.setBaseValue(value);
 		}
@@ -182,8 +271,16 @@ final class BloodKnightBoss {
 
 	// ---- queries ------------------------------------------------------------------------------
 
-	WitherSkeleton brain() {
+	Ravager brain() {
 		return brain;
+	}
+
+	WitherSkeleton puppet() {
+		return puppet;
+	}
+
+	boolean isThrall(Entity entity) {
+		return entity instanceof WitherSkeleton skeleton && thralls.contains(skeleton);
 	}
 
 	Location center() {
@@ -198,6 +295,10 @@ final class BloodKnightBoss {
 		return state;
 	}
 
+	int phase() {
+		return phase;
+	}
+
 	boolean done() {
 		return state == State.DONE;
 	}
@@ -210,9 +311,19 @@ final class BloodKnightBoss {
 		return state == State.FIGHTING || state == State.ATTACKING;
 	}
 
-	double healthFraction() {
+	private double maxHealth() {
 		AttributeInstance max = brain.getAttribute(Attribute.MAX_HEALTH);
-		return brain.isDead() ? 0.0 : brain.getHealth() / (max == null ? config.health() : max.getValue());
+		return max == null ? config.health() : max.getValue();
+	}
+
+	double healthFraction() {
+		return brain.isDead() ? 0.0 : brain.getHealth() / maxHealth();
+	}
+
+	/** Thralls are standing: the Knight takes half damage. */
+	boolean shielded() {
+		thralls.removeIf(thrall -> !thrall.isValid() || thrall.isDead());
+		return !thralls.isEmpty();
 	}
 
 	// ---- the loop -------------------------------------------------------------------------------
@@ -230,32 +341,37 @@ final class BloodKnightBoss {
 		if (alive) {
 			feet = brain.getLocation();
 		}
+		followWithStandIn();
 		if (now % 10 == 0) {
 			updateViewers(now);
+		}
+		if (now % 20 == 0) {
+			bleedTick(now);
 		}
 		switch (state) {
 			case RISING -> {
 				long t = now - stateStart;
-				if (t == 44) {
+				if (t == Animations.RISE_ROAR) {
 					BossFx.roar(feet);
 				}
-				if (t >= RISE_TICKS) {
+				if (t >= animations.rise.duration()) {
 					enter(State.FIGHTING, now);
 					brain.setInvulnerable(false);
 					brain.setAware(true);
+					scaleHealth();
+					fightStart = now;
+					lastHurt = now;
 					nextAttack = now + 40;
 				}
 			}
 			case FIGHTING -> fight(now);
 			case ATTACKING -> {
-				if (attackTick((int) (now - stateStart))) {
-					enter(State.FIGHTING, now);
-					brain.setAware(true);
-					int cooldown = (int) (config.attackCooldownTicks() * (bloodied ? 0.7 : 1.0));
-					nextAttack = now + cooldown + ThreadLocalRandom.current().nextInt(Math.max(1, cooldown / 3));
+				if (attackTick((int) (now - stateStart), now)) {
+					finishAttack(now);
 				}
 			}
 			case ENRAGING -> enrageTick(now);
+			case LAST_STAND -> lastStandTick(now);
 			case DYING -> dyingTick(now);
 			case RETREATING -> {
 				long t = now - stateStart;
@@ -278,9 +394,36 @@ final class BloodKnightBoss {
 		stateStart = now;
 	}
 
+	/** The stand-in walks where the body walks, turned the way the model faces. */
+	private void followWithStandIn() {
+		if (!puppet.isValid()) {
+			return;
+		}
+		// While it rises it comes up out of the ground with the model.
+		double lift = state == State.RISING ? pose.offset[1] * scale : sink;
+		Location at = feet.clone().add(0, lift, 0);
+		at.setYaw(modelYaw);
+		at.setPitch(0.0F);
+		puppet.teleport(at);
+		puppet.setBodyYaw(modelYaw);
+	}
+
+	/** Once it's up: more health for every extra player in the arena, up to four times as much. */
+	private void scaleHealth() {
+		int fighters = 0;
+		for (Player player : world.getPlayers()) {
+			if (fightable(player)) {
+				fighters++;
+			}
+		}
+		double max = Math.min(config.health() * 4.0, config.health() * (1.0 + config.healthPerPlayer() * Math.max(0, fighters - 1)));
+		base(brain, Attribute.MAX_HEALTH, max);
+		brain.setHealth(max);
+	}
+
 	private void fight(long now) {
 		if (now % 10 == 0) {
-			BossFx.aura(feet, bloodied);
+			BossFx.aura(feet, phase >= 2);
 		}
 		if (config.atmosphere() && now % 10 == 5) {
 			for (UUID id : participants) {
@@ -290,9 +433,24 @@ final class BloodKnightBoss {
 				}
 			}
 		}
-		if (!bloodied && healthFraction() <= config.phaseTwoAt()) {
+		if (phase == 1 && healthFraction() <= config.phaseTwoAt()) {
 			enrage(now);
 			return;
+		}
+		if (phase == 2 && healthFraction() <= config.phaseThreeAt()) {
+			beginLastStand(now);
+			return;
+		}
+		if (!berserk && config.berserkAfterTicks() > 0 && now - fightStart >= config.berserkAfterTicks()) {
+			goBerserk();
+		}
+		if (config.regen() > 0 && now - lastHurt > 300 && now % 20 == 0 && brain.getHealth() < maxHealth()) {
+			heal(maxHealth() * config.regen());
+		}
+		if (now % 20 == 0 && shielded()) {
+			for (WitherSkeleton thrall : thralls) {
+				BossFx.thrallLink(thrall.getLocation(), feet);
+			}
 		}
 		if (feet.distanceSquared(center) > sq(config.arenaRadius())) {
 			// Leashed to its arena: back to the middle.
@@ -311,9 +469,24 @@ final class BloodKnightBoss {
 		if (brain.getTarget() != hunted) {
 			brain.setTarget(hunted);
 		}
-		if (now >= nextAttack && action == null) {
-			startAttack(hunted, now);
+		if (now % 20 == 0) {
+			unreachableTicks = reachable(hunted) ? 0 : unreachableTicks + 20;
 		}
+		if (now >= nextAttack && action == null) {
+			startAttack(hunted, chooseAttack(hunted), now);
+		} else if (action == null && nextAttack - now > 30 && hunted.getLocation().distanceSquared(feet) > 144
+			&& ThreadLocalRandom.current().nextInt(150) == 0) {
+			play(animations.taunt, now);
+		}
+	}
+
+	/** Whether it can walk to its prey: not perched far above it, and a path exists. */
+	private boolean reachable(Player hunted) {
+		if (hunted.getLocation().getY() - feet.getY() > 3.0) {
+			return false;
+		}
+		Pathfinder.PathResult path = brain.getPathfinder().findPath(hunted);
+		return path != null && path.canReachFinalPoint();
 	}
 
 	private Player pickTarget() {
@@ -340,39 +513,69 @@ final class BloodKnightBoss {
 			&& (player.getGameMode() == GameMode.SURVIVAL || player.getGameMode() == GameMode.ADVENTURE);
 	}
 
-	// ---- attacks ------------------------------------------------------------------------------
+	// ---- choosing an attack ---------------------------------------------------------------------
 
-	private void startAttack(Player hunted, long now) {
-		double distance = Math.sqrt(hunted.getLocation().distanceSquared(feet));
+	private Attack chooseAttack(Player hunted) {
 		ThreadLocalRandom random = ThreadLocalRandom.current();
-		Attack choice;
-		if (distance <= CLEAVE_RADIUS) {
-			choice = random.nextDouble() < (crowdNear(8.0) >= 2 ? 0.55 : 0.3) ? Attack.SLAM : Attack.CLEAVE;
-		} else if (distance <= 15.0) {
-			choice = random.nextBoolean() ? Attack.CHARGE : Attack.SPIKES;
+		double distance = Math.hypot(hunted.getLocation().getX() - feet.getX(), hunted.getLocation().getZ() - feet.getZ());
+		boolean sight = clearPath(chest(), hunted.getEyeLocation());
+		boolean headroom = roofOver(feet, 8) == null; // no leaping under a roof: it would only hit its head
+		if (unreachableTicks >= 60) {
+			// Hiding up a pillar, in a hole, behind something it can't path round: drag them out, or
+			// reach them from below and above.
+			if (sight && distance <= GRASP_RANGE) {
+				return Attack.GRASP;
+			}
+			return phase >= 2 && random.nextBoolean() ? Attack.RAIN : Attack.SPIKES;
+		}
+		Map<Attack, Double> weights = new EnumMap<>(Attack.class);
+		if (distance <= CLEAVE_RADIUS * scale) {
+			weights.put(Attack.CLEAVE, 45.0);
+			weights.put(Attack.SLAM, crowdNear(8.0) >= 2 ? 50.0 : 25.0);
+			if (phase >= 3) {
+				weights.put(Attack.WHIRLWIND, 35.0);
+			}
+		} else if (distance <= 16.0) {
+			if (sight) {
+				weights.put(Attack.CHARGE, 30.0);
+			}
+			if (headroom) {
+				weights.put(Attack.LEAP, 25.0);
+			}
+			weights.put(Attack.SPIKES, 20.0);
+			if (sight && distance >= 8.0) {
+				weights.put(Attack.GRASP, 15.0);
+			}
+			if (phase >= 2) {
+				weights.put(Attack.RAIN, 20.0);
+			}
+			if (phase >= 3) {
+				weights.put(Attack.WHIRLWIND, 10.0);
+			}
 		} else {
-			choice = Attack.SPIKES;
+			if (distance <= 24.0 && headroom) {
+				weights.put(Attack.LEAP, 35.0);
+			}
+			weights.put(Attack.SPIKES, 30.0);
+			if (sight && distance <= GRASP_RANGE) {
+				weights.put(Attack.GRASP, 20.0);
+			}
+			if (phase >= 2) {
+				weights.put(Attack.RAIN, 25.0);
+			}
 		}
-		if (choice == lastAttack && random.nextBoolean()) {
-			choice = Attack.values()[(choice.ordinal() + 1 + random.nextInt(3)) % 4];
+		if (lastAttack != null && weights.containsKey(lastAttack) && weights.size() > 1) {
+			weights.put(lastAttack, weights.get(lastAttack) * 0.25);
 		}
-		attack = choice;
-		lastAttack = choice;
-		target = hunted;
-		struck.clear();
-		spikes.clear();
-		enter(State.ATTACKING, now);
-		brain.setAware(false);
-		brain.setVelocity(new Vector());
-		attackYaw = yawTowards(feet, hunted.getLocation());
-		brain.setRotation(attackYaw, 0);
-		play(switch (choice) {
-			case CLEAVE -> animations.cleave;
-			case SLAM -> animations.slam;
-			case SPIKES -> animations.cast;
-			case CHARGE -> animations.charge;
-		}, now);
-		BloodFx.play(feet, BossFx.GROWL, 1.0F, choice == Attack.SLAM ? 0.5F : 0.8F);
+		double total = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+		double roll = random.nextDouble() * total;
+		for (Map.Entry<Attack, Double> entry : weights.entrySet()) {
+			roll -= entry.getValue();
+			if (roll <= 0) {
+				return entry.getKey();
+			}
+		}
+		return Attack.SPIKES;
 	}
 
 	private int crowdNear(double radius) {
@@ -386,70 +589,117 @@ final class BloodKnightBoss {
 		return count;
 	}
 
+	private void startAttack(Player hunted, Attack choice, long now) {
+		attack = choice;
+		lastAttack = choice;
+		target = hunted;
+		struck.clear();
+		spots.clear();
+		landed = false;
+		grasped = false;
+		leapSpot = hunted.getLocation();
+		enter(State.ATTACKING, now);
+		brain.setAware(false);
+		brain.setVelocity(new Vector());
+		attackYaw = yawTowards(feet, hunted.getLocation());
+		brain.setRotation(attackYaw, 0);
+		play(switch (choice) {
+			case CLEAVE -> animations.cleave;
+			case SLAM -> animations.slam;
+			case SPIKES -> animations.cast;
+			case CHARGE -> animations.charge;
+			case LEAP -> animations.leap;
+			case GRASP -> animations.grasp;
+			case RAIN -> animations.rain;
+			case WHIRLWIND -> animations.whirl;
+		}, now);
+		BloodFx.play(feet, BossFx.GROWL, 1.0F, choice == Attack.SLAM || choice == Attack.LEAP ? 0.5F : 0.8F);
+	}
+
+	private void finishAttack(long now) {
+		enter(State.FIGHTING, now);
+		brain.setAware(true);
+		double factor = (phase >= 3 ? 0.5 : phase == 2 ? 0.7 : 1.0) * (berserk ? 0.6 : 1.0);
+		int cooldown = Math.max(6, (int) (config.attackCooldownTicks() * factor));
+		nextAttack = now + cooldown + ThreadLocalRandom.current().nextInt(Math.max(1, cooldown / 3));
+		if (phase >= 2 && attack == Attack.CLEAVE && ThreadLocalRandom.current().nextDouble() < 0.35) {
+			nextAttack = now + 4; // a bloodied Knight follows a cleave straight into something else
+		}
+	}
+
+	// ---- the attacks ----------------------------------------------------------------------------
+
 	/** One tick of the current attack; true when it's over. */
-	private boolean attackTick(int t) {
+	private boolean attackTick(int t, long now) {
 		double yaw = Math.toRadians(attackYaw);
 		// Minecraft yaw 0 faces +Z; the arc helper measures angles from +X.
 		double facing = Math.atan2(Math.cos(yaw), -Math.sin(yaw));
+		double dx = -Math.sin(yaw);
+		double dz = Math.cos(yaw);
 		return switch (attack) {
 			case CLEAVE -> {
-				if (t <= 13 && t % 2 == 0) {
-					BossFx.cleaveTelegraph(feet, facing, CLEAVE_RADIUS, CLEAVE_HALF_ANGLE, t / 13.0F);
+				double radius = CLEAVE_RADIUS * scale;
+				if (t < Animations.CLEAVE_HIT - 2 && t % 2 == 0) {
+					BossFx.cleaveTelegraph(feet, facing, radius, CLEAVE_HALF_ANGLE, t / (float) (Animations.CLEAVE_HIT - 2));
 				}
-				if (t == 15) {
-					BossFx.cleaveStrike(feet, facing, CLEAVE_RADIUS, CLEAVE_HALF_ANGLE);
-					for (Player player : victims(CLEAVE_RADIUS + 0.5)) {
+				if (t == Animations.CLEAVE_HIT) {
+					BossFx.cleaveStrike(feet, facing, radius, CLEAVE_HALF_ANGLE);
+					for (Player player : victims(radius + 0.5, chest())) {
 						Vector to = player.getLocation().toVector().subtract(feet.toVector()).setY(0);
 						double angle = Math.atan2(to.getZ(), to.getX());
-						if (Math.abs(wrap(angle - facing)) <= CLEAVE_HALF_ANGLE + 0.15 || to.lengthSquared() < 2.0) {
-							strike(player, config.cleaveDamage(), knockback(to, 1.15, 0.4));
+						if (Math.abs(wrap(angle - facing)) <= CLEAVE_HALF_ANGLE + 0.15 || to.lengthSquared() < 3.0) {
+							strike(player, config.cleaveDamage(), knockback(to, 1.3, 0.45));
 						}
 					}
 				}
-				yield t >= 30;
+				yield t >= animations.cleave.duration();
 			}
 			case SLAM -> {
-				if (t < 21) {
-					BossFx.slamWindup(feet, SLAM_RADIUS, t);
+				double reach = SLAM_RADIUS * scale;
+				if (t < Animations.SLAM_HIT) {
+					BossFx.slamWindup(feet, reach, t);
 				}
-				if (t == 21) {
+				if (t == Animations.SLAM_HIT) {
 					BossFx.slamImpact(feet);
 				}
-				if (t >= 21 && t <= 33) {
-					double radius = 1.0 + (t - 21) / 12.0 * (SLAM_RADIUS - 1.0);
+				if (t >= Animations.SLAM_HIT && t <= Animations.SLAM_HIT + 12) {
+					double radius = 1.0 + (t - Animations.SLAM_HIT) / 12.0 * (reach - 1.0);
 					BossFx.slamWave(feet, radius);
-					for (Player player : victims(radius + 1.0)) {
+					Location ground = feet.clone().add(0, 0.6, 0);
+					for (Player player : victims(radius + 1.0, ground)) {
 						Vector to = player.getLocation().toVector().subtract(feet.toVector());
 						double flat = Math.hypot(to.getX(), to.getZ());
 						boolean grounded = player.getLocation().getY() - feet.getY() < 0.7 && onGround(player);
 						if (flat >= radius - 1.1 && grounded && struck.add(player.getUniqueId())) {
-							strike(player, config.slamDamage(), knockback(to.setY(0), 0.8, 0.95));
+							strike(player, config.slamDamage(), knockback(to.setY(0), 0.9, 1.0));
+							player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 1, false, true, true));
 						}
 					}
 				}
-				yield t >= 40;
+				yield t >= animations.slam.duration();
 			}
 			case SPIKES -> {
 				if (t == 0) {
-					List<Player> marked = new ArrayList<>(victims(config.arenaRadius()));
+					List<Player> marked = new ArrayList<>(victims(config.arenaRadius(), null));
 					Collections.shuffle(marked);
-					for (Player player : marked.subList(0, Math.min(marked.size(), bloodied ? 4 : 3))) {
-						spikes.add(player.getLocation());
+					int count = phase >= 3 ? 6 : phase == 2 ? 4 : 3;
+					for (Player player : marked.subList(0, Math.min(marked.size(), count))) {
+						spots.add(player.getLocation());
 					}
 				}
 				if (t <= 30 && t % 2 == 0) {
-					for (Location spot : spikes) {
+					for (Location spot : spots) {
 						BossFx.spikeTelegraph(spot, t / 30.0F);
 					}
 				}
-				if (t == 16) {
+				if (t == Animations.CAST_HIT) {
 					BloodFx.play(feet, BossFx.SPIKE, 1.2F, 0.5F);
 					BloodFx.burst(feet, BloodFx.SPLATTER, 16, 0.6, 0.3);
 				}
 				if (t == 30) {
-					for (Location spot : spikes) {
+					for (Location spot : spots) {
 						BossFx.spikeErupt(spot);
-						for (Player player : victims(config.arenaRadius())) {
+						for (Player player : victims(config.arenaRadius(), null)) {
 							Location at = player.getLocation();
 							if (Math.hypot(at.getX() - spot.getX(), at.getZ() - spot.getZ()) <= 1.5 && Math.abs(at.getY() - spot.getY()) < 2.5
 								&& struck.add(player.getUniqueId())) {
@@ -458,11 +708,9 @@ final class BloodKnightBoss {
 						}
 					}
 				}
-				yield t >= 46;
+				yield t >= animations.cast.duration();
 			}
 			case CHARGE -> {
-				double dx = -Math.sin(yaw);
-				double dz = Math.cos(yaw);
 				if (t < 12 && t % 3 == 0) {
 					BossFx.chargeTelegraph(feet, yaw, CHARGE_LENGTH);
 				}
@@ -470,40 +718,198 @@ final class BloodKnightBoss {
 					BloodFx.play(feet, BossFx.CHARGE, 1.3F, 0.7F);
 					BloodFx.play(feet, BossFx.STEP, 1.2F, 0.6F);
 				}
-				if (t >= 14 && t <= 26) {
+				if (t >= Animations.CHARGE_FROM && t <= Animations.CHARGE_TO) {
 					Vector velocity = brain.getVelocity();
-					if (t > 17 && Math.hypot(velocity.getX(), velocity.getZ()) < 0.15) {
-						// Hit a wall: it staggers.
-						BossFx.hit(feet.clone().add(dx, 1.2, dz));
-						BloodFx.play(feet, BossFx.HEAVY_HIT, 1.2F, 0.5F);
+					if (t > Animations.CHARGE_FROM + 3 && Math.hypot(velocity.getX(), velocity.getZ()) < 0.15) {
+						// Hit a wall: it reels.
+						BossFx.hit(feet.clone().add(dx * 1.4, 1.2, dz * 1.4));
+						BloodFx.play(feet, BossFx.HEAVY_HIT, 1.3F, 0.5F);
+						play(animations.stagger, now);
+						nextAttack = now + 30;
 						yield true;
 					}
-					brain.setVelocity(new Vector(dx * 0.95, Math.min(velocity.getY(), 0.0), dz * 0.95));
+					brain.setVelocity(new Vector(dx * 1.05, Math.min(velocity.getY(), 0.0), dz * 1.05));
 					BossFx.chargeTrail(feet);
-					for (Player player : victims(2.2)) {
+					for (Player player : victims(1.6 * scale + 0.8, chest())) {
 						if (struck.add(player.getUniqueId())) {
-							strike(player, config.chargeDamage(), new Vector(dx * 1.3, 0.55, dz * 1.3));
+							strike(player, config.chargeDamage(), new Vector(dx * 1.4, 0.6, dz * 1.4));
 						}
 					}
 				}
-				yield t >= 34;
+				yield t >= animations.charge.duration();
+			}
+			case LEAP -> {
+				double radius = LEAP_RADIUS * scale;
+				if (t <= 8 && target != null && fightable(target)) {
+					leapSpot = target.getLocation(); // it tracks you right up until it jumps
+				}
+				if (!landed && t % 2 == 0) {
+					BossFx.leapTelegraph(leapSpot, radius, Math.min(1.0F, t / 24.0F));
+				}
+				if (t == Animations.LEAP_LAUNCH) {
+					Vector toSpot = leapSpot.toVector().subtract(feet.toVector()).setY(0);
+					double distance = Math.min(22.0, toSpot.length());
+					Vector flat = toSpot.lengthSquared() < 1.0E-4 ? new Vector() : toSpot.normalize().multiply(distance / 9.5);
+					brain.setVelocity(new Vector(flat.getX(), 0.85 + Math.max(0.0, leapSpot.getY() - feet.getY()) * 0.08, flat.getZ()));
+					BossFx.leapLaunch(feet);
+				}
+				if (!landed && t > Animations.LEAP_LAUNCH + 3 && (brain.isOnGround() || t > Animations.LEAP_LAUNCH + 40)) {
+					landed = true;
+					landedAt = t;
+					play(animations.land, now);
+					BossFx.leapImpact(feet, radius);
+					for (Player player : victims(radius, feet.clone().add(0, 1.0, 0))) {
+						Vector away = player.getLocation().toVector().subtract(feet.toVector());
+						strike(player, config.leapDamage(), knockback(away, 1.1, 0.6));
+					}
+				}
+				yield landed && t >= landedAt + 20;
+			}
+			case GRASP -> {
+				Location blade = chest().add(dx * 1.8, 0.2, dz * 1.8);
+				boolean holding = target != null && fightable(target) && clearPath(chest(), target.getEyeLocation())
+					&& target.getLocation().distance(feet) <= GRASP_RANGE + 4.0;
+				if (t < Animations.GRASP_PULL && t % 2 == 0 && holding) {
+					BossFx.graspTelegraph(blade, BloodFx.chest(target), t / (float) Animations.GRASP_PULL);
+				}
+				if (t == 2) {
+					BloodFx.play(feet, BossFx.TETHER, 1.3F, 0.6F);
+				}
+				if (t == Animations.GRASP_PULL) {
+					if (!holding) {
+						yield true; // line of sight broken: the tether snaps
+					}
+					grasped = true;
+					Vector pull = feet.toVector().subtract(target.getLocation().toVector());
+					double flat = Math.hypot(pull.getX(), pull.getZ());
+					Vector velocity = pull.setY(0).normalize().multiply(Math.min(2.4, 0.4 + flat * 0.13)).setY(0.45);
+					BossFx.graspPull(blade, BloodFx.chest(target));
+					strike(target, config.graspDamage(), new Vector());
+					target.setVelocity(velocity);
+				}
+				if (t == Animations.GRASP_SMASH && grasped) {
+					BossFx.slamImpact(feet.clone().add(dx * 2.0, 0, dz * 2.0));
+					for (Player player : victims(CLEAVE_RADIUS * scale, chest())) {
+						Vector to = player.getLocation().toVector().subtract(feet.toVector()).setY(0);
+						double angle = Math.atan2(to.getZ(), to.getX());
+						if (Math.abs(wrap(angle - facing)) <= Math.toRadians(60) || to.lengthSquared() < 3.0) {
+							strike(player, config.cleaveDamage() * 0.8, knockback(to, 0.8, 0.9));
+						}
+					}
+				}
+				yield t >= animations.grasp.duration();
+			}
+			case RAIN -> {
+				if (t == 0) {
+					ThreadLocalRandom random = ThreadLocalRandom.current();
+					for (Player player : victims(config.arenaRadius(), null)) {
+						spots.add(player.getLocation());
+						for (int i = 0; i < 2 && spots.size() < 14; i++) {
+							double angle = random.nextDouble() * Math.PI * 2;
+							double r = 1.5 + random.nextDouble() * 2.5;
+							spots.add(player.getLocation().add(Math.cos(angle) * r, 0, Math.sin(angle) * r));
+						}
+					}
+					BloodFx.play(feet, BossFx.RAIN_CALL, 1.4F, 0.6F);
+				}
+				if (t < Animations.RAIN_FALL && t % 3 == 0) {
+					for (Location spot : spots) {
+						BossFx.rainTelegraph(spot, RAIN_RADIUS, t / (float) Animations.RAIN_FALL);
+					}
+				}
+				if (t == Animations.RAIN_FALL) {
+					for (Location spot : spots) {
+						Location roof = roofOver(spot, 7);
+						BossFx.rainSplash(spot, roof);
+						if (roof != null) {
+							continue; // sheltered
+						}
+						for (Player player : victims(config.arenaRadius(), null)) {
+							Location at = player.getLocation();
+							if (Math.hypot(at.getX() - spot.getX(), at.getZ() - spot.getZ()) <= RAIN_RADIUS && Math.abs(at.getY() - spot.getY()) < 2.5
+								&& roofOver(at, 7) == null && struck.add(player.getUniqueId())) {
+								strike(player, config.rainDamage(), new Vector(0, -0.3, 0));
+							}
+						}
+					}
+				}
+				yield t >= animations.rain.duration();
+			}
+			case WHIRLWIND -> {
+				double radius = WHIRL_RADIUS * scale;
+				if (t >= Animations.WHIRL_FROM && t <= Animations.WHIRL_TO) {
+					if (target != null && fightable(target)) {
+						Vector toward = target.getLocation().toVector().subtract(feet.toVector()).setY(0);
+						if (toward.lengthSquared() > 1.0) {
+							toward.normalize().multiply(0.17);
+							brain.setVelocity(new Vector(toward.getX(), Math.min(brain.getVelocity().getY(), 0.0), toward.getZ()));
+						}
+					}
+					if (t % 2 == 0) {
+						BossFx.whirlBeat(feet, radius, t);
+					}
+					if ((t - Animations.WHIRL_FROM) % 8 == 0) {
+						for (Player player : victims(radius, chest())) {
+							Vector away = player.getLocation().toVector().subtract(feet.toVector());
+							strike(player, config.whirlwindDamage(), knockback(away, 0.8, 0.3));
+						}
+					}
+				}
+				yield t >= animations.whirl.duration();
 			}
 		};
 	}
 
-	/** Players this attack may hurt: in the arena, alive, not in creative or spectator. */
-	private List<Player> victims(double radius) {
+	/** Players an attack from {@code from} can hurt: in the arena, fighting, and (if from isn't null) in its line of sight. */
+	private List<Player> victims(double radius, Location from) {
 		List<Player> out = new ArrayList<>();
 		for (Player player : world.getPlayers()) {
-			if (fightable(player) && player.getLocation().distanceSquared(feet) <= radius * radius) {
+			if (fightable(player) && player.getLocation().distanceSquared(feet) <= radius * radius
+				&& (from == null || clearPath(from, BloodFx.chest(player)))) {
 				out.add(player);
 			}
 		}
 		return out;
 	}
 
+	/** Nothing solid on the straight line between two points (walls stop the sword and the shockwaves). */
+	private boolean clearPath(Location from, Location to) {
+		double x = from.getX();
+		double y = from.getY();
+		double z = from.getZ();
+		double ddx = to.getX() - x;
+		double ddy = to.getY() - y;
+		double ddz = to.getZ() - z;
+		double length = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+		if (length < 0.5) {
+			return true;
+		}
+		int steps = (int) Math.ceil(length / 0.4);
+		for (int i = 1; i < steps; i++) {
+			double f = i / (double) steps;
+			Block block = world.getBlockAt((int) Math.floor(x + ddx * f), (int) Math.floor(y + ddy * f), (int) Math.floor(z + ddz * f));
+			if (block.getType().isSolid()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The first solid block above a spot, within {@code height}, or null: what shelters it from the rain. */
+	private Location roofOver(Location spot, int height) {
+		int x = spot.getBlockX();
+		int z = spot.getBlockZ();
+		for (int y = spot.getBlockY() + 2; y <= spot.getBlockY() + height; y++) {
+			if (world.getBlockAt(x, y, z).getType().isSolid()) {
+				return new Location(world, x + 0.5, y, z + 0.5);
+			}
+		}
+		return null;
+	}
+
 	private void strike(Player player, double amount, Vector push) {
-		double damage = amount * (bloodied ? 1.2 : 1.0);
+		double damage = amount * (phase >= 3 ? 1.35 : phase == 2 ? 1.2 : 1.0) * (berserk ? 1.5 : 1.0);
+		double before = player.getHealth();
 		if (brain.isValid()) {
 			player.damage(damage, DamageSource.builder(DamageType.MOB_ATTACK).withCausingEntity(brain).withDirectEntity(brain).build());
 		} else {
@@ -512,6 +918,15 @@ final class BloodKnightBoss {
 		player.setVelocity(player.getVelocity().add(push));
 		BossFx.hit(BloodFx.chest(player));
 		participants.add(player.getUniqueId());
+		if (config.bleedStacks() > 0) {
+			addBleed(player, config.bleedStacks());
+		}
+		if (phase >= 3 && config.lifesteal() > 0) {
+			double dealt = before - Math.max(0.0, player.getHealth());
+			if (dealt > 0) {
+				heal(dealt * config.lifesteal());
+			}
+		}
 	}
 
 	private static Vector knockback(Vector away, double strength, double up) {
@@ -522,19 +937,98 @@ final class BloodKnightBoss {
 		return flat.normalize().multiply(strength).setY(up);
 	}
 
+	private Location chest() {
+		return feet.clone().add(0, 1.6 * scale, 0);
+	}
+
+	// ---- bleeding ---------------------------------------------------------------------------------
+
+	private void addBleed(Player player, int stacks) {
+		int[] bleed = bleeding.computeIfAbsent(player.getUniqueId(), id -> new int[2]);
+		bleed[0] = Math.min(MAX_BLEED_STACKS, bleed[0] + stacks);
+		bleed[1] = (int) (manager.now() + BLEED_SECONDS * 20L);
+	}
+
+	/** Once a second: every bleeding player loses stacks x bleed damage, straight past their armour. */
+	private void bleedTick(long now) {
+		Iterator<Map.Entry<UUID, int[]>> it = bleeding.entrySet().iterator();
+		while (it.hasNext()) {
+			Map.Entry<UUID, int[]> entry = it.next();
+			Player player = Bukkit.getPlayer(entry.getKey());
+			if (player == null || !player.isValid() || player.isDead() || player.getWorld() != world || now > entry.getValue()[1]) {
+				it.remove();
+				continue;
+			}
+			bleedHit(player, entry.getValue()[0] * config.bleedDamage());
+			BossFx.bleed(BloodFx.chest(player));
+		}
+	}
+
+	/** Magic damage that doesn't hand out invulnerability frames (it would swallow the next real hit). */
+	private void bleedHit(Player player, double amount) {
+		if (amount <= 0) {
+			return;
+		}
+		int frames = player.getNoDamageTicks();
+		double last = player.getLastDamage();
+		player.setNoDamageTicks(0);
+		DamageSource.Builder source = DamageSource.builder(DamageType.MAGIC);
+		if (brain.isValid()) {
+			source.withCausingEntity(brain);
+		}
+		player.damage(amount, source.build());
+		player.setNoDamageTicks(frames);
+		player.setLastDamage(last);
+	}
+
+	private void heal(double amount) {
+		if (!brain.isValid() || brain.isDead()) {
+			return;
+		}
+		brain.setHealth(Math.min(maxHealth(), brain.getHealth() + amount));
+		float progress = (float) Math.max(0.0, Math.min(1.0, healthFraction()));
+		packBar.progress(progress);
+		plainBar.progress(progress);
+	}
+
+	// ---- incoming damage ----------------------------------------------------------------------------
+
+	/**
+	 * Shapes every hit it takes: arrows and tridents do less, thralls halve everything while they
+	 * stand, and no single hit takes off more than the cap.
+	 */
+	void shapeIncoming(EntityDamageEvent event) {
+		double damage = event.getDamage();
+		if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Projectile) {
+			damage *= config.projectileDamage();
+		}
+		if (shielded()) {
+			damage *= 0.5;
+		}
+		if (config.damageCap() > 0) {
+			damage = Math.min(damage, config.damageCap());
+		}
+		event.setDamage(damage);
+	}
+
+	/** A player without the pack hit the stand-in: that's a hit on the Knight. */
+	void hitThroughStandIn(Player player, double damage) {
+		if (!vulnerable() || !brain.isValid() || brain.isDead() || damage <= 0) {
+			return;
+		}
+		brain.damage(damage, DamageSource.builder(DamageType.PLAYER_ATTACK).withCausingEntity(player).withDirectEntity(player).build());
+	}
+
 	// ---- phase two ----------------------------------------------------------------------------
 
 	private void enrage(long now) {
-		bloodied = true;
+		phase = 2;
 		enter(State.ENRAGING, now);
 		brain.setAware(false);
 		brain.setInvulnerable(true);
 		play(animations.roar, now);
-		base(brain, Attribute.MOVEMENT_SPEED, 0.31);
-		Component name = Component.text("☠ The Blood Knight ", NamedTextColor.DARK_RED)
-			.append(Component.text("· Bloodied ☠", NamedTextColor.RED));
-		packBar.name(name);
-		plainBar.name(name);
+		base(brain, Attribute.MOVEMENT_SPEED, 0.34);
+		renameBars(Component.text("· Bloodied ☠", NamedTextColor.RED));
 		plainBar.color(BossBar.Color.PURPLE);
 	}
 
@@ -542,7 +1036,7 @@ final class BloodKnightBoss {
 		long t = now - stateStart;
 		if (t == 8) {
 			BossFx.roar(feet);
-			for (Player player : victims(config.arenaRadius())) {
+			for (Player player : victims(config.arenaRadius(), null)) {
 				if (player.getLocation().distanceSquared(feet) < 49) {
 					Vector away = player.getLocation().toVector().subtract(feet.toVector());
 					player.setVelocity(player.getVelocity().add(knockback(away, 1.4, 0.5)));
@@ -560,9 +1054,113 @@ final class BloodKnightBoss {
 		}
 	}
 
+	// ---- phase three: the last stand ------------------------------------------------------------
+
+	private void beginLastStand(long now) {
+		phase = 3;
+		enter(State.LAST_STAND, now);
+		action = null;
+		brain.setAware(false);
+		brain.setInvulnerable(true);
+		brain.setVelocity(new Vector());
+		play(animations.lastStand, now);
+		renameBars(Component.text("· Last Stand ☠", NamedTextColor.RED));
+		plainBar.color(BossBar.Color.WHITE);
+	}
+
+	private void lastStandTick(long now) {
+		int t = (int) (now - stateStart);
+		BossFx.lastStand(feet, t, Animations.LAST_STAND_ROAR);
+		if (t == Animations.LAST_STAND_ROAR) {
+			for (Player player : victims(config.arenaRadius(), null)) {
+				if (player.getLocation().distanceSquared(feet) < 81) {
+					Vector away = player.getLocation().toVector().subtract(feet.toVector());
+					player.setVelocity(player.getVelocity().add(knockback(away, 1.7, 0.6)));
+				}
+				player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 90, 0, false, false, false));
+				player.showTitle(Title.title(Component.text("LAST STAND", NamedTextColor.DARK_RED, TextDecoration.BOLD),
+					Component.text("Its thralls shield it. Cut them down.", NamedTextColor.GRAY),
+					Title.Times.times(Duration.ofMillis(150), Duration.ofMillis(2000), Duration.ofMillis(600))));
+			}
+			raiseThralls();
+		}
+		if (t >= animations.lastStand.duration()) {
+			enter(State.FIGHTING, now);
+			brain.setInvulnerable(false);
+			brain.setAware(true);
+			base(brain, Attribute.MOVEMENT_SPEED, 0.37);
+			nextAttack = now + 10;
+		}
+	}
+
+	private void raiseThralls() {
+		int fighters = 0;
+		for (Player player : world.getPlayers()) {
+			if (fightable(player)) {
+				fighters++;
+			}
+		}
+		int count = config.thralls() <= 0 ? 0 : config.thralls() + Math.max(0, fighters - 1);
+		ThreadLocalRandom random = ThreadLocalRandom.current();
+		for (int i = 0; i < count; i++) {
+			double angle = (Math.PI * 2 * i) / count + random.nextDouble() * 0.4;
+			Location at = feet.clone().add(Math.cos(angle) * 4.0, 0, Math.sin(angle) * 4.0);
+			at.setYaw((float) Math.toDegrees(Math.atan2(-Math.cos(angle), -Math.sin(angle))));
+			WitherSkeleton thrall = world.spawn(at, WitherSkeleton.class, this::configureThrall);
+			thralls.add(thrall);
+			BossFx.thrallRise(at);
+			Player nearest = null;
+			double best = Double.MAX_VALUE;
+			for (Player player : world.getPlayers()) {
+				if (fightable(player) && player.getLocation().distanceSquared(at) < best) {
+					best = player.getLocation().distanceSquared(at);
+					nearest = player;
+				}
+			}
+			if (nearest != null) {
+				thrall.setTarget(nearest);
+			}
+		}
+	}
+
+	private void configureThrall(WitherSkeleton thrall) {
+		thrall.setPersistent(false);
+		thrall.setRemoveWhenFarAway(false);
+		thrall.setCanPickupItems(false);
+		thrall.customName(Component.text("Blood Thrall", NamedTextColor.DARK_RED));
+		thrall.setCustomNameVisible(true);
+		thrall.getPersistentDataContainer().set(Keys.THRALL, PersistentDataType.BYTE, (byte) 1);
+		base(thrall, Attribute.MAX_HEALTH, 40.0);
+		thrall.setHealth(40.0);
+		EntityEquipment gear = thrall.getEquipment();
+		ItemStack chest = new ItemStack(Material.LEATHER_CHESTPLATE);
+		chest.editMeta(LeatherArmorMeta.class, meta -> meta.setColor(Color.fromRGB(0x8C0F18)));
+		gear.setChestplate(chest, true);
+		gear.setItemInMainHand(new ItemStack(Material.IRON_SWORD), true);
+		for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HAND, EquipmentSlot.CHEST}) {
+			gear.setDropChance(slot, 0.0F);
+		}
+	}
+
+	private void goBerserk() {
+		berserk = true;
+		BossFx.berserk(feet);
+		renameBars(Component.text("· Berserk ☠", NamedTextColor.RED));
+		for (Player player : victims(config.arenaRadius(), null)) {
+			player.showTitle(Title.title(Component.empty(), Component.text("The Blood Knight goes berserk", NamedTextColor.DARK_RED),
+				Title.Times.times(Duration.ofMillis(150), Duration.ofMillis(1600), Duration.ofMillis(500))));
+		}
+	}
+
+	private void renameBars(Component suffix) {
+		Component name = Component.text("☠ The Blood Knight ", NamedTextColor.DARK_RED).append(suffix);
+		packBar.name(name);
+		plainBar.name(name);
+	}
+
 	// ---- the end ------------------------------------------------------------------------------
 
-	/** The skeleton died: the model plays out its fall and the loot drops when it hits the ground. */
+	/** The body died: the model plays out its fall and the loot drops when it hits the ground. */
 	void onDeath(Player killedBy, long now) {
 		if (state == State.DYING || state == State.DONE) {
 			return;
@@ -573,12 +1171,18 @@ final class BloodKnightBoss {
 		play(animations.death, now);
 		packBar.progress(0.0F);
 		plainBar.progress(0.0F);
+		removeThralls();
+		bleeding.clear();
 	}
 
 	private void dyingTick(long now) {
 		int t = (int) (now - stateStart);
 		BossFx.victoryBeat(feet, t);
-		if (t == 54) {
+		if (t == 22 && puppet.isValid()) {
+			BloodFx.burst(feet.clone().add(0, 1.2, 0), BloodFx.SPLATTER, 30, 0.6, 0.3);
+			puppet.remove(); // the stand-in falls apart as the model drops to its knees
+		}
+		if (t == 50) {
 			dropLoot();
 			announceVictory();
 		}
@@ -647,7 +1251,21 @@ final class BloodKnightBoss {
 		if (brain.isValid()) {
 			brain.remove();
 		}
+		if (puppet.isValid()) {
+			puppet.remove();
+		}
+		removeThralls();
 		manager.broadcastNear(center, Component.text("☠ The Blood Knight " + why, NamedTextColor.DARK_RED), config.arenaRadius() + 16);
+	}
+
+	private void removeThralls() {
+		for (WitherSkeleton thrall : thralls) {
+			if (thrall.isValid()) {
+				BossFx.hit(thrall.getLocation().add(0, 1.0, 0));
+				thrall.remove();
+			}
+		}
+		thralls.clear();
 	}
 
 	/** Removes everything, now. Safe to call more than once. */
@@ -665,9 +1283,15 @@ final class BloodKnightBoss {
 		}
 		barViewers.clear();
 		modelViewers.clear();
+		puppetViewers.clear();
+		bleeding.clear();
 		model.remove();
+		removeThralls();
 		if (brain.isValid()) {
 			brain.remove();
+		}
+		if (puppet.isValid()) {
+			puppet.remove();
 		}
 	}
 
@@ -678,8 +1302,10 @@ final class BloodKnightBoss {
 		if (attacker instanceof Player player) {
 			participants.add(player.getUniqueId());
 		}
-		if (action == null) {
+		lastHurt = now;
+		if (action == null && now - lastFlinch > 16) {
 			play(animations.flinch, now);
+			lastFlinch = now;
 		}
 		BossFx.hit(feet.clone().add(0, 1.6 * scale, 0));
 		float progress = (float) Math.max(0.0, Math.min(1.0, healthFraction()));
@@ -687,15 +1313,26 @@ final class BloodKnightBoss {
 		plainBar.progress(progress);
 	}
 
-	/** Its ordinary melee hit landed: swing the sword to match. */
-	void onMelee(long now) {
+	/** Its ordinary melee hit landed: swing the sword to match, and it makes them bleed. */
+	void onMelee(Entity victim, long now) {
 		if (action == null && state == State.FIGHTING) {
 			play(animations.swipe, now);
 		}
+		BloodFx.play(feet, BossFx.SWING, 1.1F, 0.6F);
+		if (puppet.isValid()) {
+			puppet.swingMainHand();
+		}
+		if (victim instanceof Player player && config.bleedStacks() > 0) {
+			addBleed(player, 1);
+		}
 	}
 
-	/** A player died in its arena: a taunt, if it's free to. */
+	/** A player died in its arena: it drinks, and taunts if it's free to. */
 	void onPlayerKilled(long now) {
+		if (config.killHeal() > 0 && (state == State.FIGHTING || state == State.ATTACKING)) {
+			heal(maxHealth() * config.killHeal());
+			BossFx.drink(feet);
+		}
 		if (state == State.FIGHTING && action == null) {
 			play(animations.roar, now);
 			BloodFx.play(feet, BossFx.GROWL, 1.1F, 0.6F);
@@ -704,7 +1341,7 @@ final class BloodKnightBoss {
 
 	// ---- viewers ------------------------------------------------------------------------------
 
-	/** Boss bars, the model's visibility and the pack users' fake-empty equipment, every half second. */
+	/** Boss bars, and which body each nearby player sees (the model with the pack, the stand-in without). */
 	void updateViewers(long now) {
 		double range = config.arenaRadius() + 16;
 		Set<UUID> present = new HashSet<>();
@@ -723,11 +1360,16 @@ final class BloodKnightBoss {
 			barViewers.add(id);
 			if (pack && modelViewers.add(id)) {
 				model.showTo(player);
-				hideGearFrom(player);
 			} else if (!pack && modelViewers.remove(id)) {
 				model.hideFrom(player);
-			} else if (pack && now % 40 == 0) {
-				hideGearFrom(player); // re-sent now and then: tracking can reset it
+			}
+			if (puppet.isValid() && !Boolean.valueOf(!pack).equals(puppetViewers.get(id))) {
+				puppetViewers.put(id, !pack);
+				if (pack) {
+					player.hideEntity(plugin, puppet);
+				} else {
+					player.showEntity(plugin, puppet);
+				}
 			}
 		}
 		barViewers.removeIf(id -> {
@@ -743,28 +1385,18 @@ final class BloodKnightBoss {
 		});
 	}
 
-	/** Pack users see the model, so the skeleton's fallback armour and weapons are blanked out for them. */
-	void hideGearFrom(Player player) {
-		if (!brain.isValid()) {
-			return;
-		}
-		Map<EquipmentSlot, ItemStack> empty = new EnumMap<>(EquipmentSlot.class);
-		for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET,
-			EquipmentSlot.HAND, EquipmentSlot.OFF_HAND}) {
-			empty.put(slot, ItemStack.empty());
-		}
-		player.sendEquipmentChange(brain, empty);
-	}
-
 	void forgetViewer(UUID id) {
 		barViewers.remove(id);
 		modelViewers.remove(id);
+		puppetViewers.remove(id);
+		bleeding.remove(id);
 	}
 
 	/** The player loaded (or dropped) the resource pack mid-fight. */
 	void packChanged(Player player) {
 		modelViewers.remove(player.getUniqueId());
 		model.hideFrom(player);
+		puppetViewers.remove(player.getUniqueId());
 		updateViewers(manager.now());
 	}
 
@@ -777,7 +1409,7 @@ final class BloodKnightBoss {
 
 	private void animate(long now) {
 		int interval = config.animationInterval();
-		// Walking: how fast the skeleton actually moved since the last frame.
+		// Walking: how fast the body actually moved since the last frame.
 		double moved = 0.0;
 		if (brain.isValid()) {
 			Vector velocity = brain.getVelocity();
@@ -785,8 +1417,11 @@ final class BloodKnightBoss {
 		}
 		float targetWalk = state == State.FIGHTING ? (float) Math.min(1.0, moved / 0.1) : 0.0F;
 		walkWeight += (targetWalk - walkWeight) * Math.min(1.0F, 0.25F * interval);
-		walkPhase += (float) (moved * 4.2 * interval) + 0.02F * interval * walkWeight;
+		walkPhase += (float) (moved * 3.6 * interval / scale) + 0.02F * interval * walkWeight;
 		// Facing: follow the body, or the attack's direction, turning at most 14 degrees a tick.
+		if (state == State.ATTACKING && attack == Attack.WHIRLWIND && target != null && target.isValid()) {
+			attackYaw = yawTowards(feet, target.getLocation());
+		}
 		float goal = state == State.ATTACKING ? attackYaw : brain.isValid() ? brain.getBodyYaw() : modelYaw;
 		float turn = wrapDegrees(goal - modelYaw);
 		modelYaw += Math.max(-14.0F * interval, Math.min(14.0F * interval, turn));
@@ -804,8 +1439,96 @@ final class BloodKnightBoss {
 				action.apply(pose, t, 1.0F);
 			}
 		}
+		look(now);
 		pose.addOffset(0, sink, 0, 1.0F);
 		model.update(pose, modelYaw, scale, feet);
+		footsteps();
+		swordTrail(now);
+	}
+
+	/** Its head follows its prey: turned toward them (within reason) and tilted up or down to them. */
+	private void look(long now) {
+		boolean alert = state == State.FIGHTING || state == State.ATTACKING || state == State.ENRAGING || state == State.LAST_STAND;
+		Player prey = target != null && target.isValid() ? target : brain.isValid() && brain.getTarget() instanceof Player p ? p : null;
+		float wantYaw = 0.0F;
+		float wantPitch = 0.0F;
+		if (alert && prey != null && prey.getWorld() == world) {
+			Location eyes = prey.getEyeLocation();
+			float delta = wrapDegrees(yawTowards(feet, eyes) - modelYaw);
+			wantYaw = (float) Math.max(-0.9, Math.min(0.9, -Math.toRadians(delta)));
+			double flat = Math.hypot(eyes.getX() - feet.getX(), eyes.getZ() - feet.getZ());
+			wantPitch = (float) Math.max(-0.6, Math.min(0.6, Math.atan2(eyes.getY() - (feet.getY() + 2.6 * scale), Math.max(0.5, flat))));
+		}
+		lookYaw += (wantYaw - lookYaw) * 0.35F;
+		lookPitch += (wantPitch - lookPitch) * 0.35F;
+		animations.lookAt(pose, lookYaw, lookPitch, action == null ? 1.0F : 0.45F);
+	}
+
+	/** Each heavy foot coming down while it walks: a thud and a puff of the ground. */
+	private void footsteps() {
+		float sign = Math.sin(walkPhase) >= 0 ? 1.0F : -1.0F;
+		if (walkWeight > 0.45F && sign != lastStepSign) {
+			double yaw = Math.toRadians(modelYaw);
+			double side = 0.55 * scale * sign;
+			Location foot = feet.clone().add(-Math.cos(yaw) * side, 0, -Math.sin(yaw) * side);
+			Block ground = world.getBlockAt(foot.getBlockX(), foot.getBlockY() - 1, foot.getBlockZ());
+			if (ground.getType().isSolid()) {
+				BossFx.footstep(foot, ground.getBlockData());
+			}
+		}
+		lastStepSign = sign;
+	}
+
+	/**
+	 * During the part of a swing where the blade moves fast, the sword tip's path through the air
+	 * is traced in blood: sampled several times between frames, so an arc reads as an arc.
+	 */
+	private void swordTrail(long now) {
+		float t = action == null ? -1 : now - actionStart;
+		if (action == null || !swinging(action, t)) {
+			lastTip = null;
+			return;
+		}
+		if (trailClip != action) {
+			trailClip = action;
+			lastTip = null;
+		}
+		float from = lastTip == null ? t : lastTipTime;
+		int steps = lastTip == null ? 1 : 4;
+		for (int k = 1; k <= steps; k++) {
+			float at = from + (t - from) * k / steps;
+			Location tip = tipAt(at, now);
+			if (lastTip != null) {
+				BossFx.swordArc(lastTip, tip, k == steps && ThreadLocalRandom.current().nextInt(3) == 0);
+			}
+			lastTip = tip;
+		}
+		lastTipTime = t;
+	}
+
+	private static boolean swinging(Clip clip, float t) {
+		return switch (clip.name()) {
+			case "swipe" -> t >= 4 && t <= 9;
+			case "cleave" -> t >= Animations.CLEAVE_HIT - 4 && t <= Animations.CLEAVE_HIT + 5;
+			case "slam" -> t >= Animations.SLAM_HIT - 5 && t <= Animations.SLAM_HIT + 1;
+			case "grasp" -> t >= Animations.GRASP_PULL && t <= Animations.GRASP_PULL + 4
+				|| t >= Animations.GRASP_SMASH - 4 && t <= Animations.GRASP_SMASH + 1;
+			case "whirl" -> t >= Animations.WHIRL_FROM && t <= Animations.WHIRL_TO;
+			case "land" -> t <= 4;
+			case "cast" -> t >= Animations.CAST_HIT - 4 && t <= Animations.CAST_HIT + 1;
+			default -> false;
+		};
+	}
+
+	/** Where the sword tip is {@code t} ticks into the current clip. */
+	private Location tipAt(float t, long now) {
+		trailPose.reset();
+		animations.idle(trailPose, now, 1.0F);
+		action.apply(trailPose, t, 1.0F);
+		trailPose.addOffset(0, sink, 0, 1.0F);
+		BossModel.boneMatrices(rig, trailPose, modelYaw, scale, trailBones, trailRoot);
+		trailBones[swordHand].transformPosition(SWORD_TIP, scratch);
+		return new Location(world, feet.getX() + scratch.x, feet.getY() + scratch.y, feet.getZ() + scratch.z);
 	}
 
 	// ---- helpers ------------------------------------------------------------------------------
@@ -844,6 +1567,7 @@ final class BloodKnightBoss {
 		return value * value;
 	}
 
+	/** Standing on something (the entity's view of it, not the client-reported player flag). */
 	private static boolean onGround(Entity entity) {
 		return entity.isOnGround();
 	}

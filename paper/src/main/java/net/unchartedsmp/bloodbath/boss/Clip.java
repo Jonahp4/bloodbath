@@ -4,13 +4,42 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A keyframed animation: per-bone rotation keys (and body offset keys) at tick times, eased
- * between with smoothstep so every move accelerates and settles instead of snapping. Clips start
- * and end at rest unless they {@link #holds()} their last frame (death), so they layer cleanly
- * over the idle and walk cycles.
+ * A keyframed animation: per-bone rotation keys (and body offset keys) at tick times. Each key
+ * says how the motion arrives at it ({@link Ease}): a wind-up eases out into its peak and hangs
+ * there, a strike snaps in, a follow-through overshoots and settles, a spin runs linear. Clips start
+ * and end at rest unless they {@link #holds()} their last frame (death), so they layer cleanly over
+ * the idle and walk cycles.
  */
 public final class Clip {
-	private record Key(float time, float x, float y, float z) {
+	/** How the motion into a key is paced. */
+	enum Ease {
+		/** Accelerate, then settle (the default). */
+		SMOOTH,
+		/** Start slow and hit hard: strikes, slams, the moment of impact. */
+		IN,
+		/** Burst out and decelerate into the pose: wind-ups, recoveries. */
+		OUT,
+		/** Overshoot the pose and settle back: follow-throughs, landings. */
+		BACK,
+		/** Constant speed: spins. */
+		LINEAR;
+
+		float apply(float u) {
+			return switch (this) {
+				case SMOOTH -> u * u * (3.0F - 2.0F * u);
+				case IN -> u * u * u;
+				case OUT -> 1.0F - (1.0F - u) * (1.0F - u) * (1.0F - u);
+				case BACK -> {
+					float s = 1.70158F * 1.3F;
+					float v = u - 1.0F;
+					yield 1.0F + v * v * ((s + 1.0F) * v + s);
+				}
+				case LINEAR -> u;
+			};
+		}
+	}
+
+	private record Key(float time, float x, float y, float z, Ease ease) {
 	}
 
 	private record Track(int bone, List<Key> keys) {
@@ -71,7 +100,7 @@ public final class Clip {
 			if (t <= b.time()) {
 				Key a = keys.get(i - 1);
 				float u = Math.max(0.0F, (t - a.time()) / Math.max(1.0E-3F, b.time() - a.time()));
-				u = u * u * (3.0F - 2.0F * u); // smoothstep: accelerate, then settle
+				u = b.ease().apply(u);
 				SAMPLE[0] = a.x() + (b.x() - a.x()) * u;
 				SAMPLE[1] = a.y() + (b.y() - a.y()) * u;
 				SAMPLE[2] = a.z() + (b.z() - a.z()) * u;
@@ -98,8 +127,13 @@ public final class Clip {
 			this.duration = duration;
 		}
 
-		/** A rotation key for a bone at a tick (radians, XYZ). Keys must be added in time order. */
+		/** A rotation key for a bone at a tick (radians, XYZ), eased smoothly. Keys go in time order. */
 		Builder key(String bone, float time, float x, float y, float z) {
+			return key(bone, time, x, y, z, Ease.SMOOTH);
+		}
+
+		/** A rotation key reached with the given pacing. */
+		Builder key(String bone, float time, float x, float y, float z, Ease ease) {
 			int index = rig.bone(bone);
 			if (index < 0) {
 				return this; // a rig without this bone just doesn't move it
@@ -107,19 +141,46 @@ public final class Clip {
 			Track track = tracks.stream().filter(t -> t.bone() == index).findFirst().orElse(null);
 			if (track == null) {
 				track = new Track(index, new ArrayList<>());
-				track.keys().add(new Key(0, 0, 0, 0));
+				track.keys().add(new Key(0, 0, 0, 0, Ease.SMOOTH));
 				tracks.add(track);
 			}
-			track.keys().add(new Key(time, x, y, z));
+			track.keys().add(new Key(time, x, y, z, ease));
 			return this;
 		}
 
-		/** Body offset key (blocks). */
-		Builder offset(float time, float x, float y, float z) {
-			if (offsetKeys.isEmpty()) {
-				offsetKeys.add(new Key(0, 0, 0, 0));
+		/**
+		 * Where a bone starts instead of rest: for a clip that picks up from another's last frame
+		 * (the landing after a leap), so there's no snap between them. Call before its keys.
+		 */
+		Builder start(String bone, float x, float y, float z) {
+			int index = rig.bone(bone);
+			if (index < 0) {
+				return this;
 			}
-			offsetKeys.add(new Key(time, x, y, z));
+			Track track = new Track(index, new ArrayList<>());
+			track.keys().add(new Key(0, x, y, z, Ease.SMOOTH));
+			tracks.removeIf(t -> t.bone() == index);
+			tracks.add(track);
+			return this;
+		}
+
+		/** The body offset a clip starts from (see {@link #start}). */
+		Builder startOffset(float x, float y, float z) {
+			offsetKeys.clear();
+			offsetKeys.add(new Key(0, x, y, z, Ease.SMOOTH));
+			return this;
+		}
+
+		/** Body offset key (blocks, in the model's frame: -Z is forward). */
+		Builder offset(float time, float x, float y, float z) {
+			return offset(time, x, y, z, Ease.SMOOTH);
+		}
+
+		Builder offset(float time, float x, float y, float z, Ease ease) {
+			if (offsetKeys.isEmpty()) {
+				offsetKeys.add(new Key(0, 0, 0, 0, Ease.SMOOTH));
+			}
+			offsetKeys.add(new Key(time, x, y, z, ease));
 			return this;
 		}
 

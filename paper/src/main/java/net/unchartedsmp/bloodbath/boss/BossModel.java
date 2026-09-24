@@ -13,6 +13,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /**
  * The Blood Knight's body in the world: one item display entity per rig part, all standing at the
@@ -46,13 +47,14 @@ final class BossModel {
 		}
 		sent = new Matrix4f[rig.parts().size()];
 		World world = origin.getWorld();
+		Location at = level(origin);
 		boolean shadowed = false;
 		for (Rig.Part part : rig.parts()) {
 			ItemStack item = new ItemStack(Material.PAPER);
 			item.editMeta(meta -> meta.setItemModel(part.model()));
 			boolean shadow = !shadowed && rig.bones().get(part.bone()).parent() < 0;
 			shadowed |= shadow;
-			parts.add(world.spawn(origin, ItemDisplay.class, display -> {
+			parts.add(world.spawn(at, ItemDisplay.class, display -> {
 				display.setItemStack(item);
 				display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
 				display.setPersistent(false);
@@ -69,7 +71,19 @@ final class BossModel {
 				display.getPersistentDataContainer().set(Keys.BOSS, PersistentDataType.BYTE, (byte) 1);
 			}));
 		}
-		lastOrigin = origin.clone();
+		lastOrigin = at;
+	}
+
+	/**
+	 * The displays stand at the boss's feet facing nowhere in particular: a display draws its item
+	 * turned by its own yaw and pitch, so they're kept at zero and the part matrices do the turning
+	 * (otherwise the model would turn twice as the boss turns).
+	 */
+	private static Location level(Location origin) {
+		Location at = origin.clone();
+		at.setYaw(0.0F);
+		at.setPitch(0.0F);
+		return at;
 	}
 
 	/** Makes the model visible to a player who has the resource pack. */
@@ -93,7 +107,8 @@ final class BossModel {
 	 * Poses the model. {@code yaw} is Minecraft's (0 = facing south); the model itself faces -Z,
 	 * so it's turned by 180 - yaw.
 	 */
-	void update(Pose pose, float yaw, float scale, Location origin) {
+	void update(Pose pose, float yaw, float scale, Location feet) {
+		Location origin = level(feet);
 		boolean moved = lastOrigin == null || lastOrigin.getWorld() != origin.getWorld() || lastOrigin.distanceSquared(origin) > 1.0E-4;
 		for (int i = 0; i < parts.size(); i++) {
 			ItemDisplay display = parts.get(i);
@@ -114,7 +129,31 @@ final class BossModel {
 			}
 		}
 		if (moved) {
-			lastOrigin = origin.clone();
+			lastOrigin = origin;
+		}
+	}
+
+	/**
+	 * Where a point fixed to a bone ({@code local}, in the bone's frame at rest) is after the last
+	 * {@link #update}, relative to the boss's feet.
+	 */
+	Vector3f pointOn(int bone, Vector3f local, Vector3f out) {
+		return bones[bone].transformPosition(local, out);
+	}
+
+	/** Every bone's matrix for a pose, without touching any display (for sampling between frames). */
+	static void boneMatrices(Rig rig, Pose pose, float yaw, float scale, Matrix4f[] bones, Matrix4f root) {
+		root.identity()
+			.rotateY((float) Math.toRadians(180.0 - yaw))
+			.scale(scale)
+			.translate(pose.offset[0], pose.offset[1], pose.offset[2]);
+		List<Rig.Bone> boneList = rig.bones();
+		for (int i = 0; i < bones.length; i++) {
+			Rig.Bone bone = boneList.get(i);
+			Matrix4f parent = bone.parent() < 0 ? root : bones[bone.parent()];
+			bones[i].set(parent)
+				.translate(bone.pivot())
+				.rotateXYZ(pose.rotation[i * 3], pose.rotation[i * 3 + 1], pose.rotation[i * 3 + 2]);
 		}
 	}
 
@@ -125,18 +164,7 @@ final class BossModel {
 	static void partMatrix(Rig rig, Pose pose, float yaw, float scale, int index, Matrix4f[] bones, Matrix4f root,
 		boolean computeBones, Matrix4f out) {
 		if (computeBones) {
-			root.identity()
-				.rotateY((float) Math.toRadians(180.0 - yaw))
-				.scale(scale)
-				.translate(pose.offset[0], pose.offset[1], pose.offset[2]);
-			List<Rig.Bone> boneList = rig.bones();
-			for (int i = 0; i < bones.length; i++) {
-				Rig.Bone bone = boneList.get(i);
-				Matrix4f parent = bone.parent() < 0 ? root : bones[bone.parent()];
-				bones[i].set(parent)
-					.translate(bone.pivot())
-					.rotateXYZ(pose.rotation[i * 3], pose.rotation[i * 3 + 1], pose.rotation[i * 3 + 2]);
-			}
+			boneMatrices(rig, pose, yaw, scale, bones, root);
 		}
 		Rig.Part part = rig.parts().get(index);
 		out.set(bones[part.bone()])

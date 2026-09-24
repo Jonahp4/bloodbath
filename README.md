@@ -9,15 +9,15 @@ a resource pack that the plugin hosts for you.
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.3.3.jar`](dist/paper/Bloodbath-1.3.3.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.3.3.zip`](dist/Bloodbath-ResourcePack-1.3.3.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.4.0.jar`](dist/paper/Bloodbath-1.4.0.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.4.0.zip`](dist/Bloodbath-ResourcePack-1.4.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.3.3.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.4.0.jar` into `plugins/` and restart.
 3. That's it for the 3D models: players get a download prompt when they join. The pack comes from
    the plugin's public copy on GitHub (checked to be identical to the one inside the jar), so
    there's no port to open. No other plugins are needed. See [Resource pack](#resource-pack).
@@ -92,32 +92,58 @@ Bloodbath (250). The count lives on the item, so it travels with the weapon when
 
 ## The Blood Knight (boss)
 
-The armour's owner, as a real fight. With the pack he's a fully animated 3D model (the model you
-gave, rigged into 16 bones): he claws his way out of the ground, idles with his sword breathing,
-walks, and every attack has its own animation and tells.
+The armour's owner, as a real fight, and a hard one. With the pack he's a fully animated 3D model
+(the model you gave, rigged into 16 bones): he claws his way out of the ground, shifts his weight
+while he waits, walks with planted, heavy strides, turns his head to follow you, and every attack
+has its own wind-up, strike and follow-through, with a blood trail behind the sword.
+
+**He can't walk through walls.** His body is a solid 2.4 blocks wide, as wide as the model, so he
+walks round what's in the way. His charge stops dead against a wall (and he reels from it), his
+leap is real physics, and none of his attacks go through walls except Blood Spikes and Blood Rain.
 
 **Summoning.** Sneak and right-click **crying obsidian** holding a **Blood Core** (one is used).
 Six seconds of omens (tolling bells, the ground shaking, blood welling up) and he rises. Or
 `/bb boss summon` as an op. One at a time by default.
 
-| Attack | Tell | How to live |
-|---|---|---|
-| **Cleave** (12) | He winds his sword back; a blood arc marks the ground in front of him. | Get out of the arc. |
-| **Slam** (10) | Sword raised over his head, then a shockwave rolls out along the ground. | Jump over the ring. |
-| **Blood Spikes** (9) | He plunges the sword; rings open under up to 3 players. | Step off the ring before it erupts. |
-| **Shield Charge** (8) | He braces behind his shield and a line is drawn to his target. | Sidestep the line. |
+**2000 health** (+60% for each extra player in the arena when he stands), 20 armour, 12
+toughness, 18 per sword hit, and every hit of his leaves 2 bleed stacks that ignore armour.
 
-At half health he's **bloodied**: he roars, knocks everyone back, blinds them with Darkness, the
-bar turns purple, and his attacks come 30% faster and hit 20% harder. Mist hangs over the arena
-while he fights. Anyone who dies in the arena is announced as claimed by the Blood Knight. If
-everyone leaves (60s) he sinks back into the ground.
+| Attack | Damage | Tell | How to live |
+|---|---|---|---|
+| **Cleave** | 28 | Sword drawn back across his body; a blood arc marks the ground. | Get out of the arc, or behind a wall. |
+| **Slam** | 24 | Sword raised in both hands, then a shockwave along the ground. | Jump it, or put a wall between you. |
+| **Blood Spikes** | 20 | He plunges the sword; rings open under players. Walls don't help. | Step off the ring. |
+| **Shield Charge** | 24 | He braces behind his shield; a line is drawn to his target. | Sidestep. Bait him into a wall and he staggers. |
+| **Leap** | 26 | He crouches; a circle marks where he'll land. Not under a roof. | Get out of the circle. |
+| **Blood Grasp** | 10 + a hammer blow | Sword levelled at you, then a tether drags you in. | Break line of sight before the pull. |
+| **Blood Rain** *(bloodied)* | 14 a drop | Sword to the sky; circles marked round every player. | Leave the circles, or get under a roof. |
+| **Whirlwind** *(last stand)* | 12 a beat | Three full turns with the sword held out. | Run. |
 
-When he falls: a death animation, a burst of blood, a victory sound for everyone nearby, and his
-loot: **2 to 4 Blood Cores**, a 35% chance of one Blood Knight armour piece, and 500 XP.
+**Three phases.**
+- **Bloodied (60%).** He roars (and can't be hurt while he does), knocks everyone back and blinds
+  them with Darkness. From then on he hits 20% harder, attacks 30% sooner, sometimes chains a
+  Cleave straight into another attack, and adds Blood Rain.
+- **Last stand (25%).** Down on one knee, then up with a roar that raises **Blood Thralls** (3, +1
+  per extra player). While any stand he takes **half damage**, so kill them first. He hits 35%
+  harder, attacks twice as often, adds Whirlwind, and heals from 30% of the damage he deals.
+- **Berserk.** Still fighting after 8 minutes, he hits 50% harder and attacks faster still.
 
-He can't be hurt by falling, fire, lava, suffocation, drowning, cramming, freezing, wither or
-poison, is pulled back if knocked into the void, never despawns and is never saved to disk: a
-restart, the plugin being disabled, or his world unloading ends the fight cleanly. Without the pack, players see a giant wither skeleton in netherite.
+**No cheese.** No single hit takes more than 40 off him. Arrows and tridents do half damage. Up a
+pillar or in a hole he can't path to, he drags you out with Blood Grasp or hits you with spikes and
+rain. Every player he kills heals him 8%, and he drinks from them. Leave him alone for 15 seconds
+and he regenerates 1% a second. Every number is in `boss:` in config.yml.
+
+Mist hangs over the arena while he fights. Anyone who dies in the arena is announced as claimed by
+the Blood Knight. If everyone leaves (60s) he sinks back into the ground.
+
+When he falls: he drops to his knees, then face down, bells ring out for everyone nearby, the
+thralls crumble, and his loot drops: **3 to 6 Blood Cores**, a 60% chance of one Blood Knight
+armour piece, and 1500 XP.
+
+He can't be hurt by falling, fire, lava, suffocation, drowning, cramming, freezing, cactus,
+wither or poison, is pulled back if knocked into the void, never despawns and is never saved to
+disk: a restart, the plugin being disabled, or his world unloading ends the fight cleanly. Without
+the pack, players see a giant wither skeleton in netherite that moves and fights the same way.
 
 ## Blood Core
 
@@ -242,6 +268,21 @@ Knight.
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
 
+## What's new in 1.4.0
+
+- **A much harder Blood Knight.** 2000 health scaled to the number of players, heavier hits that
+  make you bleed, three phases (bloodied at 60%, a last stand with Blood Thralls at 25%, berserk
+  after 8 minutes) and four new attacks: **Leap**, **Blood Grasp**, **Blood Rain** and
+  **Whirlwind**. Hiding, pillaring and arrow spam no longer work: see *No cheese* above.
+- **No more walking through walls.** His body is now as wide as his model and solid: he walks
+  round walls, his charge stops against them, and his attacks need a clear line to you.
+- **Better animations.** Every move was reworked with real timing (slow wind-ups, snapping
+  strikes, follow-throughs that overshoot and settle), a blood trail on the sword, a head that
+  tracks you, weight shifts while he waits, heavy footsteps, and new clips for every new attack,
+  the last stand, the taunt and the death.
+- Players without the pack see the wither-skeleton stand-in move and fight in step with him, and
+  their hits on it count.
+
 ## What's new in 1.3.3
 
 - **Dripping that looks like dripping.** Drops used to be crying obsidian's tears, which the game
@@ -362,7 +403,7 @@ Knight.
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.3.3.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.4.0.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock
