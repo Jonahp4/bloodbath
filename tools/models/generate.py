@@ -456,7 +456,11 @@ def void_scythe():
 def paradox_bow(stage):
     """stage 0 = idle (no arrow), 1..3 = pulling_0..pulling_2."""
     m = Model()
-    gy = 2.3
+    # Unlike a sword (held by the end), a bow is held in the middle: the vanilla bow sprite's
+    # resting string runs through the centre of the item. Put ours there too, so vanilla bow
+    # display transforms hold it the same way; the riser sits ahead of it by the limbs' drop.
+    idle_drop = sum(length * math.sin(math.radians(-bend)) for bend, length in zip((0, -22.5, -22.5, -45), (3.2, 3.2, 3.0, 2.4)))
+    gy = 8.0 + idle_drop
     m.centered(8, gy - 1.1, gy + 1.1, 4.4, 2.0, "grip", name="riser_grip")
     m.gem(8, gy, 2.6, depth=2.8, name="riser_gem")
     bends = {0: (0, -22.5, -22.5, -45), 1: (0, -22.5, -22.5, -45), 2: (0, -22.5, -45, -45), 3: (0, -22.5, -45, -67.5)}[stage]
@@ -501,6 +505,7 @@ WEAPONS = {
     "void_scythe": ("Hemorrhage Scythe", void_scythe),
     "paradox_bow": ("Sanguine Paradox Bow", lambda: paradox_bow(0)),
 }
+BOW_IDLE = None  # set in main(): framing reference for the bow's pull stages
 BOW_STAGES = {"paradox_bow_pulling_0": 1, "paradox_bow_pulling_1": 2, "paradox_bow_pulling_2": 3}
 
 
@@ -622,6 +627,67 @@ def v3(s):
     return [r3(s)] * 3
 
 
+def model_corners(model):
+    """Every cube corner in model space (element Z rotations applied)."""
+    pts = []
+    for e in model.elements:
+        (x1, y1, z1), (x2, y2, z2) = e["from"], e["to"]
+        corners = [(x, y, z) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
+        if e["rot"] and e["rot"][0] == "z":
+            a = math.radians(e["rot"][1])
+            ox, oy = e["rot"][2][:2]
+            corners = [(ox + (x - ox) * math.cos(a) - (y - oy) * math.sin(a), oy + (x - ox) * math.sin(a) + (y - oy) * math.cos(a), z) for x, y, z in corners]
+        pts += corners
+    return np.array(pts) - 8.0
+
+
+def fit_to_slot(transform, model, fill=15.0, max_scale=1.0, base=(0.0, 0.0, 0.0)):
+    """Scale and centre `transform` so the model, rotated exactly as Minecraft will rotate it,
+    fills `fill` of the 16-unit slot and sits in its middle."""
+    projected = model_corners(model) @ euler_xyz(*transform["rotation"]).T
+    lo, hi = projected.min(axis=0), projected.max(axis=0)
+    scale = min(max_scale, fill / max(hi[0] - lo[0], hi[1] - lo[1]))
+    mid = (lo + hi) / 2 * scale
+    transform["scale"] = v3(scale)
+    transform["translation"] = [r3(max(-80.0, min(80.0, base[i] - mid[i]))) for i in (0, 1)] + [base[2]]
+    return transform
+
+
+def model_center(model):
+    """Centre of the model's bounding box in model space (element Z rotations included)."""
+    pts = []
+    for e in model.elements:
+        (x1, y1, z1), (x2, y2, z2) = e["from"], e["to"]
+        corners = [(x, y, z) for x in (x1, x2) for y in (y1, y2) for z in (z1, z2)]
+        if e["rot"] and e["rot"][0] == "z":
+            a = math.radians(e["rot"][1])
+            ox, oy = e["rot"][2][:2]
+            corners = [(ox + (x - ox) * math.cos(a) - (y - oy) * math.sin(a), oy + (x - ox) * math.sin(a) + (y - oy) * math.cos(a), z) for x, y, z in corners]
+        pts += corners
+    return [(min(p[i] for p in pts) + max(p[i] for p in pts)) / 2 for i in range(3)]
+
+
+def euler_xyz(rx, ry, rz):
+    """Minecraft's display rotation: Quaternionf.rotationXYZ, i.e. Rx * Ry * Rz."""
+    ax, ay, az = (math.radians(v) for v in (rx, ry, rz))
+    rot_x = np.array([[1, 0, 0], [0, math.cos(ax), -math.sin(ax)], [0, math.sin(ax), math.cos(ax)]])
+    rot_y = np.array([[math.cos(ay), 0, math.sin(ay)], [0, 1, 0], [-math.sin(ay), 0, math.cos(ay)]])
+    rot_z = np.array([[math.cos(az), -math.sin(az), 0], [math.sin(az), math.cos(az), 0], [0, 0, 1]])
+    return rot_x @ rot_y @ rot_z
+
+
+def recentered(transform, center, base=(0.0, 0.0, 0.0), keep_z=False):
+    """Adds the translation that puts the model's bounding-box centre where the item's centre
+    would be, so icons, item frames and dropped items sit in the middle of their slot."""
+    offset = (np.array(center) - 8.0) * transform["scale"][0]
+    moved = euler_xyz(*transform["rotation"]) @ offset
+    t = [base[i] - moved[i] for i in range(3)]
+    if not keep_z:
+        t[2] = base[2]
+    transform["translation"] = [r3(max(-80.0, min(80.0, v))) for v in t]
+    return transform
+
+
 def display(model, weapon):
     size = extent(model)
     gui = min(1.0, 15.0 / size)
@@ -639,9 +705,11 @@ def display(model, weapon):
         "head": {"rotation": [0, 180, -45], "translation": [0, 13, 7], "scale": [1, 1, 1]},
     }
     if weapon.startswith("paradox_bow"):
-        # Vanilla item/bow transforms (held upright, aimed forward), same -45 Z fold.
-        disp["thirdperson_righthand"] = {"rotation": [-80, 260, -85], "translation": [-1, -2, 2.5], "scale": v3(0.9 * max(0.7, min(1.0, 22.0 / size)))}
-        disp["firstperson_righthand"] = {"rotation": [0, -90, -20], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68 * max(0.7, min(1.0, 22.0 / size)))}
+        # Vanilla item/bow transforms (held upright, aimed forward), same -45 Z fold. Scaled so
+        # the limbs span about what the vanilla bow sprite does.
+        bow = max(0.6, min(1.0, 20.0 / size))
+        disp["thirdperson_righthand"] = {"rotation": [-80, 260, -85], "translation": [-1, -2, 2.5], "scale": v3(0.9 * bow)}
+        disp["firstperson_righthand"] = {"rotation": [0, -90, -20], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68 * bow)}
     if weapon == "meteor_gauntlet":
         # Worn over the fist rather than swung: sit it upright on the hand.
         disp["thirdperson_righthand"] = {"rotation": [75, 0, 0], "translation": [0, 1.5, 1.5], "scale": v3(0.6)}
@@ -649,6 +717,11 @@ def display(model, weapon):
         disp["gui"] = {"rotation": [25, -35, 0], "translation": [0, 0, 0], "scale": v3(0.9)}
         disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
         disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(0.9)}
+    # The bow's pull stages must keep the idle model's framing, or the icon would jump around.
+    framing = BOW_IDLE if weapon.startswith("paradox_bow") else model
+    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon == "meteor_gauntlet" else 1.0)
+    fit_to_slot(disp["fixed"], framing, fill=14.0)
+    fit_to_slot(disp["ground"], framing, fill=7.0, max_scale=0.5, base=(0.0, 2.0, 0.0))
     return disp
 
 
@@ -696,6 +769,8 @@ def main():
         os.remove(os.path.join(prev_dir, "textures", f))
 
     preview = {"textures": {}, "weapons": {}}
+    global BOW_IDLE
+    BOW_IDLE = paradox_bow(0)
     for weapon, (title, build) in WEAPONS.items():
         variants = [(weapon, build())]
         if weapon == "paradox_bow":

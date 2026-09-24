@@ -4,7 +4,7 @@ A blood-themed rework of the **Uncharted SMP** weapons mod for Fabric **1.21.11*
 weapons, each with a real 3D model, a shared blood palette for every particle and sound, and a
 rewritten core that closes the dupe and exploit holes in the original.
 
-**Download:** [`dist/unchartedsmp-bloodbath-0.3.0.jar`](dist/unchartedsmp-bloodbath-0.3.0.jar)
+**Download:** [`dist/unchartedsmp-bloodbath-0.3.1.jar`](dist/unchartedsmp-bloodbath-0.3.1.jar)
 
 It replaces `unchartedsmp-server-only.jar`. Item ids are unchanged (`unchartedsmp:riftblade`, …),
 so weapons players already own keep working and pick up the new look.
@@ -25,6 +25,13 @@ so weapons players already own keep working and pick up the new look.
 | `paradox_bow` | **Sanguine Paradox Bow** | A real bow (draw animation, shoots arrows, takes bow enchantments). Fully drawn shots leave a Paradox Echo that flies back along the path 3s later for 7 damage. |
 
 Cooldowns, damage and ranges are the same as the original.
+
+## What's new in 0.3.1
+
+- **Bow hold fixed:** the bow is now held by its grip like the vanilla bow. It used to hang below
+  the hand because it was positioned like a sword (held by the end).
+- Inventory icons, item-frame and dropped-item views are fitted and centred from the exact
+  rotation Minecraft uses, so nothing spills out of its slot.
 
 ## What's new in 0.3.0
 
@@ -131,13 +138,13 @@ textures, names). Players who install the mod client-side get the models directl
 Normal build (needs internet access to Fabric's maven and Mojang):
 
 ```sh
-./gradlew build   # -> build/libs/unchartedsmp-bloodbath-0.3.0.jar
+./gradlew build   # -> build/libs/unchartedsmp-bloodbath-0.3.1.jar
 ```
 
 Offline build (what produced `dist/`; no Loom, no Mojang downloads):
 
 ```sh
-tools/offline-build/build.sh   # -> dist/unchartedsmp-bloodbath-0.3.0.jar
+tools/offline-build/build.sh   # -> dist/unchartedsmp-bloodbath-0.3.1.jar
 ```
 
 It compiles against small Yarn-named API stubs, remaps the bytecode to Fabric intermediary names,
