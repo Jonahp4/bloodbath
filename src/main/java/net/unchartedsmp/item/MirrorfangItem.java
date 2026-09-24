@@ -9,16 +9,20 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 import net.unchartedsmp.ability.Ability;
 import net.unchartedsmp.ability.Cooldowns;
+import net.unchartedsmp.ability.ServerClock;
 import net.unchartedsmp.ability.TickScheduler;
 import net.unchartedsmp.fx.BloodFx;
+import net.unchartedsmp.hud.Hud;
 import net.unchartedsmp.util.Targeting;
 
 /**
@@ -48,6 +52,8 @@ public class MirrorfangItem extends AbilityWeapon {
 
 	/** Mirrors spawned this session and still alive, by entity UUID. */
 	private static final Map<UUID, ArmorStandEntity> LIVE_MIRRORS = new HashMap<>();
+	/** Owner UUID -> tick their current mirror dissolves, for the status line. */
+	private static final Map<UUID, Long> MIRROR_UNTIL = new HashMap<>();
 
 	public MirrorfangItem(Settings settings) {
 		super(settings, Ability.MIRRORFANG);
@@ -85,9 +91,11 @@ public class MirrorfangItem extends AbilityWeapon {
 			return ActionResult.FAIL;
 		}
 		Cooldowns.start(player, ability);
+		MIRROR_UNTIL.put(player.getUuid(), ServerClock.now() + LIFETIME_TICKS);
 
 		Vec3d mirrorChest = Targeting.chest(mirror);
 		BloodFx.burst(world, BloodFx.BLOOD_LARGE, mirrorChest, 25, 0.4);
+		BloodFx.flow(world, Targeting.chest(player), mirrorChest, 8, 0.3, BloodFx.BRIGHT_RED, 8);
 		BloodFx.play(world, mirror, BloodFx.MIRROR, 1.0F, 1.2F);
 
 		TickScheduler.repeat(1, 1, LIFETIME_TICKS, tick -> {
@@ -99,7 +107,9 @@ public class MirrorfangItem extends AbilityWeapon {
 				LivingEntity target = nearestEnemy(world, mirror, player);
 				if (target != null) {
 					target.damage(world, world.getDamageSources().mobAttack(mirror), ATTACK_DAMAGE);
+					BloodFx.line(world, BloodFx.BLOOD_FADE, Targeting.chest(mirror), Targeting.chest(target), 4.0);
 					BloodFx.burst(world, BloodFx.SWEEP, Targeting.chest(target), 1, 0.0);
+					BloodFx.play(world, target, BloodFx.FANGS, 0.5F, 1.6F);
 					BloodFx.splash(world, Targeting.chest(target), 3);
 				}
 			}
@@ -108,12 +118,29 @@ public class MirrorfangItem extends AbilityWeapon {
 				return false;
 			}
 			if (tick % 5 == 0) {
-				BloodFx.burst(world, BloodFx.BLOOD, Targeting.chest(mirror), 3, 0.2);
+				BloodFx.burst(world, BloodFx.BLOOD_FADE, Targeting.chest(mirror), 4, 0.3);
 				BloodFx.burst(world, BloodFx.DRIP, Targeting.chest(mirror), 1, 0.25, 0.0);
+				BloodFx.ring(world, BloodFx.BLOOD, mirror.getEntityPos().add(0.0, 0.1, 0.0), ATTACK_RANGE, 16);
 			}
 			return true;
 		});
 		return ActionResult.SUCCESS;
+	}
+
+	@Override
+	public Text hudStatus(ServerPlayerEntity player) {
+		Long until = MIRROR_UNTIL.get(player.getUuid());
+		long left = until == null ? 0 : until - ServerClock.now();
+		if (left > 0) {
+			MutableText line = Hud.timer("\u2666 Blood Mirror fighting", left);
+			return line.append(Text.literal("  ").append(Hud.cooldownBar(player, ability)));
+		}
+		return Hud.cooldownBar(player, ability);
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.BLOOD_FADE;
 	}
 
 	private static LivingEntity nearestEnemy(ServerWorld world, ArmorStandEntity mirror, ServerPlayerEntity owner) {
@@ -131,6 +158,7 @@ public class MirrorfangItem extends AbilityWeapon {
 
 	private static void dismiss(ArmorStandEntity mirror) {
 		LIVE_MIRRORS.remove(mirror.getUuid());
+		MIRROR_UNTIL.values().removeIf(until -> until <= ServerClock.now());
 		if (mirror.getEntityWorld() instanceof ServerWorld world) {
 			BloodFx.splash(world, Targeting.chest(mirror), 8);
 		}
@@ -169,5 +197,6 @@ public class MirrorfangItem extends AbilityWeapon {
 			mirror.discard();
 		}
 		LIVE_MIRRORS.clear();
+		MIRROR_UNTIL.clear();
 	}
 }

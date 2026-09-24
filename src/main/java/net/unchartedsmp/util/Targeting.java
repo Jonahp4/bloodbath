@@ -30,6 +30,14 @@ public final class Targeting {
 		return hit.getType() == HitResult.Type.MISS ? end : hit.getPos();
 	}
 
+	/** Where the look ray hits a block within {@code range}; empty if it hits nothing. */
+	public static Optional<Vec3d> lookBlock(World world, PlayerEntity player, double range) {
+		Vec3d start = player.getEyePos();
+		Vec3d end = start.add(player.getRotationVec(1.0F).multiply(range));
+		HitResult hit = world.raycast(new RaycastContext(start, end, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, player));
+		return hit.getType() == HitResult.Type.MISS ? Optional.empty() : Optional.of(hit.getPos());
+	}
+
 	/** True when no solid block sits between the two points. */
 	public static boolean hasLineOfSight(World world, Vec3d from, Vec3d to, Entity viewer) {
 		HitResult hit = world.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, viewer));

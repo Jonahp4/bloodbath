@@ -4,6 +4,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ToolMaterial;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
@@ -40,9 +41,15 @@ public class NullbladeItem extends AbilityWeapon {
 			NullField.debuff(targetPlayer, ON_HIT_NULLIFY_TICKS);
 			BloodFx.play(world, target, BloodFx.NULLIFY, 0.6F, 1.5F);
 			BloodFx.burst(world, BloodFx.CLOT, Targeting.chest(target), 10, 0.3);
+			BloodFx.burst(world, BloodFx.SOUL, Targeting.chest(target), 4, 0.3);
 			NullField.notifyNullified(targetPlayer);
 		}
 		super.postHit(stack, target, attacker);
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.CLOT;
 	}
 
 	@Override
@@ -61,7 +68,9 @@ public class NullbladeItem extends AbilityWeapon {
 		// Show the field's edge for as long as it's active so players can see where it ends.
 		Vec3d ringCenter = center.add(0.0, 0.1, 0.0);
 		TickScheduler.repeat(10, 10, ZONE_DURATION_TICKS / 10, tick -> {
-			BloodFx.ring(world, BloodFx.CLOT, ringCenter, ZONE_RADIUS, 24);
+			BloodFx.ring(world, BloodFx.CLOT, ringCenter, ZONE_RADIUS, 28);
+			BloodFx.ring(world, BloodFx.BLOOD_FADE, ringCenter.add(0.0, 0.6, 0.0), ZONE_RADIUS * 0.98, 14);
+			BloodFx.burst(world, BloodFx.SOUL, center, 3, ZONE_RADIUS * 0.5);
 			return true;
 		});
 		return ActionResult.SUCCESS;

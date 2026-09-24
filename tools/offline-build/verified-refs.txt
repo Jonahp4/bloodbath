@@ -162,3 +162,9 @@ M net/minecraft/class_5321 method_29179 (Lnet/minecraft/class_5321;Lnet/minecraf
 M net/minecraft/class_8109 method_48802 (Lnet/minecraft/class_1657;)Lnet/minecraft/class_1282;
 M net/minecraft/class_8109 method_48812 (Lnet/minecraft/class_1309;)Lnet/minecraft/class_1282;
 M net/minecraft/class_8109 method_48830 ()Lnet/minecraft/class_1282;
+# Constructors Yarn's files don't list, checked by hand against the intermediary tiny file:
+# BowItem(Item.Settings) - how vanilla registers Items.BOW.
+M net/minecraft/class_1753 <init> (Lnet/minecraft/class_1792$class_1793;)V
+# TrailParticleEffect is a record whose fields are (class_243 comp_3292, int comp_3293, int comp_3346),
+# so its canonical constructor is (Vec3d target, int color, int duration).
+M net/minecraft/class_10339 <init> (Lnet/minecraft/class_243;II)V

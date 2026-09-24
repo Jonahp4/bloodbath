@@ -33,4 +33,8 @@ public enum Ability {
 	public int cooldownTicks() {
 		return cooldownTicks;
 	}
+
+	public String cooldownLabel() {
+		return (cooldownTicks % 20 == 0 ? String.valueOf(cooldownTicks / 20) : String.valueOf(cooldownTicks / 20.0)) + "s";
+	}
 }

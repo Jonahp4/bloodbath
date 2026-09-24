@@ -236,6 +236,10 @@ public final class Remap {
 			else if (p[0].equals("METHOD") || p[0].equals("FIELD")) rows.add(p);
 		}
 		Set<String> classes = new HashSet<>(obfToInter.values());
+		// Unobfuscated classes (e.g. MinecraftServer) have no CLASS line, only member rows.
+		for (String[] p : rows) {
+			classes.add(obfToInter.getOrDefault(p[1], p[1]));
+		}
 		Remapper obf = new Remapper() {
 			@Override
 			public String map(String name) {

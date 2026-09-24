@@ -35,6 +35,7 @@ public abstract class Entity implements Nameable {
 	public void setCustomNameVisible(boolean visible) { throw new UnsupportedOperationException(); }
 	public void setInvulnerable(boolean invulnerable) { throw new UnsupportedOperationException(); }
 	public boolean isSpectator() { throw new UnsupportedOperationException(); }
+	public boolean isSneaking() { throw new UnsupportedOperationException(); }
 	public final float getHeight() { throw new UnsupportedOperationException(); }
 	public boolean teleport(ServerWorld world, double x, double y, double z, Set<?> flags, float yaw, float pitch, boolean resetCamera) { throw new UnsupportedOperationException(); }
 	public abstract boolean damage(ServerWorld world, DamageSource source, float amount);

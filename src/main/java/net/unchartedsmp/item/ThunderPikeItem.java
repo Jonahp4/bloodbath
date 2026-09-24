@@ -5,6 +5,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
@@ -42,14 +43,24 @@ public class ThunderPikeItem extends AbilityWeapon {
 
 		Vec3d start = player.getEyePos();
 		Vec3d impact = Targeting.lookTarget(world, player, RANGE);
+		// Telegraph the landing spot so the target (and you) can see where the bolt will fall.
+		BloodFx.ring(world, BloodFx.BLOOD_FADE, impact.add(0.0, 0.1, 0.0), STRIKE_RADIUS, 24);
 		TickScheduler.repeat(0, 1, TRAVEL_TICKS, tick -> {
 			Vec3d p = start.lerp(impact, (tick + 1) / (double) TRAVEL_TICKS);
-			BloodFx.burst(world, BloodFx.SPARK, p, 5, 0.12);
-			BloodFx.burst(world, BloodFx.BLOOD, p, 3, 0.12);
+			BloodFx.burst(world, BloodFx.SPARK, p, 6, 0.12);
+			BloodFx.burst(world, BloodFx.BLOOD_FADE, p, 3, 0.12);
+			if (tick % 2 == 0) {
+				BloodFx.ring(world, BloodFx.SPARK, impact.add(0.0, 0.1, 0.0), STRIKE_RADIUS * (1.0 - tick / (double) TRAVEL_TICKS), 16);
+			}
 			return true;
 		});
 		TickScheduler.schedule(TRAVEL_TICKS, () -> strike(world, player, start, impact));
 		return ActionResult.SUCCESS;
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.SPARK;
 	}
 
 	private static void strike(ServerWorld world, ServerPlayerEntity player, Vec3d start, Vec3d impact) {
@@ -58,8 +69,10 @@ public class ThunderPikeItem extends AbilityWeapon {
 		bolt.setCosmetic(true);
 		world.spawnEntity(bolt);
 
-		BloodFx.burst(world, BloodFx.SPARK, impact, 35, 0.5);
+		BloodFx.burst(world, BloodFx.SPARK, impact, 45, 0.6);
 		BloodFx.splash(world, impact, 8);
+		BloodFx.spray(world, impact, STRIKE_RADIUS, 12, 8);
+		BloodFx.line(world, BloodFx.BLOOD_FADE, impact, impact.add(0.0, 12.0, 0.0), 2.0);
 		BloodFx.play(world, impact, BloodFx.THUNDER, 1.0F, 1.2F);
 
 		DamageSource source = player.isAlive()

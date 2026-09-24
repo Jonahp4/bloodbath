@@ -51,8 +51,9 @@ public class GravestoneItem extends AbilityWeapon {
 			}
 			if (tick % 5 == 0) {
 				double shrinking = FIELD_RADIUS * (1.0 - tick / (double) PULL_DURATION_TICKS) + 0.5;
-				BloodFx.ring(world, BloodFx.BLOOD, floor, shrinking, 20);
+				BloodFx.ring(world, BloodFx.BLOOD_FADE, floor, shrinking, 24);
 				BloodFx.burst(world, BloodFx.SPORE, center, 8, FIELD_RADIUS * 0.4);
+				BloodFx.gather(world, center.add(0.0, 0.4, 0.0), FIELD_RADIUS, 6, 12);
 			}
 			return true;
 		});
@@ -61,6 +62,7 @@ public class GravestoneItem extends AbilityWeapon {
 			BloodFx.play(world, center, BloodFx.IMPACT, 1.0F, 1.4F);
 			BloodFx.burst(world, BloodFx.SPLATTER, center, 50, 3.0, 0.25);
 			BloodFx.burst(world, BloodFx.BLOOD_LARGE, center, 30, 2.0);
+			BloodFx.spray(world, center.add(0.0, 0.3, 0.0), FIELD_RADIUS, 16, 10);
 			for (LivingEntity target : Targeting.livingInRadius(world, center, FIELD_RADIUS, caster)) {
 				Targeting.launchOutward(target, center, LAUNCH_STRENGTH, LAUNCH_VERTICAL);
 			}

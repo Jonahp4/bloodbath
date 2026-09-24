@@ -11,6 +11,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.unchartedsmp.hud.Hud;
 
 /**
  * Clotblade (Nullblade) suppression: direct on-hit debuffs and placed clot fields.
@@ -36,26 +37,31 @@ public final class NullField {
 	}
 
 	public static boolean isNullified(PlayerEntity player) {
+		return remainingTicks(player) > 0;
+	}
+
+	/** Ticks until this player's abilities work again (0 = not suppressed). */
+	public static long remainingTicks(PlayerEntity player) {
 		long now = ServerClock.now();
+		long remaining = 0;
 		Long debuffUntil = DEBUFFS.get(player.getUuid());
 		if (debuffUntil != null && now <= debuffUntil) {
-			return true;
+			remaining = debuffUntil - now + 1;
 		}
-		if (ZONES.isEmpty()) {
-			return false;
-		}
-		World world = player.getEntityWorld();
-		Vec3d pos = player.getEntityPos();
-		for (Zone zone : ZONES) {
-			if (now <= zone.expiresAt() && zone.world() == world && pos.squaredDistanceTo(zone.center()) <= zone.radiusSq()) {
-				return true;
+		if (!ZONES.isEmpty()) {
+			World world = player.getEntityWorld();
+			Vec3d pos = player.getEntityPos();
+			for (Zone zone : ZONES) {
+				if (now <= zone.expiresAt() && zone.world() == world && pos.squaredDistanceTo(zone.center()) <= zone.radiusSq()) {
+					remaining = Math.max(remaining, zone.expiresAt() - now + 1);
+				}
 			}
 		}
-		return false;
+		return remaining;
 	}
 
 	public static void notifyNullified(PlayerEntity player) {
-		player.sendMessage(Text.literal("Your blood has clotted. Abilities suppressed!").formatted(Formatting.DARK_RED), true);
+		Hud.flash(player, Text.literal("Your blood has clotted. Abilities suppressed!").formatted(Formatting.DARK_RED));
 	}
 
 	public static void prune() {

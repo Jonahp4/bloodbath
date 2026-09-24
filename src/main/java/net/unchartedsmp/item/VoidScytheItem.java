@@ -8,8 +8,10 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ToolMaterial;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -18,6 +20,7 @@ import net.unchartedsmp.ability.Ability;
 import net.unchartedsmp.ability.Cooldowns;
 import net.unchartedsmp.ability.ServerClock;
 import net.unchartedsmp.fx.BloodFx;
+import net.unchartedsmp.hud.Hud;
 import net.unchartedsmp.util.Targeting;
 
 /**
@@ -39,10 +42,12 @@ public class VoidScytheItem extends AbilityWeapon {
 	private record BleedKey(UUID attacker, UUID target) {
 	}
 
-	private record Bleed(int stacks, long expiresAt) {
+	private record Bleed(int stacks, long expiresAt, LivingEntity target) {
 	}
 
 	private static final Map<BleedKey, Bleed> BLEEDS = new HashMap<>();
+	/** Each attacker's most recent bleed target, for the status line. */
+	private static final Map<UUID, BleedKey> LAST_TARGET = new HashMap<>();
 
 	public VoidScytheItem(Settings settings) {
 		super(settings.sword(ToolMaterial.NETHERITE, 7.0F, -2.6F), Ability.VOID_SCYTHE);
@@ -59,10 +64,11 @@ public class VoidScytheItem extends AbilityWeapon {
 				BLEEDS.remove(key);
 				hemorrhage(world, player, target);
 			} else {
-				BLEEDS.put(key, new Bleed(stacks, now + STACK_TIMEOUT_TICKS));
-				BloodFx.burst(world, BloodFx.BLOOD, Targeting.chest(target), 8 + stacks * 2, 0.25);
+				BLEEDS.put(key, new Bleed(stacks, now + STACK_TIMEOUT_TICKS, target));
+				LAST_TARGET.put(player.getUuid(), key);
+				BloodFx.burst(world, BloodFx.BLOOD_FADE, Targeting.chest(target), 8 + stacks * 2, 0.25);
 				BloodFx.burst(world, BloodFx.DRIP, Targeting.chest(target), stacks, 0.25, 0.0);
-				player.sendMessage(Text.literal("Bleed: " + stacks + "/" + STACKS_TO_HEMORRHAGE).formatted(Formatting.RED), true);
+				Hud.flash(player, bleedLine(stacks));
 			}
 		}
 		super.postHit(stack, target, attacker);
@@ -73,6 +79,9 @@ public class VoidScytheItem extends AbilityWeapon {
 		Vec3d chest = Targeting.chest(target);
 		BloodFx.burst(world, BloodFx.BLOOD_LARGE, chest, 70, 1.0);
 		BloodFx.splash(world, chest, 12);
+		BloodFx.spray(world, chest, HEMORRHAGE_RADIUS, 16, 8);
+		BloodFx.ring(world, BloodFx.CLOT, center.add(0.0, 0.1, 0.0), HEMORRHAGE_RADIUS, 32);
+		Hud.flash(player, Text.literal("\u2620 HEMORRHAGE").formatted(Formatting.RED));
 		BloodFx.play(world, center, BloodFx.FANGS, 0.9F, 0.7F);
 		BloodFx.play(world, center, BloodFx.SQUELCH, 1.0F, 0.5F);
 
@@ -99,12 +108,53 @@ public class VoidScytheItem extends AbilityWeapon {
 		return ActionResult.SUCCESS;
 	}
 
+	private static MutableText bleedLine(int stacks) {
+		return Text.literal("Bleed  ").formatted(Formatting.DARK_RED)
+			.append(Text.literal("\u2B24".repeat(stacks)).formatted(Formatting.RED))
+			.append(Text.literal("\u2B24".repeat(STACKS_TO_HEMORRHAGE - stacks)).formatted(Formatting.DARK_GRAY))
+			.append(Text.literal("  " + stacks + "/" + STACKS_TO_HEMORRHAGE).formatted(Formatting.GRAY));
+	}
+
+	@Override
+	public Text hudStatus(ServerPlayerEntity player) {
+		BleedKey key = LAST_TARGET.get(player.getUuid());
+		Bleed bleed = key == null ? null : BLEEDS.get(key);
+		if (bleed != null && ServerClock.now() <= bleed.expiresAt()) {
+			return bleedLine(bleed.stacks())
+				.append(Text.literal(String.format(java.util.Locale.ROOT, "  fades in %.1fs", (bleed.expiresAt() - ServerClock.now()) / 20.0))
+					.formatted(Formatting.GRAY));
+		}
+		return Text.literal("Bleed  ").formatted(Formatting.DARK_RED)
+			.append(Text.literal("hit 5 times to hemorrhage").formatted(Formatting.GRAY));
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.SOUL;
+	}
+
+	/** Bleeding targets visibly drip, more the more stacks they carry. Called by the HUD tick. */
+	public static void drip() {
+		long now = ServerClock.now();
+		for (Bleed bleed : BLEEDS.values()) {
+			LivingEntity target = bleed.target();
+			if (now <= bleed.expiresAt() && target.isAlive() && target.getEntityWorld() instanceof ServerWorld world) {
+				BloodFx.burst(world, BloodFx.DRIP, Targeting.chest(target), bleed.stacks(), 0.25, 0.0);
+				if (bleed.stacks() >= STACKS_TO_HEMORRHAGE - 1) {
+					BloodFx.burst(world, BloodFx.BLOOD_FADE, Targeting.chest(target), 3, 0.3);
+				}
+			}
+		}
+	}
+
 	public static void prune() {
 		long now = ServerClock.now();
-		BLEEDS.values().removeIf(bleed -> bleed.expiresAt() < now);
+		BLEEDS.values().removeIf(bleed -> bleed.expiresAt() < now || !bleed.target().isAlive());
+		LAST_TARGET.values().removeIf(key -> !BLEEDS.containsKey(key));
 	}
 
 	public static void clearAll() {
 		BLEEDS.clear();
+		LAST_TARGET.clear();
 	}
 }

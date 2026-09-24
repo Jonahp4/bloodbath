@@ -10,4 +10,5 @@ public class Registries {
 	public static final DefaultedRegistry<Item> ITEM = null;
 	public static final Registry<ParticleType<?>> PARTICLE_TYPE = null;
 	public static final Registry<ItemGroup> ITEM_GROUP = null;
+	public static final Registry<net.minecraft.component.ComponentType<?>> DATA_COMPONENT_TYPE = null;
 }

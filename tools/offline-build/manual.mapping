@@ -41,3 +41,7 @@ METHOD net/minecraft/world/World spawnEntity (Lnet/minecraft/entity/Entity;)Z me
 
 # Registry key constant (verified against the original ModItems bytecode).
 FIELD net/minecraft/registry/RegistryKeys ITEM Lnet/minecraft/registry/RegistryKey; field_41197
+
+# More Formatting constants (declaration order: ... GOLD, GRAY, DARK_GRAY, BLUE ...).
+FIELD net/minecraft/util/Formatting GRAY Lnet/minecraft/util/Formatting; field_1080
+FIELD net/minecraft/util/Formatting DARK_GRAY Lnet/minecraft/util/Formatting; field_1063

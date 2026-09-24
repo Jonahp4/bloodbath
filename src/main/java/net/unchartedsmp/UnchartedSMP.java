@@ -1,12 +1,15 @@
 package net.unchartedsmp;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.unchartedsmp.ability.Cooldowns;
@@ -14,6 +17,8 @@ import net.unchartedsmp.ability.NullField;
 import net.unchartedsmp.ability.ServerClock;
 import net.unchartedsmp.ability.TickScheduler;
 import net.unchartedsmp.fx.BloodFx;
+import net.unchartedsmp.hud.Hud;
+import net.unchartedsmp.item.BloodWeapon;
 import net.unchartedsmp.item.BloodhookItem;
 import net.unchartedsmp.item.ChronosItem;
 import net.unchartedsmp.item.MeteorGauntletItem;
@@ -42,6 +47,7 @@ public final class UnchartedSMP implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> BloodFx.init());
 		ServerClock.register();
 		TickScheduler.register();
+		Hud.register();
 
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
 			if (player.getStackInHand(hand).getItem() instanceof MeteorGauntletItem) {
@@ -55,6 +61,16 @@ public final class UnchartedSMP implements ModInitializer {
 		ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> MirrorfangItem.onEntityLoad(entity));
 		ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> MirrorfangItem.onEntityUnload(entity));
 
+		// Kills with a Bloodbath weapon (melee, abilities or Paradox Bow arrows) burst and bleed
+		// into the killer.
+		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			if (source.getAttacker() instanceof ServerPlayerEntity killer
+				&& killer.getMainHandStack().getItem() instanceof BloodWeapon
+				&& entity.getEntityWorld() instanceof ServerWorld world) {
+				BloodFx.killBurst(world, entity, killer);
+			}
+		});
+
 		// Short-lived personal ability state is dropped on disconnect. Cooldowns and clot debuffs
 		// are NOT, otherwise relogging would reset them.
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -62,6 +78,7 @@ public final class UnchartedSMP implements ModInitializer {
 			RiftbladeItem.forget(playerId);
 			BloodhookItem.forget(playerId);
 			ChronosItem.forget(playerId);
+			Hud.forget(playerId);
 		});
 
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -93,5 +110,6 @@ public final class UnchartedSMP implements ModInitializer {
 		BloodhookItem.clearAll();
 		ChronosItem.clearAll();
 		VoidScytheItem.clearAll();
+		Hud.clearAll();
 	}
 }

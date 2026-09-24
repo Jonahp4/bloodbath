@@ -4,8 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -15,6 +17,7 @@ import net.unchartedsmp.ability.Cooldowns;
 import net.unchartedsmp.ability.ServerClock;
 import net.unchartedsmp.ability.TickScheduler;
 import net.unchartedsmp.fx.BloodFx;
+import net.unchartedsmp.hud.Hud;
 import net.unchartedsmp.util.Targeting;
 
 /**
@@ -53,16 +56,21 @@ public class ChronosItem extends AbilityWeapon {
 		MARKS.put(player.getUuid(), mark);
 		BloodFx.burst(world, BloodFx.BLOOD, pos.add(0.0, 1.0, 0.0), 20, 0.35);
 		BloodFx.play(world, pos, BloodFx.CLOCK_MARK, 0.8F, 1.8F);
-		player.sendMessage(Text.literal("Blood-mark set. Use again within 8s to recall.").formatted(Formatting.RED), true);
+		Hud.flash(player, Text.literal("Blood-mark set. Use again within 8s to recall.").formatted(Formatting.RED));
 
 		// A slow pulse over the mark, like a clock hand dripping.
 		Vec3d floor = pos.add(0.0, 0.1, 0.0);
-		TickScheduler.repeat(20, 20, MARK_WINDOW_TICKS / 20, tick -> {
+		TickScheduler.repeat(10, 10, MARK_WINDOW_TICKS / 10, tick -> {
 			if (MARKS.get(player.getUuid()) != mark) {
 				return false;
 			}
-			BloodFx.ring(world, BloodFx.BLOOD, floor, 0.6, 12);
-			BloodFx.play(world, pos, BloodFx.HEARTBEAT, 0.4F, 1.4F);
+			// A clock of blood on the ground: the ring drains as the window runs out.
+			double fraction = 1.0 - (tick + 1) / (double) (MARK_WINDOW_TICKS / 10);
+			BloodFx.ring(world, BloodFx.BLOOD_FADE, floor, 0.7, Math.max(3, (int) Math.round(16 * fraction)));
+			BloodFx.line(world, BloodFx.BLOOD, floor, floor.add(0.0, 2.2, 0.0), 3.0);
+			if (tick % 2 == 1) {
+				BloodFx.play(world, pos, BloodFx.CLOCK_TICK, 0.5F, 0.8F + tick * 0.05F);
+			}
 			return true;
 		});
 	}
@@ -72,14 +80,32 @@ public class ChronosItem extends AbilityWeapon {
 		// Someone may have built over the mark since - don't clip the player into blocks.
 		if (!Targeting.fitsAt(world, player, target)) {
 			BloodFx.splash(world, target.add(0.0, 1.0, 0.0), 4);
-			player.sendMessage(Text.literal("Your blood-mark was sealed in stone.").formatted(Formatting.DARK_RED), true);
+			Hud.flash(player, Text.literal("Your blood-mark was sealed in stone.").formatted(Formatting.DARK_RED));
 			return;
 		}
-		BloodFx.burst(world, BloodFx.BLOOD_LARGE, Targeting.chest(player), 30, 0.5);
+		Vec3d departure = Targeting.chest(player);
+		BloodFx.burst(world, BloodFx.BLOOD_LARGE, departure, 30, 0.5);
+		BloodFx.flow(world, departure, target.add(0.0, 1.0, 0.0), 10, 0.4, BloodFx.BRIGHT_RED, 10);
 		player.teleport(world, target.x, target.y, target.z, Set.of(), mark.yaw(), mark.pitch(), false);
 		BloodFx.burst(world, BloodFx.BLOOD_LARGE, target.add(0.0, 1.0, 0.0), 30, 0.5);
 		BloodFx.play(world, target, BloodFx.CLOCK_RECALL, 1.0F, 1.5F);
 		Cooldowns.start(player, Ability.CHRONOS);
+	}
+
+	@Override
+	public Text hudStatus(ServerPlayerEntity player) {
+		Mark mark = MARKS.get(player.getUuid());
+		long left = mark == null ? 0 : mark.expiresAt() - ServerClock.now();
+		if (mark != null && left > 0 && mark.world() == player.getEntityWorld()) {
+			MutableText line = Hud.timer("\u29D6 Blood-mark", left);
+			return line.append(Text.literal("  use again to recall").formatted(Formatting.GRAY));
+		}
+		return Hud.cooldownBar(player, ability);
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.BLOOD_FADE;
 	}
 
 	public static void forget(UUID playerId) {

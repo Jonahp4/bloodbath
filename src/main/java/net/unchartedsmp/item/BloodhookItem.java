@@ -4,8 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.particle.ParticleEffect;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -15,6 +17,7 @@ import net.unchartedsmp.ability.Cooldowns;
 import net.unchartedsmp.ability.ServerClock;
 import net.unchartedsmp.ability.TickScheduler;
 import net.unchartedsmp.fx.BloodFx;
+import net.unchartedsmp.hud.Hud;
 import net.unchartedsmp.util.Targeting;
 
 /**
@@ -48,7 +51,8 @@ public class BloodhookItem extends AbilityWeapon {
 		ServerPlayerEntity target = findTarget(world, player, currentRange(player));
 		if (target == null) {
 			BloodFx.play(world, player, BloodFx.WET_SLIDE, 0.8F, 1.4F);
-			BloodFx.line(world, BloodFx.BLOOD, player.getEyePos(), Targeting.lookTarget(world, player, BASE_RANGE), 1.5);
+			BloodFx.flow(world, player.getEyePos(), Targeting.lookTarget(world, player, currentRange(player)), 4, 0.05, BloodFx.BLOOD_RED, 6);
+			Hud.flash(player, Text.literal("The hook found no blood.").formatted(Formatting.GRAY));
 			return ActionResult.SUCCESS;
 		}
 		registerHit(player, target);
@@ -73,7 +77,7 @@ public class BloodhookItem extends AbilityWeapon {
 			: 1;
 		STREAKS.put(player.getUuid(), new HookStreak(target.getUuid(), stacks, now + STREAK_TIMEOUT_TICKS));
 		if (stacks > 1) {
-			player.sendMessage(Text.literal("Bloodhook range: " + Math.round(rangeFor(stacks)) + " blocks").formatted(Formatting.RED), true);
+			Hud.flash(player, Text.literal("Bloodhook range: " + Math.round(rangeFor(stacks)) + " blocks").formatted(Formatting.RED));
 		}
 	}
 
@@ -108,7 +112,10 @@ public class BloodhookItem extends AbilityWeapon {
 			if (!Targeting.stillIn(player, world) || !Targeting.stillIn(target, world)) {
 				return false;
 			}
-			BloodFx.line(world, BloodFx.BLOOD, player.getEyePos(), Targeting.chest(target), 2.0);
+			BloodFx.line(world, BloodFx.BLOOD_FADE, player.getEyePos(), Targeting.chest(target), 2.0);
+			if (tick % 2 == 0) {
+				BloodFx.flow(world, Targeting.chest(target), player.getEyePos(), 3, 0.2, BloodFx.BRIGHT_RED, 6);
+			}
 			return true;
 		});
 		TickScheduler.schedule(CHAIN_TICKS, () -> {
@@ -123,6 +130,21 @@ public class BloodhookItem extends AbilityWeapon {
 			BloodFx.play(world, target, BloodFx.SQUELCH, 0.8F, 0.7F);
 			BloodFx.splash(world, Targeting.chest(target), 6);
 		});
+	}
+
+	@Override
+	public Text hudStatus(ServerPlayerEntity player) {
+		MutableText line = Hud.cooldownBar(player, ability);
+		HookStreak streak = STREAKS.get(player.getUuid());
+		if (streak != null && ServerClock.now() <= streak.expiresAt() && streak.stacks() > 0) {
+			line.append(Text.literal("  range " + Math.round(rangeFor(streak.stacks())) + "m").formatted(Formatting.RED));
+		}
+		return line;
+	}
+
+	@Override
+	public ParticleEffect auraAccent() {
+		return BloodFx.BLOOD_FADE;
 	}
 
 	public static void forget(UUID playerId) {

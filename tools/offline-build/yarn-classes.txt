@@ -53,3 +53,12 @@ world/CollisionView
 world/EntityView
 world/RaycastContext
 world/World
+component/ComponentType
+component/type/LoreComponent
+item/BowItem
+item/RangedWeaponItem
+particle/DustColorTransitionParticleEffect
+particle/TrailParticleEffect
+server/PlayerManager
+util/math/random/Random
+world/WorldAccess
