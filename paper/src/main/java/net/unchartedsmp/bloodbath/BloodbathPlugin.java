@@ -78,6 +78,7 @@ public class BloodbathPlugin extends JavaPlugin {
 			ticker = null;
 		}
 		Behaviors.shutdown(); // removes live blood mirrors before the worlds save
+		BloodKnightSet.shutdown(); // nobody keeps a red screen
 		TickScheduler.clearAll();
 		Cooldowns.clearAll();
 		NullField.clearAll();

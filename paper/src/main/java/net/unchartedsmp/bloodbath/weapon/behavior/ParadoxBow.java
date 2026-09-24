@@ -24,27 +24,57 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.AbstractArrow;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
 /**
  * Sanguine Paradox Bow: a real bow (the client animates the draw, it shoots your arrows and takes
- * bow enchantments). A <b>fully drawn</b> shot also leaves a Paradox Echo: 3s later the shot's echo
- * tears back along the same path to where you stood, dealing 7 damage to everything it passes
- * through, once per target.
+ * bow enchantments). A <b>fully drawn</b> shot, when the echo is ready, is fired twice: once now,
+ * and once more from the past.
+ * <ul>
+ *   <li>A blood rift opens where you shot from (above your head, out of your way).</li>
+ *   <li>If the arrow hits a creature, it's <b>marked</b>. When the echo comes due (1.5s) a phantom
+ *       arrow tears out of the rift and homes into it wherever it has run, piercing anything
+ *       in between.</li>
+ *   <li>If the arrow hits nothing living, the echo retraces the arrow's real flight path back to
+ *       the rift instead, cutting everything along it: a trap for whoever walks into the line.</li>
+ * </ul>
+ * Every creature takes the echo's damage once.
  *
- * <p>While drawing, blood visibly gathers into the nocked arrow; at full draw there's a click and,
- * if the echo is off cooldown, a heartbeat and a glow to show it's primed. Arrows from the bow
- * leave a blood trail.
+ * <p>Nothing here spawns in front of the shooter's own camera: the draw effects and the first
+ * ticks of the arrow's trail are for everyone else, the shooter gets sounds and the HUD.
  */
 public final class ParadoxBow implements WeaponBehavior {
 	private static final int FULL_DRAW_TICKS = 20;
-	private static final int ECHO_STEPS = 16;
+	private static final int TRAIL_MAX_TICKS = 80;
+	private static final int PATH_MAX_POINTS = 100;
+	/** The shooter doesn't see their own trail for this long: it would start at their eyes. */
+	private static final int TRAIL_SELF_HIDDEN_TICKS = 3;
+	private static final int RETRACE_TICKS = 12;
+	private static final int PHANTOM_TICKS = 6;
 	private static final double HIT_SIZE = 1.3;
-	private static final int TRAIL_MAX_TICKS = 60;
+	private static final double RIFT_ABOVE_EYES = 1.2;
 
-	private record Trail(AbstractArrow arrow, long until) {
+	/** An arrow from the bow in flight; paradox arrows also carry their echo. */
+	private record Flight(AbstractArrow arrow, Player shooter, long firedAt, Echo echo) {
+	}
+
+	/** A pending echo: the rift, the arrow's recorded path, and whatever the arrow marked. */
+	private static final class Echo {
+		final Player shooter;
+		final Location rift;
+		final long due;
+		final List<Location> path = new ArrayList<>();
+		LivingEntity marked;
+
+		Echo(Player shooter, Location rift, long due) {
+			this.shooter = shooter;
+			this.rift = rift;
+			this.due = due;
+		}
 	}
 
 	private record Draw(Player player, long clickedAt) {
@@ -52,7 +82,9 @@ public final class ParadoxBow implements WeaponBehavior {
 
 	/** Players drawing this bow, from their right-click until the arrow leaves (or they stop). */
 	private final Map<UUID, Draw> drawing = new HashMap<>();
-	private final List<Trail> trails = new ArrayList<>();
+	private final Map<UUID, Flight> flights = new HashMap<>();
+	/** Each shooter's pending echo, for the HUD. */
+	private final Map<UUID, Echo> pending = new HashMap<>();
 
 	@Override
 	public WeaponType type() {
@@ -81,40 +113,59 @@ public final class ParadoxBow implements WeaponBehavior {
 				drawEffects(player, player.getActiveItemUsedTime());
 			}
 		}
-		if (!trails.isEmpty()) {
-			Iterator<Trail> it = trails.iterator();
+		if (!flights.isEmpty()) {
+			Iterator<Flight> it = flights.values().iterator();
 			while (it.hasNext()) {
-				Trail trail = it.next();
-				AbstractArrow arrow = trail.arrow();
-				if (!arrow.isValid() || arrow.isInBlock() || now > trail.until()) {
+				Flight flight = it.next();
+				AbstractArrow arrow = flight.arrow();
+				boolean landed = !arrow.isValid() || arrow.isInBlock();
+				Echo echo = flight.echo();
+				if (echo != null && echo.path.size() < PATH_MAX_POINTS && arrow.getWorld() == echo.rift.getWorld()) {
+					echo.path.add(arrow.getLocation());
+				}
+				if (landed || now > flight.firedAt() + TRAIL_MAX_TICKS) {
 					it.remove();
 					continue;
 				}
-				Location at = arrow.getLocation();
-				BloodFx.burst(at, BloodFx.BLOOD_FADE, 2, 0.02, 0.0);
-				if (now % 3 == 0) {
-					BloodFx.burst(at, BloodFx.DRIP, 1, 0.02, 0.0);
-				}
+				trail(flight, now);
+			}
+		}
+		if (!pending.isEmpty() && now % 4 == 0) {
+			for (Echo echo : pending.values()) {
+				riftEffects(echo, now);
 			}
 		}
 	}
 
+	private static void trail(Flight flight, long now) {
+		Location at = flight.arrow().getLocation();
+		BloodFx.Fx fx = flight.echo() != null ? BloodFx.BLOOD_FADE : BloodFx.MOTE;
+		if (now - flight.firedAt() < TRAIL_SELF_HIDDEN_TICKS) {
+			BloodFx.burstForOthers(flight.shooter(), at, fx, 2, 0.02);
+			return;
+		}
+		BloodFx.burst(at, fx, flight.echo() != null ? 2 : 1, 0.02, 0.0);
+		if (now % 3 == 0) {
+			BloodFx.burst(at, BloodFx.DRIP, 1, 0.02, 0.0);
+		}
+	}
+
+	/** Blood gathering into the nocked arrow; everyone else sees it, the shooter hears it. */
 	private void drawEffects(Player player, int drawn) {
 		Location nock = nockPos(player);
 		boolean primed = echoAvailable(player);
 		if (drawn < FULL_DRAW_TICKS) {
 			if (drawn % 3 == 0) {
-				BloodFx.gather(nock, 1.8 - drawn * 0.06, 3, 6);
+				BloodFx.burstForOthers(player, nock, BloodFx.MOTE, 3, 0.35 - drawn * 0.012);
 			}
 		} else if (drawn == FULL_DRAW_TICKS) {
 			BloodFx.play(player, BloodFx.BOW_DRAWN, 0.8F, primed ? 0.6F : 1.3F);
 			if (primed) {
 				BloodFx.play(player, BloodFx.HEARTBEAT, 0.7F, 1.4F);
-				BloodFx.burst(nock, BloodFx.BLOOD_FADE, 14, 0.2);
+				BloodFx.burstForOthers(player, nock, BloodFx.BLOOD_FADE, 10, 0.2);
 			}
 		} else if (primed && drawn % 5 == 0) {
-			BloodFx.burst(nock, BloodFx.BLOOD, 3, 0.1);
-			BloodFx.burst(nock, BloodFx.DRIP, 1, 0.1, 0.0);
+			BloodFx.burstForOthers(player, nock, BloodFx.BLOOD, 2, 0.1);
 		}
 	}
 
@@ -123,7 +174,7 @@ public final class ParadoxBow implements WeaponBehavior {
 	}
 
 	private boolean echoAvailable(Player player) {
-		return Cooldowns.isReady(player, ability()) && !NullField.isNullified(player);
+		return Cooldowns.isReady(player, ability()) && !NullField.isNullified(player) && !pending.containsKey(player.getUniqueId());
 	}
 
 	private static Location nockPos(Player player) {
@@ -137,75 +188,177 @@ public final class ParadoxBow implements WeaponBehavior {
 		return Math.min(1.0F, (t * t + t * 2.0F) / 3.0F);
 	}
 
-	/** Any arrow shot from the bow. */
-	public void arrowShot(AbstractArrow arrow) {
-		trails.add(new Trail(arrow, ServerClock.now() + TRAIL_MAX_TICKS));
+	/**
+	 * Any arrow shot from the bow. {@code fullDraw}: vanilla crits it and the caller has checked
+	 * permission, world and that the bow is enabled; the echo goes with it if it's ready.
+	 */
+	public void shot(Player player, AbstractArrow arrow, boolean fullDraw) {
+		drawing.remove(player.getUniqueId());
+		Echo echo = fullDraw ? release(player) : null;
+		flights.put(arrow.getUniqueId(), new Flight(arrow, player, ServerClock.now(), echo));
 	}
 
-	/**
-	 * A fully drawn shot (the caller checked permission, world and that it's enabled): releases
-	 * the echo if it's off cooldown and the shooter isn't clotted.
-	 */
-	public void fullDrawShot(Player player) {
-		drawing.remove(player.getUniqueId());
+	private Echo release(Player player) {
 		if (NullField.isNullified(player)) {
 			NullField.notifyNullified(player);
-			return;
+			return null;
 		}
-		if (!Cooldowns.isReady(player, ability())) {
-			return; // a normal shot: the bow is still a bow while the echo recharges
+		if (!Cooldowns.isReady(player, ability()) || pending.containsKey(player.getUniqueId())) {
+			return null; // a normal shot: the bow is still a bow while the echo recharges
 		}
 		Cooldowns.start(player, ability());
-		releaseEcho(player);
+		int delay = Math.max(10, ticksSetting("echo-delay", 30));
+		Location rift = player.getEyeLocation().add(0.0, RIFT_ABOVE_EYES, 0.0);
+		Echo echo = new Echo(player, rift, ServerClock.now() + delay);
+		pending.put(player.getUniqueId(), echo);
+		BloodFx.play(player, BloodFx.BOW_RELEASE, 1.0F, 0.6F);
+		BloodFx.play(rift, BloodFx.RIFT_OPEN, 0.6F, 1.6F);
+		BloodFx.burst(rift, BloodFx.BLOOD_FADE, 16, 0.3);
+		BloodFx.ring(rift, BloodFx.BLOOD_FADE, 0.7, 14);
+		TickScheduler.schedule(delay, () -> fire(echo));
+		return echo;
 	}
 
-	private void releaseEcho(Player player) {
-		double damage = setting("damage", 7.0);
-		int delay = Math.max(10, ticksSetting("delay", 60));
-		World world = player.getWorld();
-		Location start = player.getEyeLocation();
-		Location finish = Targeting.lookTarget(player, setting("range", 24.0));
-		BloodFx.flow(start, finish, 6, 0.05, BloodFx.BRIGHT_RED, 10);
-		BloodFx.burst(finish, BloodFx.BLOOD_LARGE, 15, 0.25);
-		BloodFx.play(player, BloodFx.BOW_RELEASE, 1.0F, 0.6F);
-		Hud.flash(player, Component.text("⧖ Paradox Echo returns in " + Math.round(delay / 20.0) + "s", NamedTextColor.RED));
+	/** A Paradox Bow arrow hit something: a paradox arrow marks the first creature it hits. */
+	public void arrowHit(AbstractArrow arrow, Entity hit) {
+		Flight flight = flights.get(arrow.getUniqueId());
+		if (flight == null || flight.echo() == null || flight.echo().marked != null || !(hit instanceof LivingEntity target)
+			|| !Targeting.validTarget(flight.shooter(), target)) {
+			return;
+		}
+		Echo echo = flight.echo();
+		echo.marked = target;
+		Location chest = BloodFx.chest(target);
+		BloodFx.ring(target.getLocation().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, 0.9, 16);
+		BloodFx.burst(chest, BloodFx.GLYPH, 12, 0.4);
+		BloodFx.play(echo.shooter, BloodFx.MARKED, 0.9F, 1.4F);
+		Hud.flash(echo.shooter, Component.text("✦ Marked: the echo will find it", NamedTextColor.RED));
+	}
 
-		// Countdown at the arrow's resting point: a shrinking ring and a tick each second.
-		int pulses = delay / 10 - 1;
-		TickScheduler.repeat(10, 10, pulses, tick -> {
-			double radius = 1.2 * (1.0 - tick / (double) Math.max(1, pulses));
-			BloodFx.ring(finish, BloodFx.BLOOD_FADE, Math.max(0.2, radius), 12);
-			BloodFx.burst(finish, BloodFx.DRIP, 2, 0.15, 0.0);
-			if (tick % 2 == 1) {
-				BloodFx.play(finish, BloodFx.CLOCK_TICK, 0.8F, 0.6F + tick * 0.1F);
+	private void riftEffects(Echo echo, long now) {
+		long left = echo.due - now;
+		double radius = 0.25 + 0.45 * Math.max(0.0, Math.min(1.0, left / 30.0));
+		BloodFx.ring(echo.rift, BloodFx.BLOOD_FADE, radius, 10);
+		BloodFx.burst(echo.rift, BloodFx.DRIP, 1, 0.15, 0.0);
+		if (now % 8 == 0) {
+			BloodFx.play(echo.rift, BloodFx.CLOCK_TICK, 0.7F, 0.9F + (float) Math.max(0, 30 - left) * 0.02F);
+		}
+		if (markedAndValid(echo)) {
+			BloodFx.ring(echo.marked.getLocation().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, 0.6 + 0.2 * Math.sin(now * 0.5), 10);
+		}
+	}
+
+	private boolean markedAndValid(Echo echo) {
+		LivingEntity target = echo.marked;
+		return target != null && target.isValid() && !target.isDead() && target.getWorld() == echo.rift.getWorld()
+			&& target.getLocation().distanceSquared(echo.rift) <= square(setting("range", 40.0));
+	}
+
+	private void fire(Echo echo) {
+		pending.remove(echo.shooter.getUniqueId(), echo);
+		if (!echo.shooter.isOnline()) {
+			return;
+		}
+		BloodFx.play(echo.rift, BloodFx.BOW_ECHO, 0.5F, 1.6F);
+		BloodFx.burst(echo.rift, BloodFx.BLOOD_FADE, 20, 0.35);
+		Set<UUID> hit = new HashSet<>();
+		if (markedAndValid(echo)) {
+			phantom(echo, hit);
+		} else {
+			retrace(echo, hit);
+		}
+	}
+
+	/** A phantom arrow tears out of the rift and homes into the marked creature. */
+	private void phantom(Echo echo, Set<UUID> hit) {
+		double damage = setting("damage", 7.0);
+		Location[] head = {echo.rift.clone()};
+		TickScheduler.repeat(1, 1, PHANTOM_TICKS, step -> {
+			LivingEntity target = echo.marked;
+			if (!target.isValid() || target.getWorld() != head[0].getWorld()) {
+				return false;
+			}
+			Location aim = BloodFx.chest(target);
+			// Close the remaining distance evenly over the ticks left: it always arrives.
+			double t = 1.0 / (PHANTOM_TICKS - step);
+			Location next = head[0].clone().add(aim.toVector().subtract(head[0].toVector()).multiply(t));
+			BloodFx.line(head[0], next, BloodFx.BLOOD, 3.0);
+			BloodFx.burst(next, BloodFx.BLOOD_FADE, 3, 0.08);
+			cut(echo, head[0], next, damage, hit);
+			head[0] = next;
+			if (step == PHANTOM_TICKS - 1) {
+				if (hit.add(target.getUniqueId()) && Targeting.validTarget(echo.shooter, target)) {
+					Damage.deal(target, damage, echo.shooter, type(), next);
+				}
+				BloodFx.splash(aim, 6);
+				BloodFx.play(aim, BloodFx.ECHO_HIT, 1.0F, 0.7F);
 			}
 			return true;
 		});
+	}
 
-		TickScheduler.schedule(delay, () -> {
-			BloodFx.play(finish, BloodFx.BOW_ECHO, 0.6F, 1.5F);
-			BloodFx.flow(finish, start, 10, 0.1, BloodFx.BRIGHT_RED, ECHO_STEPS);
-			Set<UUID> alreadyHit = new HashSet<>();
-			TickScheduler.repeat(0, 1, ECHO_STEPS, step -> {
-				double t = step / (double) (ECHO_STEPS - 1);
-				Location p = finish.clone().add(start.clone().subtract(finish).toVector().multiply(t));
-				BloodFx.burst(p, BloodFx.BLOOD_FADE, 4, 0.1);
-				BloodFx.burst(p, BloodFx.SPLATTER, 1, 0.05, 0.1);
-				BoundingBox box = BoundingBox.of(p, HIT_SIZE / 2, HIT_SIZE / 2, HIT_SIZE / 2);
-				for (var entity : world.getNearbyEntities(box, e -> e instanceof LivingEntity && e != player)) {
-					LivingEntity target = (LivingEntity) entity;
-					if (Targeting.validTarget(player, target) && alreadyHit.add(target.getUniqueId())) {
-						Damage.deal(target, damage, player, type(), p);
-						BloodFx.splash(BloodFx.chest(target), 5);
-					}
-				}
-				return true;
-			});
+	/** The echo runs the arrow's flight backwards, from where it landed to the rift. */
+	private void retrace(Echo echo, Set<UUID> hit) {
+		List<Location> path = new ArrayList<>(echo.path);
+		if (path.isEmpty()) {
+			return;
+		}
+		path.add(0, echo.rift);
+		double damage = setting("damage", 7.0);
+		int segments = path.size() - 1;
+		BloodFx.flow(path.get(segments), echo.rift, 8, 0.1, BloodFx.BRIGHT_RED, RETRACE_TICKS);
+		TickScheduler.repeat(0, 1, RETRACE_TICKS, step -> {
+			// Walk back from the landing point; each tick covers an equal share of the path.
+			int from = segments - (int) Math.floor(step * segments / (double) RETRACE_TICKS);
+			int to = segments - (int) Math.floor((step + 1) * segments / (double) RETRACE_TICKS);
+			for (int i = from; i > to; i--) {
+				Location a = path.get(i);
+				Location b = path.get(i - 1);
+				BloodFx.burst(a, BloodFx.BLOOD_FADE, 3, 0.1);
+				BloodFx.burst(a, BloodFx.SPLATTER, 1, 0.05, 0.1);
+				cut(echo, a, b, damage, hit);
+			}
+			return true;
 		});
+	}
+
+	/** Damages every valid creature along a to b once (sampled every half block). */
+	private void cut(Echo echo, Location a, Location b, double damage, Set<UUID> hit) {
+		World world = a.getWorld();
+		if (world != b.getWorld()) {
+			return;
+		}
+		Vector step = b.toVector().subtract(a.toVector());
+		int samples = Math.max(1, (int) Math.ceil(step.length() * 2.0));
+		for (int i = 0; i <= samples; i++) {
+			Location p = a.clone().add(step.clone().multiply(i / (double) samples));
+			BoundingBox box = BoundingBox.of(p, HIT_SIZE / 2, HIT_SIZE / 2, HIT_SIZE / 2);
+			for (Entity entity : world.getNearbyEntities(box, e -> e instanceof LivingEntity && e != echo.shooter)) {
+				LivingEntity target = (LivingEntity) entity;
+				if (target != echo.marked && Targeting.validTarget(echo.shooter, target) && hit.add(target.getUniqueId())) {
+					Damage.deal(target, damage, echo.shooter, type(), p);
+					BloodFx.splash(BloodFx.chest(target), 4);
+				}
+			}
+		}
+	}
+
+	private static double square(double value) {
+		return value * value;
 	}
 
 	@Override
 	public Component hud(Player player) {
+		Echo echo = pending.get(player.getUniqueId());
+		if (echo != null) {
+			long left = Math.max(0, echo.due - ServerClock.now());
+			int delay = Math.max(10, ticksSetting("echo-delay", 30));
+			Component line = Component.text("⧖ Echo  ", NamedTextColor.DARK_RED).append(Hud.bar(1.0F - left / (float) delay))
+				.append(Component.text(Hud.seconds(left), NamedTextColor.GRAY));
+			return line.append(echo.marked != null
+				? Component.text("  ✦ locked on", NamedTextColor.RED)
+				: Component.text("  ⟲ retrace", NamedTextColor.GRAY));
+		}
 		if (drawing.containsKey(player.getUniqueId()) && isDrawing(player)) {
 			float pull = pull(player.getActiveItemUsedTime());
 			Component line = Component.text("Draw  ", NamedTextColor.DARK_RED).append(Hud.bar(pull));
@@ -235,6 +388,7 @@ public final class ParadoxBow implements WeaponBehavior {
 	@Override
 	public void shutdown() {
 		drawing.clear();
-		trails.clear();
+		flights.clear();
+		pending.clear();
 	}
 }

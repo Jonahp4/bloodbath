@@ -13,6 +13,7 @@ import net.unchartedsmp.bloodbath.ability.Ability;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
+import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -44,6 +45,8 @@ public final class Hud {
 	private static final Map<UUID, Long> FLASH_UNTIL = new HashMap<>();
 	/** Players who turned the status line off with /bloodbath hud (mirrors their persistent flag). */
 	private static final Set<UUID> HIDDEN = new HashSet<>();
+	/** Players whose action bar currently shows a status line (cleared when they put the weapon away). */
+	private static final Set<UUID> SHOWING = new HashSet<>();
 
 	private Hud() {
 	}
@@ -79,16 +82,30 @@ public final class Hud {
 				type = Weapons.typeOf(inventory.getItemInOffHand());
 				offhand = true;
 			}
+			boolean canShow = settings.hudEnabled && !HIDDEN.contains(player.getUniqueId())
+				&& now >= FLASH_UNTIL.getOrDefault(player.getUniqueId(), 0L);
 			if (type == null) {
+				// With the full Blood Knight set on, a raging or recharging Blood Rage still shows.
+				Component rage = canShow ? BloodKnightSet.hud(player, false) : null;
+				if (rage != null) {
+					player.sendActionBar(rage);
+					SHOWING.add(player.getUniqueId());
+				} else if (SHOWING.remove(player.getUniqueId()) && canShow) {
+					// The action bar lingers for ~3s on its own: without this, switching to a plain
+					// bow kept showing the Paradox Bow's status.
+					player.sendActionBar(Component.empty());
+				}
 				continue;
 			}
 			WeaponBehavior behavior = Behaviors.of(type);
 			if (settings.heldAura) {
 				aura(player, behavior, offhand, now);
 			}
-			if (settings.hudEnabled && !HIDDEN.contains(player.getUniqueId())
-				&& now >= FLASH_UNTIL.getOrDefault(player.getUniqueId(), 0L)) {
-				player.sendActionBar(clotted > 0 && behavior.canBeNullified() ? clottedStatus(clotted) : behavior.hud(player));
+			if (canShow) {
+				Component line = clotted > 0 && behavior.canBeNullified() ? clottedStatus(clotted) : behavior.hud(player);
+				Component rage = BloodKnightSet.hud(player, true);
+				player.sendActionBar(rage == null ? line : line.append(Component.text("    ")).append(rage));
+				SHOWING.add(player.getUniqueId());
 			}
 		}
 	}
@@ -97,19 +114,19 @@ public final class Hud {
 		Location chest = player.getLocation().add(0.0, 1.0, 0.0);
 		BloodFx.play(player, BloodFx.READY, 0.5F, 0.7F);
 		BloodFx.ring(chest, BloodFx.BLOOD_FADE, 0.9, 14);
-		BloodFx.gather(handPos(player, false), 1.2, 4, 8);
 		flash(player, Component.text("✦ " + ability.displayName() + " ready", NamedTextColor.RED));
 	}
 
 	/** Blood slowly dripping off whatever Bloodbath weapon is in hand. */
 	private static void aura(Player player, WeaponBehavior behavior, boolean offhand, long now) {
+		// Everyone else sees it; the holder would have it right in front of the camera.
 		Location hand = handPos(player, offhand);
-		BloodFx.ambient(hand, BloodFx.DRIP, 1, 0.08);
+		BloodFx.ambientForOthers(player, hand, BloodFx.DRIP, 1, 0.08);
 		if ((now / INTERVAL_TICKS) % 3 == 0) {
-			BloodFx.ambient(hand.clone().add(0.0, 0.2, 0.0), behavior.auraAccent(), 1, 0.15);
+			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.2, 0.0), behavior.auraAccent(), 1, 0.15);
 		}
 		if ((now / INTERVAL_TICKS) % 5 == 0 && Cooldowns.isReady(player, behavior.ability())) {
-			BloodFx.ambient(hand.clone().add(0.0, 0.3, 0.0), BloodFx.BLOOD_FADE, 2, 0.2);
+			BloodFx.ambientForOthers(player, hand.clone().add(0.0, 0.3, 0.0), BloodFx.BLOOD_FADE, 2, 0.2);
 		}
 	}
 
@@ -188,10 +205,12 @@ public final class Hud {
 	public static void forget(UUID playerId) {
 		FLASH_UNTIL.remove(playerId);
 		HIDDEN.remove(playerId);
+		SHOWING.remove(playerId);
 	}
 
 	public static void clearAll() {
 		FLASH_UNTIL.clear();
 		HIDDEN.clear();
+		SHOWING.clear();
 	}
 }

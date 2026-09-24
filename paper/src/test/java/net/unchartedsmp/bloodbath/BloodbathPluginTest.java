@@ -64,6 +64,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
@@ -639,25 +640,81 @@ class BloodbathPluginTest {
 		assertFalse(mirror.isValid());
 	}
 
+	private Arrow shoot(ItemStack bow, boolean fullDraw) {
+		Arrow arrow = new TestArrow(server, player.getEyeLocation());
+		arrow.setCritical(fullDraw);
+		server.getPluginManager().callEvent(new EntityShootBowEvent(player, bow, new ItemStack(Material.ARROW), arrow,
+			EquipmentSlot.HAND, fullDraw ? 1.0F : 0.5F, true));
+		return arrow;
+	}
+
 	@Test
-	void paradoxBowEchoesFullyDrawnShots() {
+	void paradoxEchoRetracesTheArrowsRealFlight() {
 		TestZombie near = zombie(5.5, 0.5);
 		TestZombie far = zombie(10.5, 0.5);
+		TestZombie aside = zombie(5.5, 4.5);
 		ItemStack bow = hold(player, WeaponType.PARADOX_BOW);
-		Arrow weak = new TestArrow(server, player.getEyeLocation());
-		server.getPluginManager().callEvent(new EntityShootBowEvent(player, bow, new ItemStack(Material.ARROW), weak, EquipmentSlot.HAND, 0.5F, true));
+		Arrow weak = shoot(bow, false);
 		assertTrue(Cooldowns.isReady(player, Ability.PARADOX_BOW), "a half-drawn shot is just an arrow");
 		assertEquals(WeaponType.PARADOX_BOW.id(), weak.getPersistentDataContainer().get(Keys.WEAPON, PersistentDataType.STRING));
+		weak.remove();
 
-		Arrow full = new TestArrow(server, player.getEyeLocation());
-		full.setCritical(true);
-		server.getPluginManager().callEvent(new EntityShootBowEvent(player, bow, new ItemStack(Material.ARROW), full, EquipmentSlot.HAND, 1.0F, true));
+		stand(player, 0.5, 0.5, 0.0F, 0.0F); // looking south, away from the zombies: the echo follows the arrow, not the aim
+		Arrow full = shoot(bow, true);
 		assertFalse(Cooldowns.isReady(player, Ability.PARADOX_BOW));
-		ticks(50);
-		assertEquals(20.0, near.getHealth(), 1.0E-9, "the echo waits 3s");
-		ticks(30);
+		for (int i = 1; i <= 5; i++) {
+			ticks(1);
+			full.teleport(new Location(world, 0.5 + i * 2.5, 6.6, 0.5));
+		}
+		ticks(1);
+		full.remove(); // landed
+		ticks(20);
+		assertEquals(20.0, near.getHealth(), 1.0E-9, "the echo takes 1.5s to come back");
+		ticks(20);
 		assertEquals(13.0, near.getHealth(), 1.0E-9);
 		assertEquals(13.0, far.getHealth(), 1.0E-9, "hit once each along the path");
+		assertEquals(20.0, aside.getHealth(), 1.0E-9, "only the path");
+		assertEquals(20.0, player.getHealth(), 1.0E-9);
+	}
+
+	@Test
+	void paradoxEchoHomesIntoWhatTheArrowMarked() {
+		TestZombie runner = zombie(6.5, 0.5);
+		ItemStack bow = hold(player, WeaponType.PARADOX_BOW);
+		Arrow full = shoot(bow, true);
+		ticks(2);
+		full.teleport(new Location(world, 6.2, 6.6, 0.5));
+		server.getPluginManager().callEvent(new ProjectileHitEvent(full, runner, null, null));
+		assertTrue(any(actionBars(player), "Marked"));
+		full.remove();
+		runner.teleport(new Location(world, -6.5, 5.0, 7.5)); // it runs behind the shooter
+		ticks(25);
+		assertEquals(20.0, runner.getHealth(), 1.0E-9);
+		ticks(15);
+		assertEquals(13.0, runner.getHealth(), 1.0E-9, "the phantom arrow found it");
+
+		// The next full draw is a plain shot until the echo is off cooldown.
+		Arrow again = shoot(bow, true);
+		server.getPluginManager().callEvent(new ProjectileHitEvent(again, runner, null, null));
+		ticks(60);
+		assertEquals(13.0, runner.getHealth(), 1.0E-9);
+	}
+
+	@Test
+	void yourOwnWeaponsAuraStaysOutOfYourFace() {
+		TestPlayer alex = server.addTestPlayer("Alex");
+		stand(alex, 3.5, 0.5, 90.0F, 0.0F);
+		hold(player, WeaponType.RIFTBLADE);
+		world.spawns.clear();
+		ticks(60);
+		Location eyes = player.getEyeLocation();
+		List<TestWorld.Spawn> close = world.spawns.stream().filter(s -> s.at().distance(eyes) < 1.6).toList();
+		assertFalse(close.isEmpty(), "the aura is there");
+		for (TestWorld.Spawn spawn : close) {
+			assertNotNull(spawn.receivers(), spawn.particle() + " went to everyone, the holder included");
+			assertFalse(spawn.receivers().contains(player), spawn.particle() + " in the holder's face");
+			assertTrue(spawn.receivers().contains(alex), "others see it");
+		}
 	}
 
 	// ---- kills ---------------------------------------------------------------------------------
@@ -787,6 +844,50 @@ class BloodbathPluginTest {
 		assertNotNull(player.getPotionEffect(PotionEffectType.STRENGTH));
 		assertNotNull(player.getPotionEffect(PotionEffectType.RESISTANCE));
 		assertTrue(zombie.getVelocity().getX() > 0.5, "hurled away: " + zombie.getVelocity());
+		assertNotNull(player.getWorldBorder(), "the screen edges run red");
+
+		hold(player, WeaponType.RIFTBLADE);
+		actionBars(player);
+		ticks(60);
+		assertTrue(any(actionBars(player), "☠ RAGE"), "the rage shows next to the weapon's status");
+		ticks(120);
+		assertNull(player.getWorldBorder(), "and fade with it");
+		player.getInventory().setItemInMainHand(null);
+		actionBars(player);
+		ticks(8);
+		assertTrue(any(actionBars(player), "☠"), "recharging shows even with no weapon out");
+	}
+
+	@Test
+	void threePiecesBarbMeleeAttackers() {
+		TestZombie zombie = zombie(1.5, 0.5);
+		wear(player, ArmorPiece.HELM, ArmorPiece.CUIRASS);
+		EntityDamageByEntityEvent bite = new EntityDamageByEntityEvent(zombie, player, EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+			attackBy(zombie), 3.0);
+		server.getPluginManager().callEvent(bite);
+		ticks(1);
+		assertEquals(20.0, zombie.getHealth(), 1.0E-9, "two pieces: no barbs");
+		wear(player, ArmorPiece.GREAVES);
+		server.getPluginManager().callEvent(new EntityDamageByEntityEvent(zombie, player, EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+			attackBy(zombie), 3.0));
+		ticks(1);
+		assertEquals(18.0, zombie.getHealth(), 1.0E-9);
+		assertTrue(player.sounds.contains("block.note_block.hat"), "a hit marker for the wearer");
+	}
+
+	@Test
+	void sabatonsLeaveFootprintsForOthers() {
+		TestPlayer alex = server.addTestPlayer("Alex");
+		stand(alex, 4.5, 0.5, 90.0F, 0.0F);
+		wear(player, ArmorPiece.SABATONS);
+		world.spawns.clear();
+		for (int i = 0; i < 6; i++) {
+			stand(player, 0.5 + i * 1.2, 0.5, -90.0F, 0.0F);
+			ticks(6);
+		}
+		List<TestWorld.Spawn> steps = world.spawns.stream().filter(sp -> Math.abs(sp.at().getY() - 5.05) < 1.0E-6).toList();
+		assertFalse(steps.isEmpty(), "footprints");
+		assertTrue(steps.stream().allMatch(sp -> sp.receivers() != null && !sp.receivers().contains(player) && sp.receivers().contains(alex)));
 	}
 
 	@Test

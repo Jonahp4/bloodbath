@@ -8,15 +8,15 @@ number, optional crafting recipes, and a resource pack that the plugin hosts for
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.1.0.jar`](dist/paper/Bloodbath-1.1.0.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.1.0.zip`](dist/Bloodbath-ResourcePack-1.1.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.2.0.jar`](dist/paper/Bloodbath-1.2.0.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.2.0.zip`](dist/Bloodbath-ResourcePack-1.2.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
 1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
    as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.1.0.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.2.0.jar` into `plugins/` and restart.
 3. Let players download the 3D models: open **TCP port 8163** on your firewall/router. The plugin
    serves the resource pack from there and players get a download prompt when they join. Can't
    open a port? See [Resource pack](#resource-pack).
@@ -38,7 +38,7 @@ pack, sees named netherite swords and a bow. Every weapon still works for them.
 | **Crimson Thunder Pike** (`thunder_pike`) | Hurl charged blood up to 22 blocks, call crimson lightning there (5 damage) and ride it. | The lightning is cosmetic: no fires, no charged creepers |
 | **Blood Mirrorfang** (`mirrorfang`) | A blood mirror of you fights for 7s, slashing the nearest enemy every half second. | Dupe-proof, see below |
 | **Hemorrhage Scythe** (`void_scythe`) | **Harvest:** a blood arc that cuts everything in front of you and makes it bleed. | Every hit bleeds; the 5th hemorrhages for 10 damage and 8 to everything around. 12 damage. |
-| **Sanguine Paradox Bow** (`paradox_bow`) | A real bow. | Fully drawn shots leave a Paradox Echo that tears back along the arrow's path 3s later for 7 damage. |
+| **Sanguine Paradox Bow** (`paradox_bow`) | A real bow. | **Paradox Echo:** a fully drawn shot fires twice. A blood rift opens where you shot from; 1.5s later a phantom arrow tears out of it and homes into whatever your arrow hit, wherever it ran (7 damage, pierces on the way). If the arrow hit nothing living, the echo retraces its real flight path instead. |
 | **Vampire Fang** *(new)* (`vampire_fang`) | **Blood Dash:** lunge along your aim, cutting and drinking from everything you pass through. | Every hit heals you for 25% of the damage. Fast 6 damage dagger. |
 | **Blood Grimoire** *(new)* (`blood_grimoire`) | **Transfusion:** a blood tether drains 6 health from a creature over 1.5s into you. | Sneak + right-click a player to give them 8 health (and Regeneration) for 4 of yours. Works with PvP off. |
 
@@ -47,9 +47,11 @@ door, chest or button with a weapon uses the block as usual; sneak to use the ab
 Weapons work from the off hand too.
 
 While you hold a weapon, the action bar shows its cooldown and state (rift timer, bleed stacks,
-bow draw, hook range, mirror timer...). A bell and a blood ring tell you when an ability is ready.
-Blood drips off the weapon in your hand, every delayed hit is telegraphed on the ground, and kills
-burst and bleed back into the killer.
+bow draw, echo lock-on, hook range, mirror timer...). A bell and a blood ring tell you when an
+ability is ready. Ability hits tick softly when they land and a skull flashes under your crosshair
+on a kill. Blood drips off the weapon in your hand, every delayed hit is telegraphed on the
+ground, and kills burst and bleed back into the killer. Effects that would sit right in front of
+your own camera (the drips off your weapon, the bow's draw) are shown to everyone else instead.
 
 ## Blood Knight armour
 
@@ -60,9 +62,10 @@ knockback resistance and durability, fireproof) plus **one extra heart**.
 | Set bonus | |
 |---|---|
 | **2 pieces, Bloodlust** | Every kill heals you 1.5 hearts. |
-| **4 pieces, Blood Rage** | When a hit leaves you at 40% health or less: Strength and Resistance for 8s and a blood shockwave that hurls everything within 4 blocks away. 60s cooldown. A clot (Clotblade) stops it. |
+| **3 pieces, Barbed Blood** | Whatever hits you in melee takes 1 heart back. |
+| **4 pieces, Blood Rage** | When a hit leaves you at 40% health or less: Strength and Resistance for 8s and a blood shockwave that hurls everything within 4 blocks away. Your screen edges run red and your heart pounds until it fades. 60s cooldown, shown on the action bar. A clot (Clotblade) stops it. |
 
-A full set drips blood. The worn armour and the icons come from the resource pack. **Without the
+The Sabatons leave bloody footprints and a full set drips blood. The worn armour and the icons come from the resource pack. **Without the
 pack, the pieces look like netherite in the inventory but are invisible when worn** (vanilla has
 no model for them). Keep that in mind if the pack is optional on your server, or turn the set off
 with `armor.enabled: false`.
@@ -143,6 +146,30 @@ items (matched by `custom_model_data`); every other item, armour trims included,
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
 
+## What's new in 1.2.0
+
+- **Sanguine Paradox Bow, reworked.**
+  - **It's held like a bow now.** Its 3D model was rotated 90° from the vanilla bow's pose,
+    so in first person it lay across the screen. It now sits exactly where the vanilla bow
+    does, idle and drawing, and in third person too.
+  - **New model:** a recurve with dark blood-steel limbs, a glowing vein along the inside, bone
+    spurs and a red-fletched arrow.
+  - **The echo actually lands.** It used to come back 3s later along wherever you were
+    looking. Now it homes into what your arrow hit, or retraces the arrow's real flight.
+  - **Nothing in your face:** the blood gathering while you draw is shown to others only, and
+    your arrow's trail starts a few blocks out.
+- **Blood Knight armour, revamped.**
+  - Normal vanilla-style inventory icons for all four pieces.
+  - A new, clean worn look: bevelled plates, crimson trims, burning visor eyes, a glowing
+    breastplate core, knee glows.
+  - New 3-piece bonus (Barbed Blood), a red screen tint while raging, the rage on the action
+    bar, and footprints.
+- **Blood drips are blood red.** They used lava drips, which showed up as orange squares.
+- **The status line clears** as soon as you put a weapon away (it used to linger for 3s, which
+  made a plain bow look like the Paradox Bow).
+- Hit markers and a kill marker (`hud.hit-markers`).
+- The Bloodhook chain and the Bloodrift's launch now come from your hand instead of your eyes.
+
 ## What's new in 1.1.0
 
 - **Blood Knight armour**, based on the boss model: four pieces with set bonuses (Bloodlust and
@@ -169,13 +196,13 @@ items (matched by `custom_model_data`); every other item, armour trims included,
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.1.0.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.2.0.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock
 Paper 1.21.11 server) and play it: every weapon's ability and passive, kill tracking, the armory,
-the mirror's dupe guards, the armour set bonuses, commands, config reloads, recipes and the pack
-server. The test world
+the mirror's dupe guards, the armour set bonuses, the bow's echo, that nothing is drawn in a
+player's own face, commands, config reloads, recipes and the pack server. The test world
 checks particle data the way Paper does, and any error the plugin logs fails the test.
 
 `paper/offline-build/build.sh` builds the same plugin without Gradle or network access (it needs
@@ -186,9 +213,9 @@ is byte-for-byte reproducible.
 
 The models, textures, tooltip frame and pack overrides in `resourcepack/` are all generated by
 [`tools/models/generate.py`](tools/models/generate.py) (needs `numpy` and `pillow`). Edit the cube
-lists there and rerun it. Each weapon is 11-24 cubes with its own painted texture; the bow has an
-idle model and three pull stages. The armour's worn textures (`textures/entity/equipment`) are
-painted there too. The `.json` models open in Blockbench as Java Block/Item models.
+lists there and rerun it. Each weapon is 11-37 cubes with its own painted texture; the bow has an
+idle model and three pull stages. The armour's icons and worn textures
+(`textures/entity/equipment`) are drawn there too. The `.json` models open in Blockbench as Java Block/Item models.
 
 ## The Fabric mod (legacy)
 

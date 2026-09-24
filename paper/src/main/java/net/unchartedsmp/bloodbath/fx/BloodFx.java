@@ -1,5 +1,7 @@
 package net.unchartedsmp.bloodbath.fx;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import net.unchartedsmp.bloodbath.config.Settings;
 import org.bukkit.Color;
@@ -9,13 +11,16 @@ import org.bukkit.Particle;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 
 /**
  * The shared blood palette: every weapon draws its particles and sounds from here so the whole
  * set reads as one theme. Sounds are played by vanilla id, so nothing breaks if a constant moves.
  *
  * <p>Ability particles are sent long-range (up to 512 blocks, configurable). Every count is scaled
- * by {@code effects.particle-multiplier}.
+ * by {@code effects.particle-multiplier}. Cosmetics that hang around a player's own hands (the
+ * held-weapon drips, the bow's draw) go to everyone else only: in first person they'd be right
+ * in front of the camera.
  */
 public final class BloodFx {
 	/** A particle type plus the data it needs (dust colour, block state, ...), or null. */
@@ -32,7 +37,10 @@ public final class BloodFx {
 	public static final Fx CLOT = new Fx(Particle.DUST, new Particle.DustOptions(CLOT_RED, 1.8F));
 	public static final Fx SPLATTER = new Fx(Particle.BLOCK, Material.REDSTONE_BLOCK.createBlockData());
 	public static final Fx GORE = new Fx(Particle.BLOCK, Material.NETHER_WART_BLOCK.createBlockData());
-	public static final Fx DRIP = new Fx(Particle.FALLING_LAVA, null);
+	/** Blood dripping: red falling dust (it used to be falling lava, which read as orange). */
+	public static final Fx DRIP = new Fx(Particle.FALLING_DUST, Material.REDSTONE_BLOCK.createBlockData());
+	/** A fine, small blood mote for trails that pass close to the camera. */
+	public static final Fx MOTE = new Fx(Particle.DUST, new Particle.DustOptions(BRIGHT_RED, 0.7F));
 	public static final Fx HURT = new Fx(Particle.DAMAGE_INDICATOR, null);
 	public static final Fx SPORE = new Fx(Particle.CRIMSON_SPORE, null);
 	public static final Fx SOUL = new Fx(Particle.SCULK_SOUL, null);
@@ -58,6 +66,12 @@ public final class BloodFx {
 	public static final String BOW_RELEASE = "item.crossbow.shoot";
 	public static final String BOW_DRAWN = "item.crossbow.loading_end";
 	public static final String BOW_ECHO = "entity.warden.sonic_boom";
+	/** The classic "your arrow hit a player" ding. */
+	public static final String MARKED = "entity.arrow.hit_player";
+	public static final String ECHO_HIT = "item.trident.hit";
+	public static final String BARBS = "enchant.thorns.hit";
+	public static final String RAGE_FADES = "block.fire.extinguish";
+	public static final String HIT_MARKER = "block.note_block.hat";
 	public static final String CLOCK_MARK = "block.respawn_anchor.set_spawn";
 	public static final String CLOCK_RECALL = "block.respawn_anchor.deplete";
 	public static final String CLOCK_TICK = "block.note_block.hat";
@@ -68,6 +82,8 @@ public final class BloodFx {
 	public static final String DRINK = "entity.generic.drink";
 	public static final String PAGE = "item.book.page_turn";
 	public static final String RANK_UP = "ui.toast.challenge_complete";
+
+	private static final double OTHERS_RANGE_SQUARED = 48.0 * 48.0;
 
 	private BloodFx() {
 	}
@@ -95,6 +111,33 @@ public final class BloodFx {
 		int n = scaled(count);
 		if (n > 0) {
 			at.getWorld().spawnParticle(fx.particle(), at.getX(), at.getY(), at.getZ(), n, spread, spread, spread, 0.0, fx.data(), false);
+		}
+	}
+
+	/** Ambient particle that everyone but {@code self} sees. */
+	public static void ambientForOthers(Player self, Location at, Fx fx, int count, double spread) {
+		forOthers(self, at, fx, count, spread, 0.0);
+	}
+
+	/** Ability-style burst that everyone but {@code self} sees. */
+	public static void burstForOthers(Player self, Location at, Fx fx, int count, double spread) {
+		forOthers(self, at, fx, count, spread, 0.02);
+	}
+
+	private static void forOthers(Player self, Location at, Fx fx, int count, double spread, double speed) {
+		int n = scaled(count);
+		if (n <= 0) {
+			return;
+		}
+		World world = at.getWorld();
+		List<Player> viewers = new ArrayList<>();
+		for (Player player : world.getPlayers()) {
+			if (player != self && player.getLocation().distanceSquared(at) <= OTHERS_RANGE_SQUARED) {
+				viewers.add(player);
+			}
+		}
+		if (!viewers.isEmpty()) {
+			world.spawnParticle(fx.particle(), viewers, self, at.getX(), at.getY(), at.getZ(), n, spread, spread, spread, speed, fx.data(), false);
 		}
 	}
 

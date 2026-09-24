@@ -1,8 +1,12 @@
 package net.unchartedsmp.bloodbath.listener;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.title.Title;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
@@ -37,6 +41,7 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
@@ -134,10 +139,16 @@ public final class WeaponListener implements Listener {
 			return;
 		}
 		arrow.getPersistentDataContainer().set(Keys.WEAPON, PersistentDataType.STRING, WeaponType.PARADOX_BOW.id());
-		Behaviors.PARADOX_BOW.arrowShot(arrow);
 		// Vanilla only crits fully drawn shots, on every version.
-		if (arrow.isCritical() && Gate.allows(player, WeaponType.PARADOX_BOW, true)) {
-			Behaviors.PARADOX_BOW.fullDrawShot(player);
+		boolean fullDraw = arrow.isCritical() && Gate.allows(player, WeaponType.PARADOX_BOW, true);
+		Behaviors.PARADOX_BOW.shot(player, arrow, fullDraw);
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onArrowHit(ProjectileHitEvent event) {
+		if (event.getHitEntity() != null && event.getEntity() instanceof AbstractArrow arrow
+			&& WeaponType.PARADOX_BOW.id().equals(arrow.getPersistentDataContainer().get(Keys.WEAPON, PersistentDataType.STRING))) {
+			Behaviors.PARADOX_BOW.arrowHit(arrow, event.getHitEntity());
 		}
 	}
 
@@ -165,6 +176,11 @@ public final class WeaponListener implements Listener {
 		Settings settings = Settings.get();
 		if (settings.killEffects) {
 			BloodFx.killBurst(victim, killer);
+		}
+		if (settings.hitMarkers) {
+			// A skull under the crosshair, for the killer only.
+			killer.showTitle(Title.title(Component.empty(), Component.text("☠", NamedTextColor.RED),
+				Title.Times.times(Duration.ZERO, Duration.ofMillis(350), Duration.ofMillis(250))));
 		}
 		if (settings.killTracking && (victim instanceof Player || settings.countMobKills)) {
 			ItemStack weapon = held(killer, type);

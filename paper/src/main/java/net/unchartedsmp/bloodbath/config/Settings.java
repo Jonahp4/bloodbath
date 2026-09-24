@@ -29,11 +29,15 @@ public final class Settings {
 
 	public final boolean hudEnabled;
 	public final boolean readyPing;
+	/** A soft tick when an ability hit lands, and a ☠ under the crosshair on a kill. */
+	public final boolean hitMarkers;
 
 	public final double particleMultiplier;
 	public final boolean longRangeParticles;
 	public final boolean heldAura;
 	public final boolean killEffects;
+	/** Red screen edges while Blood Rage lasts. */
+	public final boolean rageVignette;
 
 	public final Set<String> disabledWorlds;
 	public final boolean respectWorldPvp;
@@ -46,6 +50,8 @@ public final class Settings {
 	public final boolean armorEnabled;
 	/** Health restored per kill with 2+ Blood Knight pieces (half-hearts). */
 	public final double armorKillHeal;
+	/** Damage melee attackers take from 3+ Blood Knight pieces (half-hearts). */
+	public final double armorBarbDamage;
 	/** Blood Rage triggers when health falls to this share of max health. */
 	public final double rageThreshold;
 	public final int rageDurationTicks;
@@ -73,11 +79,13 @@ public final class Settings {
 
 		hudEnabled = bool(c, "hud.enabled", true);
 		readyPing = bool(c, "hud.ready-ping", true);
+		hitMarkers = bool(c, "hud.hit-markers", true);
 
 		particleMultiplier = Math.max(0.0, c == null ? 1.0 : c.getDouble("effects.particle-multiplier", 1.0));
 		longRangeParticles = bool(c, "effects.long-range", true);
 		heldAura = bool(c, "effects.held-aura", true);
 		killEffects = bool(c, "effects.kill-effects", true);
+		rageVignette = bool(c, "effects.rage-vignette", true);
 
 		disabledWorlds = new HashSet<>();
 		if (c != null) {
@@ -93,6 +101,7 @@ public final class Settings {
 
 		armorEnabled = bool(c, "armor.enabled", true);
 		armorKillHeal = Math.max(0.0, c == null ? 3.0 : c.getDouble("armor.kill-heal", 3.0));
+		armorBarbDamage = Math.max(0.0, c == null ? 2.0 : c.getDouble("armor.barb-damage", 2.0));
 		rageThreshold = Math.max(0.05, Math.min(0.95, c == null ? 0.4 : c.getDouble("armor.rage-threshold", 0.4)));
 		rageDurationTicks = Math.max(20, (int) Math.round((c == null ? 8.0 : c.getDouble("armor.rage-duration", 8.0)) * 20.0));
 		rageRadius = Math.max(0.0, c == null ? 4.0 : c.getDouble("armor.rage-radius", 4.0));
@@ -136,7 +145,7 @@ public final class Settings {
 	 */
 	public String itemFingerprint() {
 		StringBuilder key = new StringBuilder();
-		key.append(killTracking).append(tooltipFrame()).append(armorKillHeal).append(rageThreshold);
+		key.append(killTracking).append(tooltipFrame()).append(armorKillHeal).append(armorBarbDamage).append(rageThreshold);
 		for (Ability ability : Ability.values()) {
 			key.append(',').append(cooldownTicks(ability));
 		}

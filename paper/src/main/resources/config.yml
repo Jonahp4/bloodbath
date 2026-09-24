@@ -46,6 +46,8 @@ hud:
   enabled: true
   # The bell and blood ring when an ability comes off cooldown.
   ready-ping: true
+  # A soft tick when an ability hit lands, and a ☠ under the crosshair when a weapon kills.
+  hit-markers: true
 
 effects:
   # Scales every particle count. 0.5 halves them for weaker PCs, 0 turns them off.
@@ -56,6 +58,8 @@ effects:
   held-aura: true
   # Gore burst and blood streams into the killer when a weapon kills.
   kill-effects: true
+  # The screen edges run red while Blood Rage lasts.
+  rage-vignette: true
 
 gameplay:
   # Worlds where abilities don't work (the weapons still hit like weapons).
@@ -134,9 +138,9 @@ weapons:
   paradox_bow:          # Sanguine Paradox Bow
     enabled: true
     cooldown: 10
-    damage: 7
-    delay: 3
-    range: 24
+    damage: 7           # the echo's damage, on top of the arrow
+    echo-delay: 1.5     # how long the echo takes to come back
+    range: 40           # how far the echo will chase a marked creature
   vampire_fang:
     enabled: true
     cooldown: 8
@@ -159,6 +163,8 @@ armor:
   enabled: true
   # (2 pieces) Bloodlust: health every kill gives back.
   kill-heal: 3
+  # (3 pieces) Barbed Blood: damage melee attackers take back.
+  barb-damage: 2
   # (4 pieces) Blood Rage: when a hit leaves you at this share of your max health or less, you get
   # Strength and Resistance and a blood shockwave hurls everything nearby away.
   rage-threshold: 0.4

@@ -14,11 +14,11 @@ import org.bukkit.inventory.EquipmentSlotGroup;
  */
 public enum ArmorPiece {
 	HELM("blood_knight_helm", "Blood Knight Helm", "helmet", Material.NETHERITE_HELMET, EquipmentSlot.HEAD, EquipmentSlotGroup.HEAD, 3,
-		"A horned helm with the Knight's grin", "cut into the visor."),
+		"The Knight's closed helm. Its eyes", "still burn behind the visor."),
 	CUIRASS("blood_knight_cuirass", "Blood Knight Cuirass", "chestplate", Material.NETHERITE_CHESTPLATE, EquipmentSlot.CHEST, EquipmentSlotGroup.CHEST, 8,
 		"Its core still glows with the", "Knight's blood."),
 	GREAVES("blood_knight_greaves", "Blood Knight Greaves", "leggings", Material.NETHERITE_LEGGINGS, EquipmentSlot.LEGS, EquipmentSlotGroup.LEGS, 6,
-		"Plated legs, stained to the knee."),
+		"Plated legs with a glow in each knee."),
 	SABATONS("blood_knight_sabatons", "Blood Knight Sabatons", "boots", Material.NETHERITE_BOOTS, EquipmentSlot.FEET, EquipmentSlotGroup.FEET, 3,
 		"Iron-shod boots that leave red", "footprints.");
 

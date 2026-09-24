@@ -131,6 +131,8 @@ public final class BloodArmor {
 		lines.add(Component.empty());
 		lines.add(plain("Blood Knight set", NamedTextColor.DARK_RED));
 		lines.add(plain("(2) Bloodlust: kills heal " + hearts(settings.armorKillHeal), NamedTextColor.GRAY));
+		lines.add(plain("(3) Barbed Blood: melee attackers", NamedTextColor.GRAY));
+		lines.add(plain("    take " + hearts(settings.armorBarbDamage) + " back", NamedTextColor.GRAY));
 		lines.add(plain("(4) Blood Rage: below " + Math.round(settings.rageThreshold * 100) + "% health, gain", NamedTextColor.GRAY));
 		lines.add(plain("    Strength and Resistance and hurl", NamedTextColor.GRAY));
 		lines.add(plain("    enemies back. Every " + Math.round(settings.cooldownTicks(Ability.BLOOD_RAGE) / 20.0) + "s.", NamedTextColor.GRAY));

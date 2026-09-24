@@ -29,6 +29,11 @@ public final class TestServer extends ServerMock {
 		return items;
 	}
 
+	@Override
+	public org.bukkit.WorldBorder createWorldBorder() {
+		return new org.mockbukkit.mockbukkit.world.WorldBorderMock(getWorlds().isEmpty() ? null : getWorlds().get(0));
+	}
+
 	public TestWorld addTestWorld(String name) {
 		TestWorld world = new TestWorld(name);
 		addWorld(world);

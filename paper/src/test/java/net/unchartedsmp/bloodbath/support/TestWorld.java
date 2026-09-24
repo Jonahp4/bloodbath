@@ -27,6 +27,11 @@ import org.mockbukkit.mockbukkit.world.WorldMock;
 public final class TestWorld extends WorldMock {
 	public int particles;
 	public int lightning;
+	/** Every particle spawn: where, and who it was sent to (null = everyone around). */
+	public final List<Spawn> spawns = new ArrayList<>();
+
+	public record Spawn(Particle particle, Location at, List<Player> receivers) {
+	}
 
 	public TestWorld(String name) {
 		super(Material.GRASS_BLOCK, 4);
@@ -51,6 +56,7 @@ public final class TestWorld extends WorldMock {
 			throw new IllegalArgumentException("negative particle count");
 		}
 		particles += count;
+		spawns.add(new Spawn(particle, new Location(this, x, y, z), receivers == null ? null : List.copyOf(receivers)));
 	}
 
 	/** Hitbox overlap, like Paper (MockBukkit only checks whether the entity's feet are in the box). */

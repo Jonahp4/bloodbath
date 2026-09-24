@@ -3,6 +3,7 @@ package net.unchartedsmp.bloodbath.listener;
 import java.util.UUID;
 import net.unchartedsmp.bloodbath.BloodbathPlugin;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -55,6 +56,7 @@ public final class SessionListener implements Listener {
 		UUID id = event.getPlayer().getUniqueId();
 		Behaviors.forget(id);
 		Hud.forget(id);
+		BloodKnightSet.forget(id);
 		plugin.weaponListener().forget(id);
 	}
 

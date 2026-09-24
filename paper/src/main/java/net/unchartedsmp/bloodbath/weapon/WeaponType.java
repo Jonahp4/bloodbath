@@ -35,7 +35,7 @@ public enum WeaponType {
 	VOID_SCYTHE("void_scythe", "Hemorrhage Scythe", Ability.VOID_SCYTHE, Material.NETHERITE_SWORD, 12, 1.4, 2031,
 		"Every hit makes the target bleed.", "The 5th hemorrhages them and everything", "around them."),
 	PARADOX_BOW("paradox_bow", "Sanguine Paradox Bow", Ability.PARADOX_BOW, Material.BOW, 0, 0, 384,
-		"A real bow. Fully drawn shots leave", "a Paradox Echo that tears back along", "the arrow's path 3s later."),
+		"A real bow. A fully drawn shot fires", "twice: its echo homes in on whatever", "the arrow hit, or retraces its flight."),
 	VAMPIRE_FANG("vampire_fang", "Vampire Fang", Ability.VAMPIRE_FANG, Material.NETHERITE_SWORD, 6, 2.2, 1561,
 		"Hits drink blood: heal part of the", "damage you deal.", "Right-click: blood dash through enemies."),
 	BLOOD_GRIMOIRE("blood_grimoire", "Blood Grimoire", Ability.BLOOD_GRIMOIRE, Material.NETHERITE_SWORD, 1, 4.0, 0,

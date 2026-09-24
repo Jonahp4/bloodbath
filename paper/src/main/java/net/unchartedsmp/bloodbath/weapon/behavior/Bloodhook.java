@@ -48,7 +48,7 @@ public final class Bloodhook implements WeaponBehavior {
 		LivingEntity target = Targeting.lookEntity(player, range);
 		if (target == null) {
 			BloodFx.play(player, BloodFx.WET_SLIDE, 0.8F, 1.4F);
-			BloodFx.flow(player.getEyeLocation(), Targeting.lookTarget(player, range), 4, 0.05, BloodFx.BLOOD_RED, 6);
+			BloodFx.flow(Hud.handPos(player, false), Targeting.lookTarget(player, range), 4, 0.05, BloodFx.BLOOD_RED, 6);
 			Hud.flash(player, Component.text("The hook found no blood.", NamedTextColor.GRAY));
 			return;
 		}
@@ -84,9 +84,11 @@ public final class Bloodhook implements WeaponBehavior {
 			if (!Targeting.stillIn(player, world) || !Targeting.stillIn(target, world)) {
 				return false;
 			}
-			BloodFx.line(player.getEyeLocation(), BloodFx.chest(target), BloodFx.BLOOD_FADE, 2.0);
+			// From the hook in your hand, not your eyes: in first person the chain would start on the camera.
+			Location hand = Hud.handPos(player, false);
+			BloodFx.line(hand, BloodFx.chest(target), BloodFx.BLOOD_FADE, 2.0);
 			if (tick % 2 == 0) {
-				BloodFx.flow(BloodFx.chest(target), player.getEyeLocation(), 3, 0.2, BloodFx.BRIGHT_RED, 6);
+				BloodFx.flow(BloodFx.chest(target), hand, 3, 0.2, BloodFx.BRIGHT_RED, 6);
 			}
 			return true;
 		});

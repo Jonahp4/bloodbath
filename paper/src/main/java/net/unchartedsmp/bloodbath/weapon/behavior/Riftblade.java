@@ -62,7 +62,7 @@ public final class Riftblade implements WeaponBehavior {
 		BloodFx.play(pos, BloodFx.HEARTBEAT, 1.0F, 1.0F);
 		BloodFx.burst(pos, BloodFx.BLOOD_LARGE, 40, 0.4);
 		BloodFx.burst(pos, BloodFx.SPORE, 10, 0.2);
-		BloodFx.flow(origin, pos, 8, 0.1, BloodFx.BRIGHT_RED, 6);
+		BloodFx.flow(Hud.handPos(player, false), pos, 8, 0.1, BloodFx.BRIGHT_RED, 6);
 
 		TickScheduler.repeat(0, 1, PULL_DURATION_TICKS, tick -> {
 			for (LivingEntity target : Targeting.livingInRadius(pos, pullRadius, player)) {

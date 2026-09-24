@@ -9,7 +9,7 @@ y=2.3, blade/head pointing +Y, flat face towards +Z (the side the camera sees). 
 display transforms expect a sprite drawn diagonally (handle bottom-left, tip top-right), so
 instead of tilting every cube we fold a -45 degree Z pre-rotation into the display transforms:
 Minecraft applies display rotations as Rx*Ry*Rz, so R_display * Rz(-45) is just "subtract 45
-from the Z angle".
+from the Z angle". (The bow is the exception: the vanilla bow sprite points up-left, so it adds 45.)
 
 Each weapon gets its own texture atlas, painted per face at 1 texel per model unit. Noise is
 sampled in model space, so patterns run continuously across neighbouring cubes.
@@ -105,7 +105,6 @@ CLOT = pal("#120103", "#240306", "#38060b", "#520912", "#7a0f1a")
 PARCHMENT = pal("#6b5a3e", "#8f7a55", "#b39d70", "#d4c192", "#efe2b8")
 HIDE = pal("#1c0205", "#33050b", "#520912", "#721020", "#95192c")
 STRING = pal("#5a0a10", "#8c1019", "#bf1c28", "#ef4a57", "#ffb0b6")
-KNIGHT = pal("#08080a", "#141417", "#212125", "#303036", "#43434a", "#5c5c64")  # the Blood Knight's plate
 STAIN = hexrgb("#7a0d18")
 STAIN_DARK = hexrgb("#4a0610")
 WHITE = hexrgb("#ffffff")
@@ -255,24 +254,7 @@ def paint_texel(mat, face, u, v, w, h, p, el):
         return c
     if mat == "string":
         return ramp(STRING, 0.4 + 0.5 * fbm(x, y * 2, z, seed))
-    if mat == "knight":
-        return knight_plate(x, y, z, seed, top_left, bottom_right)
     raise ValueError(mat)
-
-
-def knight_plate(x, y, z, seed, highlight=False, shade=False):
-    """The Blood Knight boss's armour: gunmetal plates streaked with blood, white-lit edges."""
-    c = ramp(KNIGHT, 0.2 + 0.65 * fbm(x * 0.5, y * 0.5, z * 0.5, seed, 3))
-    smear = fbm(x * 0.45 + 5, y * 0.18, z * 0.45, 61, 3)          # blood runs down the plates
-    if smear > 0.57:
-        c = ramp(BLOOD, 0.1 + (smear - 0.57) * 2.4)
-    if smear > 0.75:
-        c = ramp(GLOW, (smear - 0.75) * 2.5)
-    if highlight:
-        c = c * 0.35 + WHITE * 0.65
-    if shade:
-        c = c * 0.45
-    return c
 
 
 # --------------------------------------------------------------------------------------------
@@ -527,99 +509,168 @@ def blood_grimoire():
 
 # ---- the Blood Knight's armour (inventory models; the worn look is painted separately) ------
 
-# The helm is a plain, vanilla-shaped 16x16 icon rather than a 3D model: gunmetal plate lit from
-# the top left, a blood-red band, a visor slit with two burning eyes, open at the face.
-HELM_ICON = [
-    "................",
-    "................",
-    "................",
-    "....oooooooo....",
-    "...ohhhccccbo...",
-    "..ohhcccccRcbo..",
-    "..ohccccccccbo..",
-    "..orrrrrrrrrdo..",
-    "..obkggkkggkao..",
-    "..ohcbo..obaao..",
-    "..ohcbo..oRaao..",
-    "..orrro..orddo..",
-    "..ooooo..ooooo..",
-    "................",
-    "................",
-    "................",
-]
-HELM_COLORS = {
-    "o": "#0a0a0c", "a": "#26262c", "b": "#36363e", "c": "#4a4a54", "h": "#70707c",
-    "k": "#0d0707", "g": "#ff3b45", "r": "#b3141f", "d": "#7a0d16", "R": "#5a0a12",
+# The Blood Knight's armour icons: plain vanilla-shaped 16x16 sprites (a 3D model of a chestplate
+# just looks like a box in the inventory). Each is a silhouette: '#' plate, 'r' crimson trim,
+# 'g' glow, 'k' the visor slit. shade_icon() outlines it and lights it from the top left the
+# same way for every piece, so the four read as one set.
+ICON_COLORS = {"o": "#0a0a0c", "a": "#26262c", "b": "#36363e", "c": "#4a4a54", "h": "#70707c",
+               "k": "#0d0707", "g": "#ff3b45", "G": "#ffa6ac", "r": "#b3141f", "d": "#7a0d16"}
+ARMOR_ICONS = {
+ "blood_knight_helm": [
+  "................",
+  "................",
+  "................",
+  "....########....",
+  "...##########...",
+  "..############..",
+  "..############..",
+  "..rrrrrrrrrrrr..",
+  "..##kggkkggk##..",
+  "..#####..#####..",
+  "..#####..#####..",
+  "..rrrrr..rrrrr..",
+  "..#####..#####..",
+  "................",
+  "................",
+  "................"],
+ "blood_knight_cuirass": [
+  "................",
+  "..####....####..",
+  ".######..######.",
+  ".##############.",
+  ".##############.",
+  ".rrr########rrr.",
+  ".###.######.###.",
+  ".###.##gg##.###.",
+  ".###.#gggg#.###.",
+  ".rrr.##gg##.rrr.",
+  ".###.######.###.",
+  ".....rrrrrr.....",
+  ".....######.....",
+  ".....######.....",
+  "................",
+  "................"],
+ "blood_knight_greaves": [
+  "................",
+  "................",
+  "...##########...",
+  "...rrrrggrrrr...",
+  "...##########...",
+  "...####..####...",
+  "...####..####...",
+  "...####..####...",
+  "...#gg#..#gg#...",
+  "...####..####...",
+  "...####..####...",
+  "...####..####...",
+  "...####..####...",
+  "...rrrr..rrrr...",
+  "...####..####...",
+  "................"],
+ "blood_knight_sabatons": [
+  "................",
+  "................",
+  "................",
+  "...####...####..",
+  "...rrrr...rrrr..",
+  "...####...####..",
+  "...####...####..",
+  "...####...####..",
+  ".######.######..",
+  ".######.######..",
+  ".#g####.#g####..",
+  ".######.######..",
+  "................",
+  "................",
+  "................",
+  "................"],
 }
 
 
-def blood_knight_helm_icon():
+def shade_icon(rows):
+    H, W = len(rows), 16
+    assert all(len(r) == W for r in rows), [len(r) for r in rows]
+    inm = lambda x, y: 0 <= x < W and 0 <= y < H and rows[y][x] != "."
+    out = [[None] * W for _ in range(H)]
+    xs = [x for y in range(H) for x in range(W) if inm(x, y)]
+    cx = (min(xs) + max(xs)) / 2
+    for y in range(H):
+        for x in range(W):
+            ch = rows[y][x]
+            if ch == ".":
+                continue
+            edge = not (inm(x - 1, y) and inm(x + 1, y) and inm(x, y - 1) and inm(x, y + 1))
+            if edge:
+                out[y][x] = "o"; continue
+            lit = not inm(x - 1, y - 1) or not inm(x - 2, y) or not inm(x, y - 2)
+            dark = not inm(x + 2, y) or not inm(x, y + 2) or not inm(x + 1, y + 1)
+            if ch == "#":
+                if lit and not dark:
+                    out[y][x] = "h"
+                elif dark and not lit:
+                    out[y][x] = "a" if not inm(x, y + 2) else "b"
+                else:
+                    out[y][x] = "c" if x <= cx else "b"
+            elif ch == "r":
+                out[y][x] = "d" if dark and not lit else "r"
+            elif ch == "g":
+                out[y][x] = "G" if not rows[y - 1][x] == "g" and not rows[y][x - 1] == "g" else "g"
+            else:
+                out[y][x] = ch
+    return out
+
+
+def armor_icon(name):
     img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-    for y, row in enumerate(HELM_ICON):
-        assert len(row) == 16, y
+    for y, row in enumerate(shade_icon(ARMOR_ICONS[name])):
         for x, ch in enumerate(row):
-            if ch != ".":
-                img.putpixel((x, y), ImageColor.getrgb(HELM_COLORS[ch]) + (255,))
+            if ch:
+                img.putpixel((x, y), ImageColor.getrgb(ICON_COLORS[ch]) + (255,))
     return img
 
 
-def blood_knight_cuirass():
-    m = Model()
-    m.box(3.6, 2.0, 5.6, 12.4, 11.0, 10.4, "knight", name="torso")
-    m.box(4.2, 5.0, 10.4, 11.8, 10.4, 11.0, "knight", name="breastplate")
-    for i, y in enumerate((2.4, 3.7)):
-        m.box(4.0, y, 10.4, 12.0, y + 1.0, 10.9, "knight", name=f"fauld_{i}")
-    m.diamond(8.0, 7.6, 3.4, 0.5, "blackblade", cz=11.1, name="core_setting")
-    m.diamond(8.0, 7.6, 2.2, 0.8, "glow", cz=11.25, name="core")
-    m.box(5.4, 11.0, 6.2, 10.6, 12.4, 9.8, "knight", name="gorget")
-    for side, x1 in (("l", 1.0), ("r", 11.2)):
-        m.box(x1, 8.4, 5.0, x1 + 3.8, 12.0, 11.0, "knight", name=f"pauldron_{side}")
-        m.box(x1 - 0.2, 7.8, 4.8, x1 + 4.0, 8.6, 11.2, "blade", name=f"pauldron_trim_{side}")
-        m.diamond(x1 + 1.9, 12.3, 1.2, 1.2, "bone", name=f"pauldron_spike_{side}")
-    return m
-
-
-def blood_knight_greaves():
-    m = Model()
-    m.box(3.6, 10.0, 5.6, 12.4, 12.0, 10.4, "knight", name="waist")
-    m.diamond(8.0, 11.0, 1.8, 0.5, "glow", cz=10.6, name="buckle")
-    for side, x1 in (("l", 4.0), ("r", 8.4)):
-        m.box(x1, 1.0, 6.0, x1 + 3.6, 10.0, 10.0, "knight", name=f"leg_{side}")
-        m.box(x1 - 0.3, 4.2, 9.9, x1 + 3.9, 6.2, 10.6, "knight", name=f"knee_{side}")
-        m.box(x1 + 1.3, 1.8, 10.0, x1 + 2.3, 3.6, 10.2, "glow", name=f"shin_slit_{side}")
-        m.box(x1 + 0.2, 7.4, 10.4, x1 + 3.4, 10.2, 11.0, "knight", name=f"tasset_{side}")
-    return m
-
-
-def blood_knight_sabatons():
-    m = Model()
-    for side, x1 in (("l", 3.0), ("r", 8.6)):
-        m.box(x1, 1.0, 5.0, x1 + 4.4, 6.0, 10.0, "knight", name=f"boot_{side}")
-        m.box(x1, 1.0, 10.0, x1 + 4.4, 3.2, 12.6, "knight", name=f"toe_{side}")
-        m.box(x1 - 0.2, 4.6, 4.8, x1 + 4.6, 5.6, 10.2, "blade", name=f"cuff_{side}")
-        m.box(x1 + 1.7, 2.2, 12.5, x1 + 2.7, 2.8, 12.75, "glow", name=f"toe_glow_{side}")
-        m.diamond(x1 + 2.2, 3.4, 1.2, 1.2, "bone", cz=4.6, name=f"spur_{side}")
-    return m
+BOW_LIMB = (2.6, 3.0, 3.0, 2.6, 1.8)       # riser to tip, per segment
+BOW_BENDS = {                              # segment directions (right limb), per stage
+    0: (0, -22.5, -22.5, -45, 0),          # at rest: a recurve, the tips flick forward
+    1: (0, -22.5, -22.5, -45, 0),
+    2: (0, -22.5, -45, -45, -22.5),
+    3: (0, -22.5, -45, -67.5, -22.5),      # full draw: the limbs bend deep
+}
 
 
 def paradox_bow(stage):
-    """stage 0 = idle (no arrow), 1..3 = pulling_0..pulling_2."""
+    """stage 0 = idle (no arrow), 1..3 = pulling_0..pulling_2.
+
+    A recurve of dark blood-steel limbs with a glowing vein along the inside, bone spurs on the
+    back, a gem riser and a blood-red string."""
     m = Model()
     # Unlike a sword (held by the end), a bow is held in the middle: the vanilla bow sprite's
     # resting string runs through the centre of the item. Put ours there too, so vanilla bow
     # display transforms hold it the same way; the riser sits ahead of it by the limbs' drop.
-    idle_drop = sum(length * math.sin(math.radians(-bend)) for bend, length in zip((0, -22.5, -22.5, -45), (3.2, 3.2, 3.0, 2.4)))
+    idle_drop = -sum(length * math.sin(math.radians(bend)) for bend, length in zip(BOW_BENDS[0], BOW_LIMB))
     gy = 8.0 + idle_drop
-    m.centered(8, gy - 1.1, gy + 1.1, 4.4, 2.0, "grip", name="riser_grip")
+    m.centered(8, gy - 1.5, gy + 1.5, 4.4, 2.0, "grip", name="riser_grip")
+    m.centered(8, gy + 1.3, gy + 1.9, 5.0, 2.4, "frame", name="riser_cap_top")
+    m.centered(8, gy - 1.9, gy - 1.3, 5.0, 2.4, "frame", name="riser_cap_low")
     m.gem(8, gy, 2.6, depth=2.8, name="riser_gem")
-    bends = {0: (0, -22.5, -22.5, -45), 1: (0, -22.5, -22.5, -45), 2: (0, -22.5, -45, -45), 3: (0, -22.5, -45, -67.5)}[stage]
+    thickness = (1.6, 1.5, 1.3, 1.1, 1.0)
     tips = []
     for side, sign in (("right", 1), ("left", -1)):
         x, y = 8 + sign * 2.2, gy
-        for i, (direction, length) in enumerate(zip(bends, (3.2, 3.2, 3.0, 2.4))):
-            d = direction if sign > 0 else 180 - direction
-            x, y = m.segment(x, y, d, length, 1.7 if i < 2 else 1.3, 1.3, "blade", name=f"limb_{side}_{i}")
-        m.diamond(x, y, 1.6, 1.6, "glow", name=f"tip_{side}")
+        for i, (bend, length) in enumerate(zip(BOW_BENDS[stage], BOW_LIMB)):
+            d = bend if sign > 0 else 180 - bend
+            # The vein runs along the belly (the string side) of each limb.
+            inward = math.radians(d - 90 * sign)
+            off = thickness[i] / 2 - 0.1
+            m.segment(x + off * math.cos(inward), y + off * math.sin(inward), d, length, 0.4, 1.4, "glow",
+                      overlap=0.1, name=f"vein_{side}_{i}")
+            nx, ny = m.segment(x, y, d, length, thickness[i], 1.3, "blackblade", name=f"limb_{side}_{i}")
+            if i in (1, 3):  # bone spurs out of the back of the limb
+                back = d + 90 * sign
+                m.segment(x + (nx - x) * 0.5, y + (ny - y) * 0.5, back, 2.0 if i == 1 else 1.5, 0.8, 0.8, "bone",
+                          overlap=1.0, name=f"spur_{side}_{i}")
+            x, y = nx, ny
+        m.diamond(x, y, 1.3, 1.5, "glow", name=f"tip_{side}")
         tips.append((x, y))
     tip_x, tip_y = tips[0]
     span = tip_x - 8
@@ -636,7 +687,7 @@ def paradox_bow(stage):
     head_y = gy + {1: 8.0, 2: 6.0, 3: 4.2}[stage]
     m.box(7.8, nock_y, 7.8, 8.2, head_y, 8.2, "steel", name="arrow_shaft")
     m.diamond(8, head_y + 0.6, 2.0 if stage < 3 else 2.3, 0.8, "glow", name="arrow_head")
-    m.box(7.1, nock_y + 0.2, 7.9, 8.9, nock_y + 2.6, 8.1, "string", name="fletching")
+    m.box(7.1, nock_y + 0.2, 7.9, 8.9, nock_y + 2.6, 8.1, "blade", name="fletching")
     if stage == 3:
         m.diamond(8, head_y + 0.6, 3.4, 0.4, "gem", name="arrow_flare")
     return m
@@ -656,13 +707,14 @@ WEAPONS = {
     "vampire_fang": ("Vampire Fang", vampire_fang),
     "blood_grimoire": ("Blood Grimoire", blood_grimoire),
 }
-ARMOR = {
-    "blood_knight_helm": ("Blood Knight Helm", None, "helmet"),       # flat icon, see HELM_ICON
-    "blood_knight_cuirass": ("Blood Knight Cuirass", blood_knight_cuirass, "chestplate"),
-    "blood_knight_greaves": ("Blood Knight Greaves", blood_knight_greaves, "leggings"),
-    "blood_knight_sabatons": ("Blood Knight Sabatons", blood_knight_sabatons, "boots"),
+ARMOR = {  # flat icons, see ARMOR_ICONS
+    "blood_knight_helm": ("Blood Knight Helm", None, "helmet"),
+    "blood_knight_cuirass": ("Blood Knight Cuirass", None, "chestplate"),
+    "blood_knight_greaves": ("Blood Knight Greaves", None, "leggings"),
+    "blood_knight_sabatons": ("Blood Knight Sabatons", None, "boots"),
 }
 BOW_IDLE = None  # set in main(): framing reference for the bow's pull stages
+VANILLA_BOW_SPAN = 18.4  # tip to tip of the vanilla bow sprite, (1,14) to (14,1)
 BOW_STAGES = {"paradox_bow_pulling_0": 1, "paradox_bow_pulling_1": 2, "paradox_bow_pulling_2": 3}
 
 
@@ -980,11 +1032,15 @@ def display(model, weapon):
         "head": {"rotation": [0, 180, -45], "translation": [0, 13, 7], "scale": [1, 1, 1]},
     }
     if weapon.startswith("paradox_bow"):
-        # Vanilla item/bow transforms (held upright, aimed forward), same -45 Z fold. Scaled so
-        # the limbs span about what the vanilla bow sprite does.
-        bow = max(0.6, min(1.0, 20.0 / size))
-        disp["thirdperson_righthand"] = {"rotation": [-80, 260, -85], "translation": [-1, -2, 2.5], "scale": v3(0.9 * bow)}
-        disp["firstperson_righthand"] = {"rotation": [0, -90, -20], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68 * bow)}
+        # Vanilla item/bow transforms. The vanilla bow sprite is not drawn like a sword: its arrow
+        # points up-LEFT (the limbs run bottom-left to top-right), while ours points +Y. So the
+        # fold here is +45, not the swords' -45 (with -45 the bow was held 90 degrees off, lying
+        # across the screen). Scaled so tip to tip it spans what the vanilla sprite does (about
+        # 18.4 units, corner to corner), whatever the pull stage.
+        corners = model_corners(BOW_IDLE)
+        bow = VANILLA_BOW_SPAN / (corners[:, 0].max() - corners[:, 0].min())
+        disp["thirdperson_righthand"] = {"rotation": [-80, 260, -40 + 45], "translation": [-1, -2, 2.5], "scale": v3(0.9 * bow)}
+        disp["firstperson_righthand"] = {"rotation": [0, -90, 25 + 45], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68 * bow)}
     if weapon == "meteor_gauntlet":
         # Worn over the fist rather than swung: sit it upright on the hand.
         disp["thirdperson_righthand"] = {"rotation": [75, 0, 0], "translation": [0, 1.5, 1.5], "scale": v3(0.6)}
@@ -1000,17 +1056,9 @@ def display(model, weapon):
         disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
         disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
         disp["head"] = {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
-    if weapon.startswith("blood_knight_"):
-        # Armour pieces: shown front-on at a 3/4 angle, held like any other item.
-        disp["thirdperson_righthand"] = {"rotation": [0, 0, 0], "translation": [0, 3, 1], "scale": v3(0.55)}
-        disp["firstperson_righthand"] = {"rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": v3(0.68)}
-        disp["gui"] = {"rotation": [20, -30, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
-        disp["ground"] = {"rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": v3(0.5)}
-        disp["fixed"] = {"rotation": [0, 180, 0], "translation": [0, 0, 0], "scale": v3(1.0)}
-        disp["head"] = {"rotation": [0, 180, 0], "translation": [0, 13, 7], "scale": [1, 1, 1]}
     # The bow's pull stages must keep the idle model's framing, or the icon would jump around.
     framing = BOW_IDLE if weapon.startswith("paradox_bow") else model
-    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon in ("meteor_gauntlet", "blood_grimoire") or weapon.startswith("blood_knight_") else 1.0)
+    fit_to_slot(disp["gui"], framing, max_scale=disp["gui"]["scale"][0] if weapon in ("meteor_gauntlet", "blood_grimoire") else 1.0)
     fit_to_slot(disp["fixed"], framing, fill=14.0)
     fit_to_slot(disp["ground"], framing, fill=7.0, max_scale=0.5, base=(0.0, 2.0, 0.0))
     return disp
@@ -1110,7 +1158,7 @@ def main():
 
 
 def write_flat_item(name, models_out, tex_out):
-    blood_knight_helm_icon().save(os.path.join(tex_out, f"{name}.png"))
+    armor_icon(name).save(os.path.join(tex_out, f"{name}.png"))
     with open(os.path.join(models_out, f"{name}.json"), "w") as f:
         json.dump({"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/{name}"}}, f, indent=1)
 
@@ -1233,8 +1281,15 @@ def write_armor_overrides(definitions):
             }}, f, indent=2)
 
 
-# The worn look: the vanilla humanoid armour layout at 2x (128x64), painted like the boss.
+# The worn look: the vanilla humanoid armour layout at 2x (128x64). Clean bevelled gunmetal plates
+# (lit from the top left, like the icons), crimson trims, glowing accents, and only a few
+# deliberate blood drips.
 KS = 2  # texels per armour-texture unit
+WORN = {k: hexrgb(v) for k, v in {
+    "o": "#08080a", "d": "#1a1a20", "m": "#2b2b33", "l": "#3b3b45", "h": "#5f5f6c", "s": "#8e8e9c",
+    "t": "#a3121c", "T": "#dc2a36", "t0": "#5c0910", "g": "#ff3b45", "G": "#ffb0b5", "k": "#050304",
+    "blood": "#4a060b", "drop": "#8c0f18",
+}.items()}
 
 
 def _box_faces(u, v, w, h, d):
@@ -1243,107 +1298,216 @@ def _box_faces(u, v, w, h, d):
             "front": (u + d, v + d, w, h), "left": (u + d + w, v + d, d, h), "back": (u + d + w + d, v + d, w, h)}
 
 
-def _paint_box(img, u, v, w, h, d, seed, detail=None, rows=None):
-    """Paints one box of the armour texture. detail(face, px, py, fw, fh) may return a colour
-    (or None for plate); rows limits side faces to their lowest `rows` texture units (boots)."""
-    for face, (fx, fy, fw, fh) in _box_faces(u, v, w, h, d).items():
-        fw, fh = fw * KS, fh * KS
-        for py in range(fh):
-            if rows is not None and face not in ("top", "bottom") and py < fh - rows * KS:
-                continue
-            if rows is not None and face == "top":
-                continue
-            for px in range(fw):
-                gx, gy = fx * KS + px, fy * KS + py
-                c = detail(face, px, py, fw, fh) if detail else None
-                if c is None:
-                    edge_hi = py == 0 or (rows is not None and py == fh - rows * KS)
-                    c = knight_plate(gx * 0.5, gy * 0.5, seed * 0.37, seed, edge_hi and face not in ("top", "bottom"),
-                                     py == fh - 1 and face not in ("top", "bottom"))
-                    # Plate seams every few texels, like the boss's layered armour.
-                    if face not in ("top", "bottom") and py % 10 == 9:
-                        c = c * 0.5
-                img[gy, gx, :3] = np.clip(c, 0, 255)
-                img[gy, gx, 3] = 255
+class _Face:
+    """Draws on one face of a box, in that face's own texel coordinates."""
+
+    def __init__(self, img, x, y, w, h, seed):
+        self.img, self.x, self.y, self.w, self.h, self.seed = img, x, y, w, h, seed
+
+    def put(self, px, py, color):
+        if 0 <= px < self.w and 0 <= py < self.h:
+            self.img[self.y + py, self.x + px, :3] = np.clip(color, 0, 255)
+            self.img[self.y + py, self.x + px, 3] = 255
+
+    def plate(self, x0, y0, x1, y1, tone="m"):
+        """A bevelled plate: soft top-to-bottom gradient, lit top/left rims, dark bottom/right."""
+        base = WORN[tone]
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                g = 1.12 - 0.24 * (py - y0) / max(1, y1 - y0 - 1)
+                n = 0.95 + 0.1 * _hash(self.x + px, self.y + py, 3, self.seed)
+                c = base * g * n
+                if py == y0:
+                    c = base * 0.35 + WORN["h"] * 0.65
+                elif px == x0:
+                    c = c * 1.18
+                if py == y1 - 1:
+                    c = WORN["o"] * 0.6 + base * 0.4
+                elif px == x1 - 1:
+                    c = c * 0.72
+                self.put(px, py, c)
+
+    def trim(self, x0, y0, x1, y1=None):
+        """Crimson trim: a bright top line, darker below."""
+        y1 = y0 + 1 if y1 is None else y1
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                self.put(px, py, WORN["T"] if py == y0 else WORN["t"] if py < y1 - 1 or y1 - y0 == 1 else WORN["t0"])
+
+    def fill(self, x0, y0, x1, y1, key):
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                self.put(px, py, WORN[key])
+
+    def glow_diamond(self, cx, cy, r):
+        for py in range(self.h):
+            for px in range(self.w):
+                dist = abs(px - cx) + abs(py - cy)
+                if dist <= r - 0.5:
+                    self.put(px, py, WORN["G"] if dist <= 0.6 else WORN["g"])
+                elif dist <= r + 0.6:
+                    self.put(px, py, WORN["k"])
+                elif dist <= r + 1.6:
+                    self.put(px, py, WORN["t"])
+
+    def drip(self, px, py, length):
+        for i in range(length):
+            self.put(px, py + i, WORN["blood"])
+        self.put(px, py + length, WORN["drop"])
+
+    def mail(self, x0, y0, x1, y1):
+        """Dark chainmail: a fine checker of two dark tones."""
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                self.put(px, py, WORN["m"] * 0.85 if (px + py) % 2 == 0 else WORN["d"] * 0.8)
 
 
-def _helm_detail(face, px, py, fw, fh):
-    if face == "front":  # 16x16: a plain closed helm, red band, visor slit with burning eyes
-        if py == 0:
-            return KNIGHT[5]
-        if py == 4:
-            return ramp(BLOOD, 0.6)                           # the band, same as the icon
-        if py in (6, 7) and 1 <= px <= 14:
-            if (3 <= px <= 5 or 10 <= px <= 12):
-                return ramp(GLOW, 0.85 if py == 6 else 0.55)
-            return KNIGHT[0]                                  # the visor slit
-        if py == 8 and 1 <= px <= 14:
-            return KNIGHT[4]                                  # lit lower lip of the slit
-        if 10 <= py <= 13 and px in (5, 7, 8, 10) and py % 2 == 0:
-            return KNIGHT[0]                                  # breathing holes
-    if face in ("left", "right", "back") and py == 4:
-        return ramp(BLOOD, 0.6)                               # the band goes all the way round
-    if face in ("left", "right") and py == 9:
-        return KNIGHT[0]                                      # cheek guard seam
-    return None
+def _faces(img, u, v, w, h, d, seed):
+    return {face: _Face(img, fx * KS, fy * KS, fw * KS, fh * KS, seed + i)
+            for i, (face, (fx, fy, fw, fh)) in enumerate(_box_faces(u, v, w, h, d).items())}
 
 
-def _chest_detail(face, px, py, fw, fh):
-    if face == "front":  # 16x24: breastplate with the glowing core, then faulds
-        cx, cy = 7.5, 8.5
-        dist = abs(px - cx) + abs(py - cy)
-        if dist <= 2.0:
-            return ramp(GLOW, 0.8)
-        if dist <= 3.2:
-            return ramp(GLOW, 0.3)
-        if dist <= 4.0:
-            return KNIGHT[0]
-        if py in (15, 18, 21):
-            return KNIGHT[0]
-        if py in (16, 19, 22):
-            return KNIGHT[4]
-    if face == "back" and 7 <= px <= 8:
-        return ramp(BLOOD, 0.45)
-    return None
+def _paint_helm(img):
+    f = _faces(img, 0, 0, 8, 8, 8, 11)
+    front = f["front"]                                    # 16x16
+    front.plate(0, 0, 16, 4, "l")                         # brow
+    front.trim(0, 4, 16, 6)                               # the band
+    front.fill(0, 6, 16, 8, "k")                          # visor slit
+    for x in (3, 4, 5, 10, 11, 12):                       # eyes
+        front.put(x, 6, WORN["G"] if x in (4, 11) else WORN["g"])
+        front.put(x, 7, WORN["g"] * 0.75)
+    front.plate(0, 8, 7, 16, "l")
+    front.plate(7, 8, 9, 16, "h")                         # nose ridge
+    front.plate(9, 8, 16, 16, "m")
+    for x in (3, 5, 10, 12):                              # breathing holes
+        for y in (10, 12):
+            front.put(x, y, WORN["k"])
+    for face, near_front in (("right", 15), ("left", 0)):
+        side = f[face]
+        side.plate(0, 0, 16, 4, "m")
+        side.trim(0, 4, 16, 6)
+        side.plate(0, 6, 16, 16, "m")
+        lo, hi = (11, 16) if near_front == 15 else (0, 5)
+        side.fill(lo, 6, hi, 8, "k")                      # the slit wraps round
+        seam = 10 if near_front == 15 else 5
+        side.fill(seam, 8, seam + 1, 16, "o")             # cheek guard
+        side.put(seam + (-2 if near_front == 15 else 2), 11, WORN["s"])   # rivet
+        side.put(seam + (-2 if near_front == 15 else 2), 14, WORN["s"])
+    back = f["back"]
+    back.plate(0, 0, 16, 4, "m")
+    back.trim(0, 4, 16, 6)
+    back.plate(0, 6, 16, 10, "m")
+    back.plate(0, 10, 16, 13, "l")                        # neck guard lames
+    back.plate(0, 13, 16, 16, "m")
+    top = f["top"]
+    top.plate(0, 0, 16, 16, "l")
+    top.trim(7, 0, 9, 16)                                 # crest ridge
+    top.fill(9, 0, 10, 16, "o")
+    f["bottom"].fill(0, 0, 16, 16, "d")
 
 
-def _arm_detail(face, px, py, fw, fh):
-    if face == "top" or py <= 8:  # pauldron
-        c = knight_plate(px * 0.5 + 40, py * 0.5, 3, 7)
-        if py == 0 or py == 8:
-            return c * 0.35 + WHITE * 0.65 if py == 0 else ramp(BLOOD, 0.55)
-        return c * 0.8
-    if face != "top" and face != "bottom" and 18 <= py <= 19 and 2 <= px <= fw - 3:
-        return ramp(GLOW, 0.6)          # a glowing slit in the vambrace
-    return None
+def _paint_torso(img, u, v, seed, legs_only=False):
+    f = _faces(img, u, v, 8, 12, 4, seed)
+    if legs_only:
+        # Leggings only show the belt and faulds at the bottom of the body box.
+        for face in ("front", "back", "left", "right"):
+            s = f[face]
+            s.fill(0, 16, s.w, 18, "d")                   # belt
+            s.fill(0, 16, s.w, 17, "m")
+            s.plate(0, 18, s.w, 21, "m")
+            s.plate(0, 21, s.w, 24, "l")
+            s.trim(0, 23, s.w)
+        buckle = f["front"]
+        buckle.fill(6, 16, 10, 18, "s")
+        buckle.put(7, 16, WORN["G"])
+        buckle.put(8, 16, WORN["g"])
+        buckle.put(7, 17, WORN["g"])
+        buckle.put(8, 17, WORN["g"] * 0.7)
+        return
+    front = f["front"]                                    # 16x24
+    front.plate(0, 0, 16, 2, "d")                         # gorget
+    front.trim(0, 2, 16)
+    front.plate(0, 3, 8, 14, "l")                         # breastplate halves
+    front.plate(8, 3, 16, 14, "m")
+    front.glow_diamond(7.5, 8.0, 2.0)                     # the Knight's blood core
+    front.drip(9, 12, 3)
+    front.drip(5, 13, 2)
+    for y0 in (14, 17, 20):                               # lames
+        front.plate(0, y0, 16, y0 + 3, "m" if y0 != 17 else "l")
+    front.trim(0, 23, 16)
+    back = f["back"]
+    back.plate(0, 0, 16, 14, "m")
+    back.trim(7, 1, 9, 13)                                # spine
+    back.fill(9, 1, 10, 13, "o")
+    for y0 in (14, 17, 20):
+        back.plate(0, y0, 16, y0 + 3, "m")
+    back.trim(0, 23, 16)
+    for face in ("left", "right"):
+        s = f[face]
+        s.plate(0, 0, 8, 14, "m")
+        for y0 in (14, 17, 20):
+            s.plate(0, y0, 8, y0 + 3, "m")
+        s.trim(0, 23, 8)
+    top = f["top"]
+    top.plate(0, 0, 16, 8, "l")
+    top.fill(5, 0, 11, 2, "d")                            # collar
+    f["bottom"].fill(0, 0, 16, 8, "d")
 
 
-def _boot_detail(face, px, py, fw, fh):
-    if face == "front" and py >= fh - 3 and 2 <= px <= 5:
-        return ramp(GLOW, 0.6)
-    if py == fh - 10:
-        return ramp(BLOOD, 0.6)           # blood-red cuff
-    return None
+def _paint_arm(img):
+    f = _faces(img, 40, 16, 4, 12, 4, 37)
+    for face in ("front", "back", "left", "right"):
+        s = f[face]                                       # 8x24
+        s.plate(0, 0, 8, 4, "l")                          # pauldron, two layers
+        s.trim(0, 4, 8)
+        s.plate(0, 5, 8, 8, "m")
+        s.fill(0, 8, 8, 9, "t0")
+        s.mail(0, 9, 8, 14)                               # upper arm
+        s.trim(0, 14, 8)
+        s.plate(0, 15, 8, 24, "m")                        # vambrace
+        if face in ("front", "right"):
+            for x in range(2, 6):
+                s.put(x, 19, WORN["g"] if x in (3, 4) else WORN["g"] * 0.7)
+    top = f["top"]
+    top.plate(0, 0, 8, 8, "l")
+    for i in range(8):                                    # crimson rim round the pauldron top
+        for x, y in ((i, 0), (i, 7), (0, i), (7, i)):
+            top.put(x, y, WORN["t"])
+    f["bottom"].fill(0, 0, 8, 8, "d")
 
 
-def _waist_detail(face, px, py, fw, fh):
-    """Leggings show only the lowest 4 units of the body box: a belt, then faulds."""
-    if face in ("front", "back", "left", "right") and py in (fh - 8, fh - 7):
-        if face == "front" and fw // 2 - 2 <= px <= fw // 2 + 1:
-            return ramp(GLOW, 0.7)
-        return ramp(BLOOD, 0.35)
-    return None
+def _paint_boots(img):
+    f = _faces(img, 0, 16, 4, 12, 4, 53)
+    for face in ("front", "back", "left", "right"):
+        s = f[face]                                       # only the lowest 10 texels show
+        s.trim(0, 14, 8, 16)                              # cuff
+        s.plate(0, 16, 8, 20, "m")
+        s.plate(0, 20, 8, 24, "l" if face == "front" else "m")
+        s.fill(0, 23, 8, 24, "o")                         # sole edge
+    toe = f["front"]
+    toe.put(3, 21, WORN["G"])
+    toe.put(4, 21, WORN["g"])
+    toe.put(3, 22, WORN["g"] * 0.7)
+    toe.put(4, 22, WORN["g"] * 0.7)
+    f["right"].put(5, 18, WORN["s"])                      # strap buckles
+    f["left"].put(2, 18, WORN["s"])
+    f["bottom"].fill(0, 0, 8, 8, "d")
 
 
-def _leg_detail(face, px, py, fw, fh):
-    if face in ("front", "back", "left", "right"):
-        if py <= 1:
-            return ramp(BLOOD, 0.35)                                  # belt line
-        if face == "front" and 9 <= py <= 12:                         # knee guard
-            return KNIGHT[4] if py == 9 else KNIGHT[3] * 0.8 + ramp(BLOOD, 0.3) * 0.2
-        if face == "front" and 16 <= py <= 19 and 3 <= px <= 4:
-            return ramp(GLOW, 0.6)                                    # shin slit
-    return None
+def _paint_legs(img):
+    f = _faces(img, 0, 16, 4, 12, 4, 79)
+    for face in ("front", "back", "left", "right"):
+        s = f[face]                                       # 8x24
+        s.plate(0, 0, 8, 10, "m")                         # thigh
+        s.plate(0, 10, 8, 15, "l" if face == "front" else "m")   # knee cop
+        s.plate(0, 15, 8, 24, "m")                        # greave
+    for face in ("front", "left", "right"):
+        f[face].trim(0, 9, 8)                             # above the knee
+    knee = f["front"]
+    knee.glow_diamond(3.5, 12.5, 1.5)
+    knee.plate(3, 16, 5, 23, "h")                         # shin ridge
+    knee.drip(2, 15, 2)
+    f["bottom"].fill(0, 0, 8, 8, "d")
 
 
 def write_knight_equipment():
@@ -1352,21 +1516,15 @@ def write_knight_equipment():
     os.makedirs(os.path.join(tex, "humanoid_leggings"), exist_ok=True)
 
     outer = np.zeros((32 * KS, 64 * KS, 4), dtype=float)
-    _paint_box(outer, 0, 0, 8, 8, 8, 11, _helm_detail)        # helmet (head)
-    _paint_box(outer, 16, 16, 8, 12, 4, 23, _chest_detail)    # chestplate (body)
-    _paint_box(outer, 40, 16, 4, 12, 4, 37, _arm_detail)      # chestplate (arms)
-    _paint_box(outer, 0, 16, 4, 12, 4, 53, _boot_detail, rows=5)  # boots (legs)
+    _paint_helm(outer)                                    # helmet (head)
+    _paint_torso(outer, 16, 16, 23)                       # chestplate (body)
+    _paint_arm(outer)                                     # chestplate (arms)
+    _paint_boots(outer)                                   # boots (legs, lower part)
     Image.fromarray(outer.astype("uint8"), "RGBA").save(os.path.join(tex, "humanoid", "blood_knight.png"))
 
     inner = np.zeros((32 * KS, 64 * KS, 4), dtype=float)
-    waist = np.zeros_like(inner)
-    _paint_box(waist, 16, 16, 8, 12, 4, 67, _waist_detail)
-    # Leggings only show the lower part of the body box (belt and faulds).
-    for face, (fx, fy, fw, fh) in _box_faces(16, 16, 8, 12, 4).items():
-        if face in ("front", "back", "left", "right"):
-            y0 = (fy + fh) * KS - 8
-            inner[y0:(fy + fh) * KS, fx * KS:(fx + fw) * KS] = waist[y0:(fy + fh) * KS, fx * KS:(fx + fw) * KS]
-    _paint_box(inner, 0, 16, 4, 12, 4, 79, _leg_detail)       # leggings (legs)
+    _paint_torso(inner, 16, 16, 67, legs_only=True)       # leggings (waist)
+    _paint_legs(inner)                                    # leggings (legs)
     Image.fromarray(inner.astype("uint8"), "RGBA").save(os.path.join(tex, "humanoid_leggings", "blood_knight.png"))
 
     eq = os.path.join(ASSETS, "equipment")
