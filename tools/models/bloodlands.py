@@ -127,14 +127,19 @@ GLYPHS = {
 }
 
 
-def text_width(text):
-    return sum(len(GLYPHS[ch][0]) + 1 for ch in text) - 1
+def glyph(ch, tight=False):
+    # Tight lettering (for a label that only just fits) uses a one-pixel space.
+    return ["0"] * 7 if tight and ch == " " else GLYPHS[ch]
 
 
-def draw_text(im, x, y, text, color, shadow=None, alpha=255):
+def text_width(text, tight=False):
+    return sum(len(glyph(ch, tight)[0]) + 1 for ch in text) - 1
+
+
+def draw_text(im, x, y, text, color, shadow=None, alpha=255, tight=False):
     cx = x
     for ch in text:
-        rows = GLYPHS[ch]
+        rows = glyph(ch, tight)
         for gy, row in enumerate(rows):
             for gx, bit in enumerate(row):
                 if bit == "1":
@@ -618,10 +623,11 @@ def button_face(state, frame=0, frames=1):
     labels = {"idle": "BLEED WEAPON", "cannot": "CANNOT BLEED", "need": "NEED MORE BLOOD", "ready": "BLEED WEAPON",
               "bleeding": "BLEEDING...", "max": "MAXIMUM LEVEL"}
     text = labels[state]
-    x = (BUTTON_W - text_width(text)) // 2
-    draw_text(im, x, 6, text, ink, shadow=shade(low, 0.4))
+    tight = text_width(text) > BUTTON_W - 8
+    x = (BUTTON_W - text_width(text, tight)) // 2
+    draw_text(im, x, 6, text, ink, shadow=shade(low, 0.4), tight=tight)
     if state == "cannot":
-        for xx in range(x - 2, x + text_width(text) + 2):
+        for xx in range(x - 2, x + text_width(text, tight) + 2):
             put(im, xx, 9, IRON[4])
     return im
 
