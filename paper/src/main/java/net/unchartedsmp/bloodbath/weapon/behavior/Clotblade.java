@@ -8,6 +8,7 @@ import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -50,6 +51,11 @@ public final class Clotblade implements WeaponBehavior {
 			BloodFx.play(victim, BloodFx.NULLIFY, 0.6F, 1.5F);
 			BloodFx.burst(chest, BloodFx.CLOT, 10, 0.3);
 			BloodFx.burst(chest, BloodFx.SOUL, 4, 0.3);
+			Location feet = victim.getLocation();
+			for (double h : new double[] {0.25, 1.0, 1.75}) {
+				BloodFx.ring(feet.clone().add(0.0, h, 0.0), BloodFx.CLOT, 0.55, 10);
+			}
+			Shapes.spiral(feet, BloodFx.BLOOD_FADE, 0.6, 2.0, 1.5, 14, 0.0);
 			NullField.notifyNullified(victim);
 		}
 	}
@@ -72,10 +78,12 @@ public final class Clotblade implements WeaponBehavior {
 		// Show the field's edge for as long as it's active so players can see where it ends.
 		Location floor = center.clone().add(0.0, 0.1, 0.0);
 		Location band = center.clone().add(0.0, 0.7, 0.0);
+		Shapes.shockwave(floor, BloodFx.CLOT, radius, 8);
 		TickScheduler.repeat(10, 10, duration / 10, tick -> {
 			BloodFx.ring(floor, BloodFx.CLOT, radius, 28);
-			BloodFx.ring(band, BloodFx.BLOOD_FADE, radius * 0.98, 14);
+			Shapes.dome(floor, BloodFx.BLOOD_FADE, radius, 4, 20, tick * 0.25);
 			BloodFx.burst(center, BloodFx.SOUL, 3, radius * 0.5);
+			BloodFx.burst(center, BloodFx.MIST, 2, radius * 0.4, 0.0);
 			return true;
 		});
 	}

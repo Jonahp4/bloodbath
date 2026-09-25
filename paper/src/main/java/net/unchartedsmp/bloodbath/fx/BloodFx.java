@@ -199,31 +199,37 @@ public final class BloodFx {
 		emit(w, DRIP, at.getX(), at.getY(), at.getZ(), Math.max(1, intensity / 2), 0.3, 0.2, 0.3, 0.0);
 	}
 
+	/** A batch of shape points around {@code center}, reaching {@code extent} blocks from it. */
+	public static Particles.Batch shape(Location center, double extent) {
+		return Particles.batch(center.getWorld(), center.getX(), center.getY(), center.getZ(), extent, Particles.Audience.ALL, null,
+			viewDistance());
+	}
+
 	/** Particle line between two points, {@code perBlock} samples per block of distance. */
 	public static void line(Location from, Location to, Fx fx, double perBlock) {
 		double length = from.distance(to);
-		if (!Particles.anyoneNear(from.getWorld(), (from.getX() + to.getX()) / 2, (from.getY() + to.getY()) / 2,
-			(from.getZ() + to.getZ()) / 2, viewDistance() + length / 2)) {
+		Particles.Batch batch = Particles.batch(from.getWorld(), (from.getX() + to.getX()) / 2, (from.getY() + to.getY()) / 2,
+			(from.getZ() + to.getZ()) / 2, length / 2, Particles.Audience.ALL, null, viewDistance());
+		if (!batch.visible()) {
 			return;
 		}
 		int steps = Math.max(2, (int) Math.ceil(length * perBlock * Math.min(1.0, Settings.get().particleMultiplier)));
-		World w = from.getWorld();
 		for (int i = 0; i <= steps; i++) {
 			double t = i / (double) steps;
-			emit(w, fx, lerp(from.getX(), to.getX(), t), lerp(from.getY(), to.getY(), t), lerp(from.getZ(), to.getZ(), t), 1, 0, 0, 0, 0);
+			batch.point(i, fx, lerp(from.getX(), to.getX(), t), lerp(from.getY(), to.getY(), t), lerp(from.getZ(), to.getZ(), t), 1, 0, 0, 0, 0);
 		}
 	}
 
 	/** Flat horizontal ring. */
 	public static void ring(Location center, Fx fx, double radius, int points) {
-		if (!Particles.anyoneNear(center.getWorld(), center.getX(), center.getY(), center.getZ(), viewDistance() + radius)) {
+		Particles.Batch batch = shape(center, radius);
+		if (!batch.visible()) {
 			return;
 		}
 		int n = Math.max(3, (int) Math.round(points * Math.min(1.0, Settings.get().particleMultiplier)));
-		World w = center.getWorld();
 		for (int i = 0; i < n; i++) {
 			double angle = (Math.PI * 2.0 * i) / n;
-			emit(w, fx, center.getX() + Math.cos(angle) * radius, center.getY(), center.getZ() + Math.sin(angle) * radius, 1, 0, 0, 0, 0);
+			batch.point(i, fx, center.getX() + Math.cos(angle) * radius, center.getY(), center.getZ() + Math.sin(angle) * radius, 1, 0, 0, 0, 0);
 		}
 	}
 
@@ -268,6 +274,8 @@ public final class BloodFx {
 		burst(chest.clone().add(0.0, 0.6, 0.0), DRIP, 10, 0.7, 0.0);
 		burst(victim.getLocation().add(0.0, 0.2, 0.0), RING, 1, 0.0);
 		burst(chest, WISP, 5, 0.3, 0.02);
+		Shapes.shockwave(victim.getLocation().add(0.0, 0.1, 0.0), BLOOD_FADE, 2.0, 6);
+		Shapes.rising(victim.getLocation(), 0.6, 2.2, 6, 14);
 		// The weapon drinks: blood streams from the corpse into the killer.
 		Location killerChest = killer.getLocation().add(0.0, killer.getHeight() * 0.6, 0.0);
 		for (int i = 0; i < 6; i++) {

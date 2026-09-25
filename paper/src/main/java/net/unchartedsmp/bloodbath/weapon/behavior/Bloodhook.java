@@ -9,6 +9,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.util.Damage;
@@ -92,7 +93,8 @@ public final class Bloodhook implements WeaponBehavior {
 			}
 			// From the hook in your hand, not your eyes: in first person the chain would start on the camera.
 			Location hand = Hud.handPos(player, false);
-			BloodFx.line(hand, BloodFx.chest(target), BloodFx.BLOOD_FADE, 2.0);
+			Shapes.helix(hand, BloodFx.chest(target), BloodFx.BLOOD_FADE, 0.12, 1.2, 3.0, tick * 0.9);
+			BloodFx.line(hand, BloodFx.chest(target), BloodFx.CLOT, 1.0);
 			if (tick % 2 == 0) {
 				BloodFx.flow(BloodFx.chest(target), hand, 3, 0.2, BloodFx.BRIGHT_RED, 6);
 			}
@@ -111,6 +113,14 @@ public final class Bloodhook implements WeaponBehavior {
 				double lift = 0.3 + Math.max(0.0, toTarget.getY()) * 0.06;
 				Targeting.addVelocity(player, toTarget.multiply(speed / distance).setY(0.0).add(new Vector(0.0, lift, 0.0)));
 				player.setFallDistance(0.0F);
+				TickScheduler.repeat(1, 1, 8, step -> {
+					if (!player.isValid()) {
+						return false;
+					}
+					BloodFx.burstForOthers(player, BloodFx.chest(player), BloodFx.BLOOD_FADE, 3, 0.2);
+					BloodFx.burstForOthers(player, player.getLocation().add(0.0, 0.3, 0.0), BloodFx.MOTE, 2, 0.15);
+					return true;
+				});
 			}
 			BloodFx.play(target, BloodFx.CHAIN_SNAP, 0.6F, 1.6F);
 			BloodFx.play(target, BloodFx.SQUELCH, 0.8F, 0.7F);

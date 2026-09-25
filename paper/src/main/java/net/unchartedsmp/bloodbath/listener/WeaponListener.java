@@ -18,6 +18,7 @@ import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
@@ -28,6 +29,7 @@ import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import net.unchartedsmp.bloodbath.weapon.behavior.Mirrorfang;
 import org.bukkit.Keyed;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.AbstractArrow;
@@ -54,6 +56,7 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.Vector;
 
 /** Turns clicks, hits, shots and kills with Bloodbath weapons into their powers. */
 public final class WeaponListener implements Listener {
@@ -132,9 +135,29 @@ public final class WeaponListener implements Listener {
 		if (type == null || !Targeting.validTarget(player, target) || !Gate.allows(player, type, true)) {
 			return;
 		}
-		BloodFx.splash(BloodFx.chest(target), 3);
+		hitSpray(player, target);
 		Behaviors.of(type).melee(player, target, event.getFinalDamage());
 		bloodBleed(player, target, BloodLevels.level(player.getInventory().getItemInMainHand()), type);
+	}
+
+	/**
+	 * Every hit with a Bloodbath weapon throws blood out of the far side of the wound, in the
+	 * direction of the blow, and a falling (critical) hit flashes a small crescent.
+	 */
+	private static void hitSpray(Player player, LivingEntity target) {
+		Location chest = BloodFx.chest(target);
+		BloodFx.splash(chest, 3);
+		Vector blow = target.getLocation().toVector().subtract(player.getLocation().toVector()).setY(0.0);
+		if (blow.lengthSquared() > 1.0E-4) {
+			blow.normalize();
+			Location out = chest.clone().add(blow.clone().multiply(1.7)).add(0.0, -0.35, 0.0);
+			BloodFx.flow(chest, out, 4, 0.15, BloodFx.BRIGHT_RED, 8);
+			BloodFx.flow(chest, out.clone().add(0.0, -0.6, 0.0), 3, 0.2, BloodFx.BLOOD_RED, 10);
+			if (player.getFallDistance() > 0.0F && player.getVelocity().getY() < 0.0) {
+				BloodFx.burst(chest, BloodFx.EMBER, 8, 0.3, 0.08);
+				Shapes.crescent(chest, 0.75, Math.atan2(blow.getZ(), blow.getX()) + Math.PI / 2, Math.PI / 3, 0.3);
+			}
+		}
 	}
 
 	/** A bled weapon's hit may open a wound. */

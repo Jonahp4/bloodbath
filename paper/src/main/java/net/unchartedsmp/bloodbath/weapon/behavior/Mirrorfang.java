@@ -11,6 +11,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -86,6 +87,8 @@ public final class Mirrorfang implements WeaponBehavior {
 
 		Location mirrorChest = BloodFx.chest(mirror);
 		BloodFx.burst(mirrorChest, BloodFx.BLOOD_LARGE, 25, 0.4);
+		Shapes.converge(mirrorChest, 2.0, 10, 8);
+		Shapes.spiral(mirror.getLocation(), BloodFx.BLOOD_FADE, 0.55, 2.0, 2.0, 20, 0.0);
 		BloodFx.flow(BloodFx.chest(player), mirrorChest, 8, 0.3, BloodFx.BRIGHT_RED, 8);
 		BloodFx.play(mirror, BloodFx.MIRROR, 1.0F, 1.2F);
 
@@ -175,6 +178,7 @@ public final class Mirrorfang implements WeaponBehavior {
 		Damage.deal(target, damage, owner, type(), from);
 		BloodFx.line(BloodFx.chest(mirror), chest, BloodFx.BLOOD_FADE, 4.0);
 		BloodFx.burst(chest, BloodFx.SWEEP, 1, 0.0);
+		Shapes.crescent(chest, 0.9, Math.atan2(look.getZ(), look.getX()), Math.PI / 3, 0.35);
 		BloodFx.play(target, BloodFx.FANGS, 0.5F, 1.6F);
 		BloodFx.splash(chest, 3);
 	}

@@ -26,6 +26,7 @@ import net.unchartedsmp.bloodbath.bloodlands.Bloodlands;
 import net.unchartedsmp.bloodbath.config.BloodConfig;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.Bukkit;
@@ -580,11 +581,13 @@ public final class Portals implements Listener {
 				continue;
 			}
 			long held = now - e.getValue().since();
-			if (held % 4 == 0) {
-				// Blood spirals up around them as the portal takes hold.
-				double angle = held * 0.6;
-				Location at = player.getLocation().add(Math.cos(angle) * 0.7, 0.2 + (held % 20) / 10.0, Math.sin(angle) * 0.7);
-				BloodFx.burst(at, BloodFx.BLOOD_FADE, 2, 0.05);
+			if (held % 2 == 0) {
+				// Blood spirals up around them, tighter and faster as the portal takes hold.
+				double pull = Math.min(1.0, held / (double) Math.max(1, warmup));
+				Shapes.spiral(player.getLocation(), BloodFx.BLOOD_FADE, 0.9 - 0.4 * pull, 2.1, 1.0 + pull, 10, held * 0.5);
+				if (held % 6 == 0) {
+					Shapes.converge(BloodFx.chest(player), 1.6, 3, 6);
+				}
 			}
 			if (held >= warmup) {
 				ready.add(player);

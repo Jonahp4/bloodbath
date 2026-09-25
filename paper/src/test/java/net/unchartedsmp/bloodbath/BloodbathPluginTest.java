@@ -1911,4 +1911,16 @@ class BloodbathPluginTest {
 		assertEquals(Material.NETHERITE_SWORD.getKey(), Weapons.itemModel("riftblade", Material.NETHERITE_SWORD));
 		assertEquals(BloodArmor.EQUIPMENT, BloodArmor.wornAsset(ArmorPiece.HELM));
 	}
+
+	@Test
+	void distantViewersGetAFractionOfAShapesPoints() {
+		TestPlayer far = server.addTestPlayer("Far");
+		stand(far, 52.5, 0.5, 90.0F, 0.0F); // beyond twice full detail (24), inside view distance (64)
+		world.spawns.clear();
+		BloodFx.ring(new Location(world, 0.5, 6.0, 0.5), BloodFx.BLOOD_FADE, 2.0, 32);
+		long near = world.spawns.stream().filter(s -> s.receivers() != null && s.receivers().contains(player)).count();
+		long distant = world.spawns.stream().filter(s -> s.receivers() != null && s.receivers().contains(far)).count();
+		assertEquals(32, near, "every point up close");
+		assertEquals(8, distant, "a quarter of them far away");
+	}
 }

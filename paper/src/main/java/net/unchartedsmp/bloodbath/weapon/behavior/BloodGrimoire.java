@@ -9,6 +9,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -95,7 +96,12 @@ public final class BloodGrimoire implements WeaponBehavior {
 			Location book = Hud.handPos(caster, false);
 			Location heart = BloodFx.chest(victim);
 			if (tick % 2 == 0) {
-				BloodFx.line(heart, book, BloodFx.BLOOD, 2.5);
+				Shapes.helix(heart, book, BloodFx.BLOOD_FADE, 0.18, 0.8, 3.0, tick * 0.6);
+				BloodFx.line(heart, book, BloodFx.BLOOD, 1.5);
+			}
+			if (tick % 4 == 0) {
+				Shapes.arc(caster.getLocation().add(0.0, 0.1, 0.0), BloodFx.GLYPH, 1.0, tick * 0.3, Math.PI, 12);
+				BloodFx.ring(caster.getLocation().add(0.0, 0.05, 0.0), BloodFx.BLOOD_FADE, 1.1, 16);
 			}
 			BloodFx.flow(heart, book, 2, 0.25, tick % 4 == 0 ? BloodFx.BRIGHT_RED : BloodFx.BLOOD_RED, 8);
 			if (tick % PULSE_INTERVAL_TICKS == PULSE_INTERVAL_TICKS - 1) {
@@ -136,6 +142,8 @@ public final class BloodGrimoire implements WeaponBehavior {
 		BloodFx.line(from, to, BloodFx.BLOOD_FADE, 3.0);
 		BloodFx.burst(to, BloodFx.BLOOD_FADE, 20, 0.4);
 		BloodFx.ring(friend.getLocation().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, 0.9, 16);
+		Shapes.spiral(friend.getLocation(), BloodFx.EMBER, 0.7, 2.2, 2.0, 22, 0.0);
+		Shapes.helix(from, to, BloodFx.BLOOD_FADE, 0.2, 0.6, 3.0, 0.0);
 		BloodFx.play(caster, BloodFx.PAGE, 1.0F, 1.2F);
 		BloodFx.play(friend, BloodFx.READY, 0.6F, 1.4F);
 		Hud.flash(caster, Component.text("You gave " + friend.getName() + " your blood.", NamedTextColor.RED));

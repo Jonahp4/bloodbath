@@ -11,6 +11,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -95,6 +96,9 @@ public final class HemorrhageScythe implements WeaponBehavior {
 		BloodFx.splash(chest, 12);
 		BloodFx.spray(chest, radius, 16, 8);
 		BloodFx.ring(center.clone().add(0.0, 0.1, 0.0), BloodFx.CLOT, radius, 32);
+		Shapes.shockwave(center.clone().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, radius, 8);
+		Shapes.column(center, BloodFx.BLOOD_LARGE, 3.0, 14, 0.2);
+		BloodFx.burst(chest, BloodFx.NOVA, 1, 0.0);
 		BloodFx.play(center, BloodFx.FANGS, 0.9F, 0.7F);
 		BloodFx.play(center, BloodFx.SQUELCH, 1.0F, 0.5F);
 
@@ -122,13 +126,10 @@ public final class HemorrhageScythe implements WeaponBehavior {
 		}
 		facing.normalize();
 		Location chest = BloodFx.chest(player);
-		// Draw the arc: points on a 120° sweep in front of the player.
+		// The arc: a full crescent over the 120° it cuts, a sweep flash at its middle.
 		double yaw = Math.atan2(facing.getZ(), facing.getX());
-		for (int i = -6; i <= 6; i++) {
-			double angle = yaw + Math.toRadians(i * 10.0);
-			Location p = chest.clone().add(Math.cos(angle) * 2.4, 0.1 - Math.abs(i) * 0.04, Math.sin(angle) * 2.4);
-			BloodFx.burst(p, i % 3 == 0 ? BloodFx.SWEEP : BloodFx.BLOOD_FADE, 1, 0.05);
-		}
+		Shapes.crescent(chest.clone().add(0.0, 0.1, 0.0), 2.4, yaw, Math.toRadians(60), 0.9);
+		BloodFx.burst(chest.clone().add(facing.clone().multiply(1.8)), BloodFx.SWEEP, 1, 0.0);
 		BloodFx.play(player, BloodFx.HARVEST, 1.0F, 0.6F);
 		BloodFx.play(player, BloodFx.SQUELCH, 0.6F, 0.8F);
 
@@ -193,6 +194,7 @@ public final class HemorrhageScythe implements WeaponBehavior {
 			if (now <= bleed.expiresAt() && target.isValid() && !target.isDead()) {
 				Location chest = BloodFx.chest(target);
 				BloodFx.burst(chest, BloodFx.DRIP, bleed.stacks(), 0.25, 0.0);
+				Shapes.orbit(chest, bleed.stacks(), 0.6, now * 0.25);
 				if (bleed.stacks() >= nearDeath) {
 					BloodFx.burst(chest, BloodFx.BLOOD_FADE, 3, 0.3);
 				}

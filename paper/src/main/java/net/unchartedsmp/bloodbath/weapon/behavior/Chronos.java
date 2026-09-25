@@ -72,7 +72,7 @@ public final class Chronos implements WeaponBehavior {
 				return false;
 			}
 			double fraction = 1.0 - (tick + 1) / (double) pulses;
-			BloodFx.ring(floor, BloodFx.BLOOD_FADE, 0.7, Math.max(3, (int) Math.round(16 * fraction)));
+			Shapes.clock(floor, 0.8, fraction);
 			BloodFx.line(floor, top, BloodFx.BLOOD, 3.0);
 			if (tick % 2 == 1) {
 				BloodFx.play(pos, BloodFx.CLOCK_TICK, 0.5F, 0.8F + tick * 0.05F);
@@ -104,6 +104,7 @@ public final class Chronos implements WeaponBehavior {
 		Location left = player.getLocation();
 		BloodFx.burst(departure, BloodFx.BLOOD_LARGE, 30, 0.5);
 		BloodFx.flow(departure, target.clone().add(0.0, 1.0, 0.0), 10, 0.4, BloodFx.BRIGHT_RED, 10);
+		Shapes.helix(departure, target.clone().add(0.0, 1.0, 0.0), BloodFx.EMBER, 0.4, 0.5, 3.0, 0.0);
 		if (!Targeting.teleport(player, target, target.getYaw(), target.getPitch())) {
 			return;
 		}

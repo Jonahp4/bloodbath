@@ -7,6 +7,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -67,11 +68,15 @@ public final class MeteorGauntlet implements WeaponBehavior {
 			// Danger ring at full radius plus an inner ring closing in: impact when they meet.
 			BloodFx.ring(center, BloodFx.CLOT, radius, 28);
 			BloodFx.ring(center, BloodFx.BLOOD_FADE, radius * (1.0 - progress), 20);
+			Shapes.arc(center.clone().add(0.0, 0.15, 0.0), BloodFx.GLYPH, radius * 0.85, tick * 0.5, Math.PI / 5, 6);
+			Shapes.arc(center.clone().add(0.0, 0.15, 0.0), BloodFx.GLYPH, radius * 0.85, tick * 0.5 + Math.PI, Math.PI / 5, 6);
+			Shapes.column(center, BloodFx.EMBER, 2.5 * (1.0 - progress) + 0.5, 6, 0.05);
 			// The meteor: a falling clot that closes in on the impact point.
 			Location meteor = center.clone().add(0.0, 14.0 * (1.0 - progress), 0.0);
 			BloodFx.burst(meteor, BloodFx.BLOOD_LARGE, 8, 0.3);
 			BloodFx.burst(meteor.clone().add(0.0, 0.8, 0.0), BloodFx.SMOKE, 2, 0.2, 0.0);
 			BloodFx.burst(meteor, BloodFx.DRIP, 3, 0.2, 0.0);
+			Shapes.spiral(meteor, BloodFx.BLOOD_FADE, 0.45, 3.5, 1.2, 12, tick * 0.8);
 			return true;
 		});
 		TickScheduler.schedule(delay, () -> strike(caster, center, radius, damage));
@@ -85,6 +90,9 @@ public final class MeteorGauntlet implements WeaponBehavior {
 		BloodFx.burst(center, BloodFx.BLOOD_LARGE, 25, 1.2);
 		BloodFx.spray(center, radius, 20, 10);
 		BloodFx.ring(center, BloodFx.CLOT, radius * 0.7, 24);
+		Shapes.shockwave(center.clone().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, radius * 1.3, 10);
+		BloodFx.burst(center, BloodFx.GORE, 30, 0.6, 0.35);
+		Shapes.rising(center, radius * 0.6, 3.0, 10, 16);
 		for (LivingEntity target : Targeting.livingInRadius(center, radius, caster)) {
 			Damage.deal(target, damage, caster, type(), center);
 			Targeting.launchOutward(target, center, LAUNCH_STRENGTH, LAUNCH_VERTICAL);

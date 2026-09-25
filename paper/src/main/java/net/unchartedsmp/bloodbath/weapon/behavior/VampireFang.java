@@ -12,6 +12,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -100,11 +101,15 @@ public final class VampireFang implements WeaponBehavior {
 			Location chest = BloodFx.chest(player);
 			BloodFx.burst(chest, BloodFx.BLOOD_FADE, 6, 0.25);
 			BloodFx.burst(chest, BloodFx.SPLATTER, 2, 0.2, 0.05);
+			if (tick % 2 == 0) {
+				Shapes.column(player.getLocation(), BloodFx.BLOOD_FADE, 1.8, 7, 0.12); // an afterimage of you
+			}
 			for (LivingEntity target : Targeting.livingInRadius(chest, 1.8, player)) {
 				if (cut.add(target.getUniqueId())) {
 					double before = health(target);
 					Damage.deal(target, damage, player, type(), player.getLocation());
 					BloodFx.splash(BloodFx.chest(target), 5);
+					Shapes.crescent(BloodFx.chest(target), 0.8, Math.atan2(aim.getZ(), aim.getX()) + Math.PI / 2, Math.PI / 3, 0.3);
 					drink(player, target, Math.max(0.0, before - health(target)) * lifesteal * 2.0);
 				}
 			}

@@ -2,9 +2,10 @@ package net.unchartedsmp.bloodbath.fx;
 
 import java.util.concurrent.ThreadLocalRandom;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.config.Settings;
 import org.bukkit.Color;
 import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.util.Vector;
 
 /**
  * Particle shapes the bigger effects are composed from: rings, spirals, columns, arcs, rising
@@ -21,31 +22,186 @@ public final class Shapes {
 
 	/** A helix around a vertical axis, {@code turns} times round over {@code height}. */
 	public static void spiral(Location base, BloodFx.Fx fx, double radius, double height, double turns, int points, double phase) {
-		World world = base.getWorld();
+		Particles.Batch batch = BloodFx.shape(base.clone().add(0.0, height / 2, 0.0), Math.max(radius, height / 2));
+		if (!batch.visible()) {
+			return;
+		}
 		for (int i = 0; i < points; i++) {
 			double t = i / (double) Math.max(1, points - 1);
 			double angle = phase + t * turns * Math.PI * 2.0;
-			BloodFx.emit(world, fx, base.getX() + Math.cos(angle) * radius, base.getY() + t * height, base.getZ() + Math.sin(angle) * radius,
+			batch.point(i, fx, base.getX() + Math.cos(angle) * radius, base.getY() + t * height, base.getZ() + Math.sin(angle) * radius,
 				1, 0, 0, 0, 0);
 		}
 	}
 
 	/** A vertical column of particles, slightly jittered so it reads as liquid rather than a line. */
 	public static void column(Location base, BloodFx.Fx fx, double height, int points, double spread) {
-		World world = base.getWorld();
+		Particles.Batch batch = BloodFx.shape(base.clone().add(0.0, height / 2, 0.0), height / 2 + spread);
+		if (!batch.visible()) {
+			return;
+		}
 		for (int i = 0; i < points; i++) {
 			double y = base.getY() + height * i / (double) Math.max(1, points - 1);
-			BloodFx.emit(world, fx, base.getX(), y, base.getZ(), 1, spread, 0.05, spread, 0);
+			batch.point(i, fx, base.getX(), y, base.getZ(), 1, spread, 0.05, spread, 0);
 		}
 	}
 
 	/** An arc of a horizontal circle, centred on {@code yawRadians}, spanning {@code halfAngle} each side. */
 	public static void arc(Location center, BloodFx.Fx fx, double radius, double yawRadians, double halfAngle, int points) {
-		World world = center.getWorld();
+		Particles.Batch batch = BloodFx.shape(center, radius);
+		if (!batch.visible()) {
+			return;
+		}
 		for (int i = 0; i < points; i++) {
 			double angle = yawRadians - halfAngle + 2.0 * halfAngle * i / (double) Math.max(1, points - 1);
-			BloodFx.emit(world, fx, center.getX() + Math.cos(angle) * radius, center.getY(), center.getZ() + Math.sin(angle) * radius,
+			batch.point(i, fx, center.getX() + Math.cos(angle) * radius, center.getY(), center.getZ() + Math.sin(angle) * radius,
 				1, 0, 0, 0, 0);
+		}
+	}
+
+	/**
+	 * A filled crescent: a slash's whole swept band, bright along its leading edge and fading to
+	 * clotted blood behind, thickest in the middle and tapering to points at both ends.
+	 * {@code yawRadians} is the direction it faces (Minecraft yaw + 90°, in radians).
+	 */
+	public static void crescent(Location center, double radius, double yawRadians, double halfAngle, double thickness) {
+		Particles.Batch batch = BloodFx.shape(center, radius);
+		if (!batch.visible()) {
+			return;
+		}
+		int along = (int) Math.max(10, radius * halfAngle * 7);
+		int index = 0;
+		for (int i = 0; i < along; i++) {
+			double t = i / (double) (along - 1);
+			double angle = yawRadians - halfAngle + 2.0 * halfAngle * t;
+			double width = thickness * Math.sin(Math.PI * t); // tapered ends
+			double lift = Math.sin(Math.PI * t) * 0.15;
+			for (int k = 0; k < 3; k++) {
+				double r = radius - width * k / 2.0;
+				BloodFx.Fx fx = k == 0 ? BloodFx.SLASH : k == 1 ? BloodFx.BLOOD_FADE : BloodFx.CLOT;
+				batch.point(index++, fx, center.getX() + Math.cos(angle) * r, center.getY() + lift - k * 0.05,
+					center.getZ() + Math.sin(angle) * r, 1, 0, 0, 0, 0);
+			}
+		}
+	}
+
+	/**
+	 * Two strands of blood twisting round each other from {@code from} to {@code to}: a chain, a
+	 * drain, a beam. {@code phase} turns it (advance it each tick and the twist flows along).
+	 */
+	public static void helix(Location from, Location to, BloodFx.Fx fx, double radius, double turnsPerBlock, double perBlock, double phase) {
+		Vector axis = to.toVector().subtract(from.toVector());
+		double length = axis.length();
+		if (length < 1.0E-3) {
+			return;
+		}
+		Location mid = from.clone().add(axis.clone().multiply(0.5));
+		Particles.Batch batch = BloodFx.shape(mid, length / 2 + radius);
+		if (!batch.visible()) {
+			return;
+		}
+		axis.multiply(1.0 / length);
+		// Two directions perpendicular to the axis.
+		Vector side = Math.abs(axis.getY()) > 0.9 ? new Vector(1, 0, 0) : new Vector(0, 1, 0);
+		Vector u = axis.getCrossProduct(side).normalize();
+		Vector v = axis.getCrossProduct(u).normalize();
+		int steps = (int) Math.max(4, length * perBlock * Math.min(1.0, Settings.get().particleMultiplier));
+		int index = 0;
+		for (int i = 0; i <= steps; i++) {
+			double t = i / (double) steps;
+			double angle = phase + t * length * turnsPerBlock * Math.PI * 2.0;
+			for (int strand = 0; strand < 2; strand++) {
+				double a = angle + strand * Math.PI;
+				double ox = (u.getX() * Math.cos(a) + v.getX() * Math.sin(a)) * radius;
+				double oy = (u.getY() * Math.cos(a) + v.getY() * Math.sin(a)) * radius;
+				double oz = (u.getZ() * Math.cos(a) + v.getZ() * Math.sin(a)) * radius;
+				batch.point(index++, fx, from.getX() + axis.getX() * t * length + ox, from.getY() + axis.getY() * t * length + oy,
+					from.getZ() + axis.getZ() * t * length + oz, 1, 0, 0, 0, 0);
+			}
+		}
+	}
+
+	/** The upper half of a sphere: a field's wall and roof, seen from anywhere around it. */
+	public static void dome(Location center, BloodFx.Fx fx, double radius, int rings, int perRing, double phase) {
+		Particles.Batch batch = BloodFx.shape(center.clone().add(0.0, radius / 2, 0.0), radius);
+		if (!batch.visible()) {
+			return;
+		}
+		int index = 0;
+		for (int r = 0; r < rings; r++) {
+			double elevation = (Math.PI / 2) * r / rings;
+			double ringRadius = radius * Math.cos(elevation);
+			double y = center.getY() + radius * Math.sin(elevation);
+			int n = Math.max(4, (int) Math.round(perRing * Math.cos(elevation)));
+			for (int i = 0; i < n; i++) {
+				double angle = phase + (Math.PI * 2.0 * i) / n + r * 0.4;
+				batch.point(index++, fx, center.getX() + Math.cos(angle) * ringRadius, y, center.getZ() + Math.sin(angle) * ringRadius,
+					1, 0, 0, 0, 0);
+			}
+		}
+	}
+
+	/**
+	 * Blood swirling inward and down toward {@code center} over {@code ticks}: the read for "this
+	 * pulls". A few arms of a spiral wind in and tighten each tick.
+	 */
+	public static void vortex(Location center, double radius, int arms, int ticks) {
+		Location c = center.clone();
+		TickScheduler.repeat(0, 2, Math.max(1, ticks / 2), tick -> {
+			double t = tick * 2.0 / Math.max(1, ticks);
+			Particles.Batch batch = BloodFx.shape(c, radius);
+			if (!batch.visible()) {
+				return true;
+			}
+			int index = 0;
+			for (int arm = 0; arm < arms; arm++) {
+				for (int k = 0; k < 6; k++) {
+					double s = k / 5.0;
+					double r = radius * (1.0 - s) * (1.0 - t * 0.3) + 0.2;
+					double angle = arm * Math.PI * 2.0 / arms + s * 2.4 + tick * 0.45;
+					BloodFx.Fx fx = k < 2 ? BloodFx.BLOOD_FADE : k < 4 ? BloodFx.BLOOD : BloodFx.EMBER;
+					batch.point(index++, fx, c.getX() + Math.cos(angle) * r, c.getY() + 0.1 + s * 0.6, c.getZ() + Math.sin(angle) * r, 1, 0, 0, 0, 0);
+				}
+			}
+			return true;
+		});
+	}
+
+	/**
+	 * A clock face on the ground: twelve marks round the rim and a hand pointing at how much of the
+	 * window is left ({@code fraction}, 1 = all of it).
+	 */
+	public static void clock(Location center, double radius, double fraction) {
+		Particles.Batch batch = BloodFx.shape(center, radius);
+		if (!batch.visible()) {
+			return;
+		}
+		int index = 0;
+		for (int i = 0; i < 12; i++) {
+			double angle = Math.PI * 2.0 * i / 12 - Math.PI / 2;
+			BloodFx.Fx fx = i / 12.0 < fraction ? BloodFx.BLOOD_FADE : BloodFx.CLOT;
+			batch.point(index++, fx, center.getX() + Math.cos(angle) * radius, center.getY(), center.getZ() + Math.sin(angle) * radius, 1, 0, 0, 0, 0);
+		}
+		double hand = Math.PI * 2.0 * fraction - Math.PI / 2;
+		for (int k = 1; k <= 4; k++) {
+			double r = radius * k / 5.0;
+			batch.point(index++, BloodFx.EMBER, center.getX() + Math.cos(hand) * r, center.getY() + 0.02, center.getZ() + Math.sin(hand) * r, 1, 0, 0, 0, 0);
+		}
+	}
+
+	/** Motes circling an entity at chest height, one per {@code count}: stacks you can count. */
+	public static void orbit(Location chest, int count, double radius, double phase) {
+		if (count <= 0) {
+			return;
+		}
+		Particles.Batch batch = BloodFx.shape(chest, radius);
+		if (!batch.visible()) {
+			return;
+		}
+		for (int i = 0; i < count; i++) {
+			double angle = phase + Math.PI * 2.0 * i / count;
+			batch.point(i, BloodFx.EMBER, chest.getX() + Math.cos(angle) * radius, chest.getY() + Math.sin(phase * 2 + i) * 0.15,
+				chest.getZ() + Math.sin(angle) * radius, 1, 0, 0, 0, 0);
 		}
 	}
 

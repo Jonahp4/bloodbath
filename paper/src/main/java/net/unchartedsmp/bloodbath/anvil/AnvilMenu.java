@@ -15,6 +15,7 @@ import net.unchartedsmp.bloodbath.blood.BloodLevels;
 import net.unchartedsmp.bloodbath.config.BloodConfig;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
@@ -535,6 +536,8 @@ public final class AnvilMenu implements InventoryHolder {
 			int now = level();
 			BloodFx.burst(top, BloodFx.BLOOD_LARGE, 26, 0.4);
 			BloodFx.burst(top, BloodFx.RING, 8, 0.3);
+			Shapes.shockwave(top.clone().add(0.0, -0.4, 0.0), BloodFx.BLOOD_FADE, 1.8, 6);
+			Shapes.spiral(top.clone().add(0.0, -0.3, 0.0), BloodFx.EMBER, 0.5, 1.6, 2.0, 18, 0.0);
 			play(player, "block.anvil.use", 0.6F, 0.8F, true);
 			play(player, "entity.player.levelup", 0.6F, 0.6F, true);
 			WeaponType type = weapon == null ? null : Weapons.typeOf(weapon);

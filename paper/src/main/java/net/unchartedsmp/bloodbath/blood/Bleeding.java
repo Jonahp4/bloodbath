@@ -146,6 +146,10 @@ public final class Bleeding {
 		if (drops > 0) {
 			BloodFx.burst(chest, BloodFx.DRIP, drops, 0.25, 0.0);
 			BloodFx.burst(chest, BloodFx.SPLATTER, Math.min(3, bleed.stacks()), 0.2, 0.05);
+			// A little spurt from the wound with every pulse, higher the deeper it is.
+			double side = (target.getEntityId() % 2 == 0 ? 1 : -1) * 0.3;
+			BloodFx.flow(chest, chest.clone().add(side, 0.35 + 0.12 * Math.min(5, bleed.stacks()), 0.0), Math.min(4, bleed.stacks() + 1),
+				0.1, BloodFx.BRIGHT_RED, 6);
 		}
 		if (amount <= 0.0) {
 			return;

@@ -46,6 +46,8 @@ public final class Gravestone implements WeaponBehavior {
 		BloodFx.play(center, BloodFx.SQUELCH, 1.0F, 0.6F);
 		BloodFx.burst(center, BloodFx.BURST, 1, 0.0);
 		BloodFx.burst(floor, BloodFx.GORE, 30, 1.5, 0.1);
+		Shapes.vortex(floor, radius, 4, duration);
+		Shapes.column(center, BloodFx.CLOT, 1.6, 10, 0.12);
 
 		// One repeating task instead of one scheduled lambda per tick.
 		TickScheduler.repeat(0, 1, duration, tick -> {
@@ -64,6 +66,8 @@ public final class Gravestone implements WeaponBehavior {
 		TickScheduler.schedule(duration, () -> {
 			BloodFx.play(center, BloodFx.IMPACT, 1.0F, 1.4F);
 			BloodFx.burst(center, BloodFx.SPLATTER, 50, 3.0, 0.25);
+			Shapes.shockwave(floor, BloodFx.BLOOD_FADE, radius, 8);
+			BloodFx.burst(center, BloodFx.NOVA, 1, 0.0);
 			BloodFx.burst(center, BloodFx.BLOOD_LARGE, 30, 2.0);
 			BloodFx.spray(center.clone().add(0.0, 0.3, 0.0), radius, 16, 10);
 			double damage = setting("damage", 6.0);

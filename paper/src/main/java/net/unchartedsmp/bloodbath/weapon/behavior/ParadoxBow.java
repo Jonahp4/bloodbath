@@ -15,6 +15,7 @@ import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -287,6 +288,7 @@ public final class ParadoxBow implements WeaponBehavior {
 			double t = 1.0 / (PHANTOM_TICKS - step);
 			Location next = head[0].clone().add(aim.toVector().subtract(head[0].toVector()).multiply(t));
 			BloodFx.line(head[0], next, BloodFx.BLOOD, 3.0);
+			Shapes.helix(head[0], next, BloodFx.EMBER, 0.15, 1.5, 4.0, step * 1.2);
 			BloodFx.burst(next, BloodFx.BLOOD_FADE, 3, 0.08);
 			cut(echo, head[0], next, damage, hit);
 			head[0] = next;

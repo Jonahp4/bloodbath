@@ -48,6 +48,8 @@ public final class ThunderPike implements WeaponBehavior {
 			Location p = start.clone().add(impact.clone().subtract(start).toVector().multiply(t));
 			BloodFx.burst(p, BloodFx.SPARK, 6, 0.12);
 			BloodFx.burst(p, BloodFx.BLOOD_FADE, 3, 0.12);
+			Location back = start.clone().add(impact.clone().subtract(start).toVector().multiply(Math.max(0.0, t - 1.0 / TRAVEL_TICKS)));
+			Shapes.helix(back, p, BloodFx.SPARK, 0.22, 1.5, 4.0, tick * 1.1);
 			if (tick % 2 == 0) {
 				BloodFx.ring(floor, BloodFx.SPARK, radius * (1.0 - tick / (double) TRAVEL_TICKS), 16);
 			}
@@ -63,6 +65,8 @@ public final class ThunderPike implements WeaponBehavior {
 		BloodFx.splash(impact, 8);
 		BloodFx.spray(impact, radius, 12, 8);
 		BloodFx.line(impact, impact.clone().add(0.0, 12.0, 0.0), BloodFx.BLOOD_FADE, 2.0);
+		Shapes.shockwave(impact.clone().add(0.0, 0.1, 0.0), BloodFx.SPARK, radius * 1.4, 7);
+		Shapes.column(impact, BloodFx.EMBER, 3.0, 14, 0.2);
 		BloodFx.play(impact, BloodFx.THUNDER, 1.0F, 1.2F);
 
 		double damage = setting("damage", 7.0);

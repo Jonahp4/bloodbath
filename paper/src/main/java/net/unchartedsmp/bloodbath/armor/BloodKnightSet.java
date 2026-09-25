@@ -14,6 +14,7 @@ import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -141,6 +142,8 @@ public final class BloodKnightSet implements Listener {
 		BloodFx.spray(chest, settings.rageRadius, 18, 10);
 		BloodFx.ring(center.clone().add(0.0, 0.1, 0.0), BloodFx.CLOT, settings.rageRadius, 32);
 		BloodFx.burst(center.clone().add(0.0, 0.2, 0.0), BloodFx.RING, 1, 0.0);
+		Shapes.shockwave(center.clone().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, settings.rageRadius * 1.2, 8);
+		Shapes.spiral(center, BloodFx.EMBER, 0.8, 2.4, 3.0, 30, 0.0);
 		BloodFx.play(player, BloodFx.ROAR, 0.8F, 1.3F);
 		BloodFx.play(player, BloodFx.HEARTBEAT, 1.2F, 0.8F);
 		player.showTitle(Title.title(Component.empty(), Component.text("☠ BLOOD RAGE ☠", NamedTextColor.DARK_RED),

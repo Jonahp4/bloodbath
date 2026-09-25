@@ -10,6 +10,7 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Particles;
 import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
@@ -67,6 +68,8 @@ public final class Riftblade implements WeaponBehavior {
 		BloodFx.burst(pos, BloodFx.BLOOD_LARGE, 40, 0.4);
 		BloodFx.burst(pos, BloodFx.SPORE, 10, 0.2);
 		BloodFx.flow(Hud.handPos(player, false), pos, 8, 0.1, BloodFx.BRIGHT_RED, 6);
+		Shapes.vortex(pos.clone().add(0.0, -0.8, 0.0), pullRadius, 3, PULL_DURATION_TICKS + 6);
+		double facing = Math.toRadians(player.getLocation().getYaw());
 
 		TickScheduler.repeat(0, 1, PULL_DURATION_TICKS, tick -> {
 			for (LivingEntity target : Targeting.livingInRadius(pos, pullRadius, player)) {
@@ -86,7 +89,7 @@ public final class Riftblade implements WeaponBehavior {
 			if (rifts.get(player.getUniqueId()) != rift) {
 				return false;
 			}
-			BloodFx.ring(pos, BloodFx.BLOOD_FADE, 0.7, 12);
+			tear(pos, facing, tick);
 			BloodFx.burst(pos, BloodFx.DRIP, 2, 0.3, 0.0);
 			BloodFx.gather(pos, 2.2, 3, 10);
 			return true;
@@ -103,11 +106,37 @@ public final class Riftblade implements WeaponBehavior {
 		Location target = landing.get();
 		Location departure = BloodFx.chest(player);
 		BloodFx.burst(departure, BloodFx.BLOOD_LARGE, 25, 0.4);
+		Shapes.helix(departure, target.clone().add(0.0, 1.0, 0.0), BloodFx.BLOOD_FADE, 0.45, 0.35, 3.0, 0.0);
 		BloodFx.flow(departure, target.clone().add(0.0, 1.0, 0.0), 8, 0.3, BloodFx.BRIGHT_RED, 8);
 		if (Targeting.teleport(player, target, player.getLocation().getYaw(), player.getLocation().getPitch())) {
 			BloodFx.play(target, BloodFx.RIFT_STEP, 1.0F, 0.8F);
 			BloodFx.splash(target.clone().add(0.0, 1.0, 0.0), 8);
 			tearShut(player, target);
+		}
+	}
+
+	/**
+	 * The rift itself: an upright tear in the air, a bright edge round a dark wound, turned to face
+	 * whoever opened it and breathing as it weeps.
+	 */
+	private static void tear(Location pos, double facingRadians, int tick) {
+		Particles.Batch batch = BloodFx.shape(pos, 1.4);
+		if (!batch.visible()) {
+			return;
+		}
+		double breathe = 1.0 + 0.08 * Math.sin(tick * 1.3);
+		double sideX = Math.cos(facingRadians);
+		double sideZ = Math.sin(facingRadians);
+		int points = 22;
+		for (int i = 0; i < points; i++) {
+			double a = Math.PI * 2.0 * i / points;
+			double across = Math.cos(a) * 0.38 * breathe;
+			double up = Math.sin(a) * 1.15 * breathe;
+			batch.point(i, i % 3 == 0 ? BloodFx.SLASH : BloodFx.BLOOD_FADE, pos.getX() + sideX * across, pos.getY() + up,
+				pos.getZ() + sideZ * across, 1, 0, 0, 0, 0);
+		}
+		for (int k = -3; k <= 3; k++) {
+			batch.point(points + k + 3, BloodFx.CLOT, pos.getX(), pos.getY() + k * 0.28, pos.getZ(), 1, 0.03, 0.05, 0.03, 0);
 		}
 	}
 
