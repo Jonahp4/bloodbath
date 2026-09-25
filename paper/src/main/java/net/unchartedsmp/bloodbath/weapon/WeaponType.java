@@ -16,30 +16,30 @@ import org.bukkit.Material;
  * bow so vanilla clients play the draw animation themselves.
  */
 public enum WeaponType {
-	RIFTBLADE("riftblade", "Bloodrift Blade", Ability.RIFTBLADE, Material.NETHERITE_SWORD, 10, 1.8, 1561,
-		"Right-click: tear a bleeding rift ahead", "that drags enemies in. Use again to", "step through it."),
+	RIFTBLADE("riftblade", "Bloodrift Blade", Ability.RIFTBLADE, Material.NETHERITE_SWORD, 9, 1.6, 1561,
+		"Right-click: tear a bleeding rift ahead", "that drags enemies in. Use again to", "step through, cutting all around you."),
 	BLOODHOOK("bloodhook", "Bloodhook", Ability.BLOODHOOK, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click: chain the player you're", "looking at and reel yourself in.", "Repeat hooks reach further."),
-	NULLBLADE("nullblade", "Clotblade", Ability.NULLBLADE_ZONE, Material.NETHERITE_SWORD, 6, 1.6, 250,
-		"Hits clot a player's blood, suppressing", "their abilities.", "Right-click: throw down a clot field."),
+		"Right-click: chain the enemy you're", "looking at, slow them and reel", "yourself in. Repeat hooks reach further."),
+	NULLBLADE("nullblade", "Clotblade", Ability.NULLBLADE_ZONE, Material.NETHERITE_SWORD, 7, 1.6, 1561,
+		"Hits clot a player's blood, suppressing", "their abilities (once every 8s each).", "Right-click: throw down a clot field."),
 	METEOR_GAUNTLET("meteor_gauntlet", "Blood Meteor Gauntlet", Ability.METEOR_GAUNTLET, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Punch a block or right-click the ground:", "a blood meteor lands 2s later and", "launches everything nearby."),
+		"Punch a block or right-click the ground:", "a blood meteor falls, launches everything", "nearby and leaves a crater that bleeds."),
 	GRAVESTONE("gravestone", "Crimson Gravestone", Ability.GRAVESTONE, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click: a blood pool drags everything", "nearby in for 3s, then erupts."),
+		"Right-click: a blood pool drags everything", "nearby in, then erupts under them."),
 	CHRONOS("chronos", "Bleeding Chronos", Ability.CHRONOS, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click: leave a blood-mark.", "Use again to snap back to it."),
+		"Right-click: leave a blood-mark. Use", "again to snap back to it and win back", "some of the blood you lost since."),
 	THUNDER_PIKE("thunder_pike", "Crimson Thunder Pike", Ability.THUNDER_PIKE, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click: hurl charged blood, call", "crimson lightning and ride the bolt."),
+		"Right-click: hurl charged blood, call", "crimson lightning and ride the bolt.", "What it strikes is stunned."),
 	MIRRORFANG("mirrorfang", "Blood Mirrorfang", Ability.MIRRORFANG, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click: a blood mirror of you", "fights beside you."),
+		"Right-click: a blood mirror of you", "hunts down the nearest enemy."),
 	VOID_SCYTHE("void_scythe", "Hemorrhage Scythe", Ability.VOID_SCYTHE, Material.NETHERITE_SWORD, 12, 1.0, 2031,
 		"Every hit makes the target bleed.", "The 5th hemorrhages them and everything", "around them."),
 	PARADOX_BOW("paradox_bow", "Sanguine Paradox Bow", Ability.PARADOX_BOW, Material.BOW, 0, 0, 384,
-		"A real bow. A fully drawn shot fires", "twice: its echo homes in on whatever", "the arrow hit, or retraces its flight."),
+		"A real bow. A fully drawn shot fires", "twice: its echo homes in on whatever", "the arrow hit (and lights it up), or", "retraces its flight."),
 	VAMPIRE_FANG("vampire_fang", "Vampire Fang", Ability.VAMPIRE_FANG, Material.NETHERITE_SWORD, 6, 2.2, 1561,
 		"Hits drink blood: heal part of the", "damage you deal.", "Right-click: blood dash through enemies."),
 	BLOOD_GRIMOIRE("blood_grimoire", "Blood Grimoire", Ability.BLOOD_GRIMOIRE, Material.NETHERITE_SWORD, 1, 4.0, 0,
-		"Right-click a creature: drain its blood", "into you.", "Sneak + right-click a player: give them yours.");
+		"Right-click a creature: drain its blood", "into you, slowing it as it goes.", "Sneak + right-click a player: give them yours.");
 
 	private static final Map<String, WeaponType> BY_ID = new HashMap<>();
 	private static final Map<String, WeaponType> BY_NAME = new HashMap<>();

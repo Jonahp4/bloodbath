@@ -170,8 +170,62 @@ public class BloodbathPlugin extends JavaPlugin {
 		"identical to its own pack, so it can never hand players a different or outdated one. Remove them",
 		"all to never use a mirror.");
 
+	/**
+	 * 1.6.0's PvP rebalance: {path, the old default, the new one}. A server that never changed a
+	 * value gets the new one; anything an owner tuned themselves is theirs and stays.
+	 */
+	private static final Object[][] REBALANCED = {
+		{"weapons.riftblade.cooldown", 15, 14},
+		{"weapons.bloodhook.cooldown", 6, 7}, {"weapons.bloodhook.range", 10, 12},
+		{"weapons.nullblade.hit-clot", 4, 2.5},
+		{"weapons.meteor_gauntlet.cooldown", 14, 15}, {"weapons.meteor_gauntlet.damage", 5, 8}, {"weapons.meteor_gauntlet.delay", 2, 1.6},
+		{"weapons.gravestone.cooldown", 20, 18}, {"weapons.gravestone.duration", 3, 2},
+		{"weapons.thunder_pike.cooldown", 12, 13}, {"weapons.thunder_pike.range", 22, 20}, {"weapons.thunder_pike.damage", 5, 7},
+		{"weapons.mirrorfang.duration", 7, 6}, {"weapons.mirrorfang.damage", 4, 3}, {"weapons.mirrorfang.range", 3.5, 3},
+		{"weapons.void_scythe.cooldown", 3, 5}, {"weapons.void_scythe.damage", 10, 9}, {"weapons.void_scythe.splash-damage", 8, 6},
+		{"weapons.paradox_bow.damage", 7, 6},
+		{"weapons.vampire_fang.cooldown", 8, 9}, {"weapons.vampire_fang.dash-damage", 4, 5},
+		{"weapons.blood_grimoire.cooldown", 14, 16}, {"weapons.blood_grimoire.range", 12, 10}, {"weapons.blood_grimoire.drain", 6, 5},
+		{"armor.barb-damage", 2, 1.5},
+		{"armor.full-set-effects", List.of("strength:0", "speed:0", "fire_resistance:0"), List.of("speed:0", "fire_resistance:0")},
+	};
+
+	private void rebalance(FileConfiguration config) {
+		int changed = 0;
+		for (Object[] entry : REBALANCED) {
+			String path = (String) entry[0];
+			if (!config.isSet(path)) {
+				continue;
+			}
+			boolean untouched = entry[1] instanceof List<?> old
+				? config.getStringList(path).stream().map(String::trim).toList().equals(old)
+				: config.isInt(path) || config.isDouble(path)
+					? Math.abs(config.getDouble(path) - ((Number) entry[1]).doubleValue()) < 1.0E-9 : false;
+			if (untouched) {
+				config.set(path, entry[2]);
+				changed++;
+			}
+		}
+		// Settings new in 1.6.0 show up in old configs too, so they can be found and tuned.
+		var defaults = config.getDefaults();
+		if (defaults != null && config.isConfigurationSection("weapons")) {
+			for (String key : defaults.getKeys(true)) {
+				if ((key.startsWith("weapons.") || key.startsWith("gameplay.")) && !defaults.isConfigurationSection(key)
+					&& !config.isSet(key) && config.isConfigurationSection(key.substring(0, key.lastIndexOf('.')))) {
+					config.set(key, defaults.get(key));
+					changed++;
+				}
+			}
+		}
+		if (changed > 0) {
+			saveConfig();
+			getLogger().info("Updated config.yml for 1.6.0's PvP rebalance: " + changed + " settings you hadn't changed now have the new values.");
+		}
+	}
+
 	private void migrateConfig() {
 		FileConfiguration config = getConfig();
+		rebalance(config);
 		// 1.5.0: the Blood Anvil and Bloodstone Frame recipes, for configs written before they existed.
 		boolean added = false;
 		for (String recipe : List.of("blood_anvil", "bloodstone_frame")) {

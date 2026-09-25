@@ -261,7 +261,7 @@ class BloodlandsTest {
 	void theAnvilBleedsAnExistingWeaponAndKeepsEverythingElse() {
 		ItemStack weapon = veteran(WeaponType.RIFTBLADE);
 		double before = attackDamage(weapon);
-		assertEquals(10.0, before, 1e-6);
+		assertEquals(9.0, before, 1e-6);
 		AnvilMenu menu = openAnvil(player);
 		Inventory top = player.getOpenInventory().getTopInventory();
 		assertEquals(AnvilMenu.class, top.getHolder(false).getClass());
@@ -289,7 +289,7 @@ class BloodlandsTest {
 		// The preview: built from the real weapon, one level up, never the real thing.
 		ItemStack preview = top.getItem(15);
 		assertTrue(gui(preview));
-		assertTrue(any(lore(preview), "Melee damage: 10  →  11"), lore(preview).toString());
+		assertTrue(any(lore(preview), "Melee damage: 9  →  10"), lore(preview).toString());
 		assertTrue(any(lore(preview), "Bleeding chance: 0%  →  4%"));
 
 		// A Blood Drop in: ready.

@@ -56,7 +56,7 @@ public final class BloodGrimoire implements WeaponBehavior {
 		if (!Cooldowns.checkReady(player, ability())) {
 			return;
 		}
-		double range = setting("range", 12.0);
+		double range = setting("range", 10.0);
 		if (player.isSneaking()) {
 			LivingEntity ally = Targeting.lookEntity(player, range,
 				target -> target instanceof Player other && other.getGameMode() != GameMode.SPECTATOR && !other.isDead());
@@ -77,7 +77,7 @@ public final class BloodGrimoire implements WeaponBehavior {
 
 	private void drain(Player caster, LivingEntity victim, double range) {
 		Cooldowns.start(caster, ability());
-		double perPulse = setting("drain", 6.0) / PULSES;
+		double perPulse = setting("drain", 5.0) / PULSES;
 		double leash = (range + 4.0) * (range + 4.0);
 		World world = caster.getWorld();
 		channels.put(caster.getUniqueId(), new Channel(victim, ServerClock.now() + PULSES * PULSE_INTERVAL_TICKS));
@@ -100,7 +100,9 @@ public final class BloodGrimoire implements WeaponBehavior {
 			BloodFx.flow(heart, book, 2, 0.25, tick % 4 == 0 ? BloodFx.BRIGHT_RED : BloodFx.BLOOD_RED, 8);
 			if (tick % PULSE_INTERVAL_TICKS == PULSE_INTERVAL_TICKS - 1) {
 				double before = health(victim);
-				Damage.deal(victim, perPulse, caster, type(), caster.getLocation());
+				// Blood leaving the body: armour doesn't stop it (Protection still does), and it drags.
+				Damage.deal(victim, perPulse, caster, type(), caster.getLocation(), false);
+				victim.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, PULSE_INTERVAL_TICKS + 4, 0, false, true, true));
 				double taken = Math.max(0.0, before - health(victim));
 				heal(caster, taken);
 				BloodFx.splash(heart, 3);

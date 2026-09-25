@@ -39,6 +39,7 @@ import net.unchartedsmp.bloodbath.ability.Ability;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
@@ -413,8 +414,14 @@ class BloodbathPluginTest {
 		ticks(5);
 		assertTrue(zombie.getVelocity().getX() < 0.0, "pulled toward the caster");
 		assertEquals(0.0, player.getVelocity().length(), 1.0E-9, "the caster isn't pulled");
-		ticks(60);
-		assertTrue(zombie.getVelocity().getY() > 1.0, "launched");
+		ticks(34);
+		Vector before = zombie.getVelocity().clone(); // (no physics here: the pull's velocity just piles up)
+		ticks(6);
+		Vector kick = zombie.getVelocity().clone().subtract(before);
+		assertTrue(kick.getY() > 1.0, "thrown up, " + kick);
+		assertTrue(Math.abs(kick.getX()) < 0.6, "up, not away: it comes down beside you, " + kick);
+		assertEquals(14.0, zombie.getHealth(), 1.0E-9, "the eruption does 6");
+		assertTrue(Bleeding.stacks(zombie) > 0, "and opens a wound");
 		assertTrue(world.particles > 0);
 	}
 
@@ -428,9 +435,13 @@ class BloodbathPluginTest {
 		ticks(20);
 		assertEquals(20.0, zombie.getHealth(), 1.0E-9, "nothing lands before the telegraph ends");
 		ticks(25);
-		assertEquals(15.0, zombie.getHealth(), 1.0E-9);
+		assertEquals(12.0, zombie.getHealth(), 1.0E-9, "8 damage");
 		assertEquals(20.0, player.getHealth(), 1.0E-9);
 		assertTrue(zombie.getVelocity().getY() > 0.5, "launched");
+		// The crater: whoever stands in it bleeds.
+		TestZombie wader = zombie(0.5, 1.5);
+		ticks(25);
+		assertTrue(Bleeding.stacks(wader) > 0, "the crater bleeds whoever stands in it");
 	}
 
 	@Test
@@ -441,7 +452,8 @@ class BloodbathPluginTest {
 		rightClick(player);
 		ticks(10);
 		assertEquals(1, world.lightning);
-		assertEquals(15.0, zombie.getHealth(), 1.0E-9);
+		assertEquals(13.0, zombie.getHealth(), 1.0E-9, "7 damage");
+		assertTrue(zombie.hasPotionEffect(PotionEffectType.SLOWNESS), "stunned by the bolt");
 		assertTrue(player.getLocation().getX() > 7.0, "rode the bolt, now at " + player.getLocation());
 		assertEquals(5.0, player.getLocation().getY(), 0.01, "landed on the ground, not in it");
 	}
@@ -463,7 +475,7 @@ class BloodbathPluginTest {
 	@Test
 	void riftbladeOpensARiftAndStepsThroughIt() {
 		stand(player, 0.5, 0.5, -90.0F, 10.0F);
-		TestZombie zombie = zombie(8.5, 2.5);
+		TestZombie zombie = zombie(8.5, 1.5); // next to the rift (the mock world has no physics to drag it there)
 		hold(player, WeaponType.RIFTBLADE);
 		rightClick(player);
 		ticks(3);
@@ -471,9 +483,29 @@ class BloodbathPluginTest {
 		assertTrue(plain(Behaviors.RIFTBLADE.hud(player)).contains("Rift open"));
 		rightClick(player);
 		assertTrue(player.getLocation().getX() > 7.0, "stepped through to " + player.getLocation());
+		assertTrue(zombie.getHealth() < 20.0, "the rift snapped shut on what was dragged to it");
+		assertTrue(zombie.hasPotionEffect(PotionEffectType.SLOWNESS));
 		ticks(1);
 		rightClick(player);
 		assertTrue(any(actionBars(player), "still clotting"), "stepping through was the free recast");
+	}
+
+	@Test
+	void chronosRecallWinsBackSomeLostBloodAndAFadedMarkStillCosts() {
+		hold(player, WeaponType.CHRONOS);
+		rightClick(player);
+		player.setHealth(10.0); // took 10 since the mark
+		stand(player, 6.5, 6.5, 90.0F, 30.0F);
+		ticks(5);
+		rightClick(player);
+		assertEquals(13.0, player.getHealth(), 1.0E-9, "30% of the 10 lost comes back");
+		Cooldowns.reset(player.getUniqueId());
+		ticks(1);
+		rightClick(player);
+		assertTrue(any(actionBars(player), "Blood-mark set"));
+		ticks(165);
+		assertFalse(Cooldowns.isReady(player, Ability.CHRONOS), "a mark that dried up unused still costs a short cooldown");
+		assertTrue(any(actionBars(player), "dried up"));
 	}
 
 	@Test
@@ -499,7 +531,8 @@ class BloodbathPluginTest {
 		ticks(10);
 		assertTrue(player.getVelocity().getX() > 0.5, "yanked east, velocity " + player.getVelocity());
 		assertTrue(player.getVelocity().getY() > 0.0);
-		assertEquals(20.0, zombie.getHealth(), 1.0E-9, "the hook itself doesn't hurt");
+		assertEquals(18.0, zombie.getHealth(), 1.0E-9, "the hook bites for 2");
+		assertTrue(zombie.hasPotionEffect(PotionEffectType.SLOWNESS), "and holds them");
 	}
 
 	@Test
@@ -524,8 +557,8 @@ class BloodbathPluginTest {
 		melee(player, target, 6.0);
 		assertTrue(any(actionBars(player), "HEMORRHAGE"));
 		ticks(2);
-		assertEquals(10.0, target.getHealth(), 1.0E-9, "10 hemorrhage damage");
-		assertEquals(12.0, bystander.getHealth(), 1.0E-9, "8 splash damage");
+		assertEquals(11.0, target.getHealth(), 1.0E-9, "9 hemorrhage damage");
+		assertEquals(14.0, bystander.getHealth(), 1.0E-9, "6 splash damage");
 	}
 
 	@Test
@@ -549,8 +582,8 @@ class BloodbathPluginTest {
 		rightClick(player);
 		assertTrue(player.getVelocity().getX() > 1.0, "dashing east");
 		ticks(2);
-		assertEquals(16.0, zombie.getHealth(), 1.0E-9, "cut by the dash");
-		assertEquals(14.0, player.getHealth(), 1.0E-9, "and drank from it");
+		assertEquals(15.0, zombie.getHealth(), 1.0E-9, "cut by the dash");
+		assertEquals(14.5, player.getHealth(), 1.0E-9, "and drank from it");
 		assertTrue(plain(Behaviors.VAMPIRE_FANG.hud(player)).contains("drunk"));
 	}
 
@@ -562,8 +595,9 @@ class BloodbathPluginTest {
 		rightClick(player);
 		assertTrue(plain(Behaviors.BLOOD_GRIMOIRE.hud(player)).contains("Transfusion"));
 		ticks(35);
-		assertEquals(14.0, zombie.getHealth(), 1.0E-6);
-		assertEquals(16.0, player.getHealth(), 1.0E-6);
+		assertEquals(15.0, zombie.getHealth(), 1.0E-6, "5 drained");
+		assertEquals(15.0, player.getHealth(), 1.0E-6, "into you");
+		assertTrue(zombie.hasPotionEffect(PotionEffectType.SLOWNESS), "and it drags");
 	}
 
 	@Test
@@ -603,8 +637,41 @@ class BloodbathPluginTest {
 		rightClick(alex);
 		assertTrue(any(actionBars(alex), "Your blood has clotted"));
 		assertTrue(Cooldowns.isReady(alex, Ability.RIFTBLADE), "nothing fired");
-		ticks(84);
-		assertFalse(NullField.isNullified(alex), "wears off after 4s");
+		ticks(54);
+		assertFalse(NullField.isNullified(alex), "wears off after 2.5s");
+		melee(player, alex, 6.0);
+		assertFalse(NullField.isNullified(alex), "hits can't clot the same player again for 8s: no permanent lock");
+		ticks(110);
+		melee(player, alex, 6.0);
+		assertTrue(NullField.isNullified(alex), "after the 8s, a hit clots again");
+	}
+
+	@Test
+	void abilityHitsOnPlayersPartlyPierceArmourAndCanBeTunedForPvp() {
+		TestPlayer alex = server.addTestPlayer("Alex");
+		stand(alex, 3.5, 0.5, 90.0F, 0.0F);
+		List<String> hits = new ArrayList<>();
+		server.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+			@org.bukkit.event.EventHandler
+			public void on(EntityDamageEvent event) {
+				if (event.getEntity() == alex) {
+					hits.add(event.getCause() + ":" + event.getDamage());
+				}
+			}
+		}, plugin);
+		Damage.deal(alex, 10.0, player, WeaponType.RIFTBLADE);
+		assertEquals(List.of("ENTITY_ATTACK:6.5", "MAGIC:3.5"), hits, "35% goes through armour as magic");
+		assertEquals(10.0, alex.getHealth(), 1.0E-9);
+		// Mobs take one ordinary hit, as before.
+		TestZombie zombie = zombie(-3.5, 0.5);
+		Damage.deal(zombie, 10.0, player, WeaponType.RIFTBLADE);
+		assertEquals(10.0, zombie.getHealth(), 1.0E-9);
+		plugin.getConfig().set("gameplay.pvp-ability-damage", 0.5);
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		alex.setHealth(20.0);
+		Damage.deal(alex, 10.0, player, WeaponType.RIFTBLADE);
+		assertEquals(15.0, alex.getHealth(), 1.0E-9, "PvP ability damage halved");
 	}
 
 	@Test
@@ -650,9 +717,9 @@ class BloodbathPluginTest {
 		server.getPluginManager().callEvent(new EntityDeathEvent(mirror, attackBy(player), drops));
 		assertTrue(drops.isEmpty(), "a killed mirror drops nothing");
 
-		ticks(11);
-		assertEquals(16.0, zombie.getHealth(), 1.0E-9, "slashed once");
-		ticks(140);
+		ticks(15);
+		assertEquals(17.0, zombie.getHealth(), 1.0E-9, "slashed once");
+		ticks(120);
 		assertFalse(mirror.isValid(), "dissolved");
 		assertEquals(0, Behaviors.MIRRORFANG.liveCount());
 	}
@@ -697,8 +764,8 @@ class BloodbathPluginTest {
 		ticks(20);
 		assertEquals(20.0, near.getHealth(), 1.0E-9, "the echo takes 1.5s to come back");
 		ticks(20);
-		assertEquals(13.0, near.getHealth(), 1.0E-9);
-		assertEquals(13.0, far.getHealth(), 1.0E-9, "hit once each along the path");
+		assertEquals(14.0, near.getHealth(), 1.0E-9);
+		assertEquals(14.0, far.getHealth(), 1.0E-9, "hit once each along the path");
 		assertEquals(20.0, aside.getHealth(), 1.0E-9, "only the path");
 		assertEquals(20.0, player.getHealth(), 1.0E-9);
 	}
@@ -717,13 +784,14 @@ class BloodbathPluginTest {
 		ticks(25);
 		assertEquals(20.0, runner.getHealth(), 1.0E-9);
 		ticks(15);
-		assertEquals(13.0, runner.getHealth(), 1.0E-9, "the phantom arrow found it");
+		assertEquals(14.0, runner.getHealth(), 1.0E-9, "the phantom arrow found it");
+		assertTrue(runner.hasPotionEffect(PotionEffectType.GLOWING), "and lit it up");
 
 		// The next full draw is a plain shot until the echo is off cooldown.
 		Arrow again = shoot(bow, true);
 		server.getPluginManager().callEvent(new ProjectileHitEvent(again, runner, null, null));
 		ticks(60);
-		assertEquals(13.0, runner.getHealth(), 1.0E-9);
+		assertEquals(14.0, runner.getHealth(), 1.0E-9);
 	}
 
 	@Test
@@ -1465,19 +1533,18 @@ class BloodbathPluginTest {
 	@Test
 	void theFullSetBuffsYouWhileWornAndStopsWhenAPieceComesOff() {
 		wear(player, ArmorPiece.HELM, ArmorPiece.CUIRASS, ArmorPiece.GREAVES);
-		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH), "three pieces: no buffs yet");
+		assertNull(player.getPotionEffect(PotionEffectType.SPEED), "three pieces: no buffs yet");
 		wear(player, ArmorPiece.SABATONS);
-		PotionEffect strength = player.getPotionEffect(PotionEffectType.STRENGTH);
-		assertNotNull(strength);
-		assertTrue(strength.isInfinite());
+		PotionEffect fireproof = player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE);
+		assertNotNull(fireproof);
+		assertTrue(fireproof.isInfinite());
 		assertNotNull(player.getPotionEffect(PotionEffectType.SPEED));
-		assertNotNull(player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE));
+		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH), "no permanent Strength since 1.6.0");
 		assertTrue(any(actionBars(player), "strength is yours"));
 
 		player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 200, 2)); // a potion on top
 		takeOff(player, ArmorPiece.HELM);
-		assertNull(player.getPotionEffect(PotionEffectType.STRENGTH), "gone the moment a piece comes off");
-		assertNull(player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE));
+		assertNull(player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE), "gone the moment a piece comes off");
 		PotionEffect speed = player.getPotionEffect(PotionEffectType.SPEED);
 		assertNotNull(speed, "someone else's stronger effect is left alone");
 		assertEquals(2, speed.getAmplifier());
@@ -1604,7 +1671,7 @@ class BloodbathPluginTest {
 		server.getPluginManager().callEvent(new EntityDamageByEntityEvent(zombie, player, EntityDamageEvent.DamageCause.ENTITY_ATTACK,
 			attackBy(zombie), 3.0));
 		ticks(1);
-		assertEquals(18.0, zombie.getHealth(), 1.0E-9);
+		assertEquals(18.5, zombie.getHealth(), 1.0E-9, "1.5 back");
 		assertTrue(player.sounds.contains("block.note_block.hat"), "a hit marker for the wearer");
 	}
 

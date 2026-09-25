@@ -10,6 +10,8 @@ import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.hud.Hud;
+import net.unchartedsmp.bloodbath.config.Settings;
+import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -17,6 +19,8 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
 /**
@@ -49,6 +53,8 @@ public final class Bloodhook implements WeaponBehavior {
 		if (target == null) {
 			BloodFx.play(player, BloodFx.WET_SLIDE, 0.8F, 1.4F);
 			BloodFx.flow(Hud.handPos(player, false), Targeting.lookTarget(player, range), 4, 0.05, BloodFx.BLOOD_RED, 6);
+			// A miss costs half: whiffing in a fight shouldn't leave you with nothing for the full cooldown.
+			Cooldowns.startFor(player, ability(), Settings.get().cooldownTicks(ability()) / 2);
 			Hud.flash(player, Component.text("The hook found no blood.", NamedTextColor.GRAY));
 			return;
 		}
@@ -57,12 +63,12 @@ public final class Bloodhook implements WeaponBehavior {
 	}
 
 	private double rangeFor(int stacks) {
-		return Math.min(setting("max-range", 28.0), setting("range", 10.0) + stacks * setting("range-per-hook", 3.0));
+		return Math.min(setting("max-range", 28.0), setting("range", 12.0) + stacks * setting("range-per-hook", 3.0));
 	}
 
 	private double currentRange(Player player) {
 		Streak streak = streaks.get(player.getUniqueId());
-		return streak != null && ServerClock.now() <= streak.expiresAt() ? rangeFor(streak.stacks()) : setting("range", 10.0);
+		return streak != null && ServerClock.now() <= streak.expiresAt() ? rangeFor(streak.stacks()) : setting("range", 12.0);
 	}
 
 	private void registerHit(Player player, LivingEntity target) {
@@ -109,6 +115,15 @@ public final class Bloodhook implements WeaponBehavior {
 			BloodFx.play(target, BloodFx.CHAIN_SNAP, 0.6F, 1.6F);
 			BloodFx.play(target, BloodFx.SQUELCH, 0.8F, 0.7F);
 			BloodFx.splash(BloodFx.chest(target), 6);
+			// The hook bites and holds: a little damage and a slow, so the reel actually lands you on them.
+			double bite = setting("damage", 2.0);
+			if (bite > 0.0) {
+				Damage.deal(target, bite, player, type(), player.getLocation());
+			}
+			int slow = ticksSetting("slow", 20);
+			if (slow > 0 && target.isValid() && !target.isDead()) {
+				target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, slow, 0, false, true, true));
+			}
 		});
 	}
 

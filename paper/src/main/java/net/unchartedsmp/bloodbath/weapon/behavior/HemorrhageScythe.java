@@ -98,14 +98,14 @@ public final class HemorrhageScythe implements WeaponBehavior {
 		BloodFx.play(center, BloodFx.FANGS, 0.9F, 0.7F);
 		BloodFx.play(center, BloodFx.SQUELCH, 1.0F, 0.5F);
 
-		double splash = setting("splash-damage", 8.0);
+		double splash = setting("splash-damage", 6.0);
 		for (LivingEntity nearby : Targeting.livingInRadius(center, radius, player)) {
 			if (nearby != target) {
 				Targeting.pullTowards(nearby, center, 0.8);
 				Damage.deal(nearby, splash, player, type(), center);
 			}
 		}
-		Damage.deal(target, setting("damage", 10.0), player, type());
+		Damage.deal(target, setting("damage", 9.0), player, type());
 	}
 
 	/** Harvest: a blood arc in front of you. */

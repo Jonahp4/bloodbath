@@ -10,21 +10,25 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.hud.Hud;
+import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 /**
  * Bloodrift Blade: tears a bleeding rift up to 14 blocks ahead that drags nearby enemies in.
  * Use again within 6s to step through it. The cooldown starts when the rift opens.
  */
 public final class Riftblade implements WeaponBehavior {
-	private static final double PULL_STRENGTH = 0.28;
-	private static final int PULL_DURATION_TICKS = 10;
+	private static final double PULL_STRENGTH = 0.34;
+	private static final int PULL_DURATION_TICKS = 14;
 
 	private record Rift(Location origin, Location pos, long expiresAt) {
 	}
@@ -103,6 +107,25 @@ public final class Riftblade implements WeaponBehavior {
 		if (Targeting.teleport(player, target, player.getLocation().getYaw(), player.getLocation().getPitch())) {
 			BloodFx.play(target, BloodFx.RIFT_STEP, 1.0F, 0.8F);
 			BloodFx.splash(target.clone().add(0.0, 1.0, 0.0), 8);
+			tearShut(player, target);
+		}
+	}
+
+	/** The rift snaps shut behind you, cutting everything around where you came out and slowing it. */
+	private void tearShut(Player player, Location at) {
+		double radius = setting("exit-radius", 2.5);
+		double damage = setting("exit-damage", 4.0);
+		int slow = ticksSetting("exit-slow", 30);
+		Location center = at.clone().add(0.0, 1.0, 0.0);
+		Shapes.arc(center, BloodFx.SLASH, radius * 0.8, Math.toRadians(at.getYaw() + 90.0), Math.PI, 18);
+		BloodFx.ring(at.clone().add(0.0, 0.15, 0.0), BloodFx.BLOOD_FADE, radius, 24);
+		BloodFx.burst(center, BloodFx.NOVA, 1, 0.0);
+		for (LivingEntity target : Targeting.livingInRadius(center, radius, player)) {
+			Damage.deal(target, damage, player, type(), at);
+			if (slow > 0) {
+				target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, slow, 1, false, true, true));
+			}
+			BloodFx.splash(BloodFx.chest(target), 4);
 		}
 	}
 

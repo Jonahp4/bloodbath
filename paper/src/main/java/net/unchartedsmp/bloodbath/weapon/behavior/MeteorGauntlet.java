@@ -5,6 +5,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.util.Damage;
@@ -18,8 +19,9 @@ import org.bukkit.entity.Player;
 
 /**
  * Blood Meteor Gauntlet: punch a block, or right-click the ground up to 24 blocks away, to call
- * down a blood meteor. After a 2s telegraph it deals 5 damage and launches everything within
- * 4.5 blocks, except the caster.
+ * down a blood meteor. After a 1.6s telegraph (a ring on the ground, the meteor falling into it)
+ * it deals 8 damage and launches everything within 4.5 blocks, except the caster, and leaves a
+ * crater of blood for 3s that makes whoever stands in it bleed.
  */
 public final class MeteorGauntlet implements WeaponBehavior {
 	private static final double LAUNCH_STRENGTH = 1.6;
@@ -55,8 +57,8 @@ public final class MeteorGauntlet implements WeaponBehavior {
 
 	private void telegraphAndStrike(Player caster, Location center) {
 		double radius = setting("radius", 4.5);
-		double damage = setting("damage", 5.0);
-		int delay = Math.max(4, ticksSetting("delay", 40));
+		double damage = setting("damage", 8.0);
+		int delay = Math.max(4, ticksSetting("delay", 32));
 		int steps = delay / 4;
 		BloodFx.play(center, BloodFx.HEARTBEAT, 1.0F, 0.6F);
 		BloodFx.play(center, BloodFx.ROAR, 0.4F, 1.6F);
@@ -87,6 +89,31 @@ public final class MeteorGauntlet implements WeaponBehavior {
 			Damage.deal(target, damage, caster, type(), center);
 			Targeting.launchOutward(target, center, LAUNCH_STRENGTH, LAUNCH_VERTICAL);
 		}
+		crater(caster, center, radius * 0.6);
+	}
+
+	/** The pool the meteor leaves: standing in it opens a wound every second. */
+	private void crater(Player caster, Location center, double radius) {
+		int duration = ticksSetting("crater-duration", 60);
+		if (duration <= 0) {
+			return;
+		}
+		Location floor = center.clone().add(0.0, 0.05, 0.0);
+		TickScheduler.repeat(5, 5, duration / 5, tick -> {
+			BloodFx.ring(floor, BloodFx.CLOT, radius, 20);
+			BloodFx.burst(floor, BloodFx.BLOOD, 6, radius * 0.5, 0.0);
+			BloodFx.burst(floor.clone().add(0.0, 0.2, 0.0), BloodFx.SPORE, 2, radius * 0.4);
+			if (tick % 4 == 3) {
+				BloodFx.play(center, BloodFx.SQUELCH, 0.4F, 0.6F);
+				for (LivingEntity target : Targeting.livingInRadius(center, radius, caster)) {
+					if (Math.abs(target.getLocation().getY() - center.getY()) < 1.5) {
+						Bleeding.apply(target, 1, caster, type());
+						BloodFx.burst(target.getLocation().add(0.0, 0.2, 0.0), BloodFx.SPLATTER, 4, 0.2, 0.1);
+					}
+				}
+			}
+			return true;
+		});
 	}
 
 	@Override

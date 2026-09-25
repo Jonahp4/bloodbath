@@ -97,6 +97,13 @@ gameplay:
   respect-world-pvp: true
   # Dropped weapons never despawn and survive cactus and explosions.
   weapons-never-despawn: true
+  # Share of every ability hit on a player that goes straight through armour (as magic damage:
+  # Protection still reduces it). Against full netherite an ability that only armour sees does
+  # almost nothing; 0 makes abilities ordinary armoured hits, 1 ignores armour entirely.
+  ability-armor-pierce: 0.35
+  # Every ability hit on a player is multiplied by this. Turn it down if abilities feel too
+  # strong in PvP on your server (0.8), up if too weak. Mobs aren't affected.
+  pvp-ability-damage: 1.0
 
 kill-tracking:
   # Weapons count their kills and rank up: Blooded 5, Crimson 25, Sanguine 100, Bloodbath 250.
@@ -112,93 +119,111 @@ messages:
 weapons:
   riftblade:            # Bloodrift Blade
     enabled: true
-    cooldown: 15
+    cooldown: 14
     range: 14           # how far ahead the rift opens
     pull-radius: 3.5
     window: 6           # time to step through
+    exit-damage: 4      # the rift snaps shut as you step out: damage around you...
+    exit-radius: 2.5
+    exit-slow: 1.5      # ...and Slowness II for this long
   bloodhook:
     enabled: true
-    cooldown: 6
-    range: 10
+    cooldown: 7         # a miss only costs half
+    range: 12
     range-per-hook: 3   # extra range for hooking the same target again within 12s
     max-range: 28
+    damage: 2           # the hook bites...
+    slow: 1             # ...and holds (Slowness I, seconds) so you land on them
   nullblade:            # Clotblade
     enabled: true
     cooldown: 20
-    hit-clot: 4         # how long a hit suppresses a player's abilities
+    hit-clot: 2.5       # how long a hit suppresses a player's abilities
+    clot-immunity: 8    # a player can only be clotted by hits once in this many seconds
     field-radius: 4
     field-duration: 8
   meteor_gauntlet:      # Blood Meteor Gauntlet
     enabled: true
-    cooldown: 14
+    cooldown: 15
     range: 24
-    damage: 5
+    damage: 8
     radius: 4.5
-    delay: 2
+    delay: 1.6          # the telegraph: time from the ring appearing to impact
+    crater-duration: 3  # the crater bleeds whoever stands in it (a stack every second)
   gravestone:           # Crimson Gravestone
     enabled: true
-    cooldown: 20
+    cooldown: 18
     radius: 6
-    duration: 3
+    duration: 2         # the pull, before the eruption
+    damage: 6           # the eruption (plus a bleeding wound); it throws them up, not away
   chronos:              # Bleeding Chronos
     enabled: true
     cooldown: 18
     window: 8           # time to recall
+    recall-heal: 0.3    # share of the health lost since the mark that the recall gives back...
+    recall-heal-max: 6  # ...up to this much (half-hearts)
+    departure-damage: 3 # the blood left behind bursts on whoever was chasing you
+    departure-radius: 2.5
+    fade-cooldown: 6    # a mark that dries up unused still costs this much cooldown
   thunder_pike:         # Crimson Thunder Pike
     enabled: true
-    cooldown: 12
-    range: 22
-    damage: 5
+    cooldown: 13
+    range: 20
+    damage: 7
     radius: 3
+    stun: 1             # what the bolt hits is slowed hard (Slowness III) for this long
   mirrorfang:           # Blood Mirrorfang
     enabled: true
     cooldown: 20
-    duration: 7
-    damage: 4           # per slash, every half second
-    range: 3.5
+    duration: 6
+    damage: 3           # per slash
+    interval: 0.7       # between slashes
+    range: 3            # slashing reach
+    hunt-range: 10      # how far away the mirror notices, and glides after, an enemy
   void_scythe:          # Hemorrhage Scythe
     enabled: true
-    cooldown: 3         # Harvest (right-click)
+    cooldown: 5         # Harvest (right-click)
     bleed-hits: 5       # hits to hemorrhage
     bleed-damage: 0.5   # per bleed stack, every bleed-interval (bleeding ignores armour)
     bleed-interval: 1.5
-    damage: 10          # hemorrhage damage to the target
-    splash-damage: 8    # ...and to everything around it
+    damage: 9           # hemorrhage damage to the target
+    splash-damage: 6    # ...and to everything around it
     radius: 4
     reap-damage: 4      # Harvest damage
   paradox_bow:          # Sanguine Paradox Bow
     enabled: true
     cooldown: 10
-    damage: 7           # the echo's damage, on top of the arrow
+    damage: 6           # the echo's damage, on top of the arrow
     echo-delay: 1.5     # how long the echo takes to come back
     range: 40           # how far the echo will chase a marked creature
+    mark-glow: 3        # a marked creature glows (seen through walls) for this long
   vampire_fang:
     enabled: true
-    cooldown: 8
-    lifesteal: 0.25     # share of melee damage healed
+    cooldown: 9
+    lifesteal: 0.25     # share of the melee damage actually dealt that heals you
     dash-speed: 1.7
-    dash-damage: 4
+    dash-damage: 5
   blood_grimoire:
     enabled: true
-    cooldown: 14
-    range: 12
-    drain: 6            # health drained over 1.5s
+    cooldown: 16
+    range: 10
+    drain: 5            # health drained over 1.5s; armour doesn't stop it, and it slows them
     gift-cost: 4        # health you pay to give (never takes you below 1 heart)
     gift-heal: 8
     gift-regeneration: 4
 
-# The Blood Knight's armour (helm, cuirass, greaves, sabatons). Netherite protection plus a heart
-# of health per piece. Without the resource pack it looks like netherite in the inventory but is
-# invisible when worn, so keep that in mind if the pack is optional on your server.
+# The Blood Knight's armour (helm, cuirass, greaves, sabatons). A little more than netherite
+# protection, plus half a heart of health per piece. It needs the resource pack to be seen, so
+# keep that in mind if the pack is optional on your server.
 armor:
   enabled: true
   # (2 pieces) Bloodlust: health every kill gives back.
   kill-heal: 3
   # (3 pieces) Barbed Blood: damage melee attackers take back.
-  barb-damage: 2
+  barb-damage: 1.5
   # (4 pieces) Effects the full set gives for as long as it's worn, as effect:amplifier
-  # (0 = level I). They go the moment a piece comes off. [] for none.
-  full-set-effects: [strength:0, speed:0, fire_resistance:0]
+  # (0 = level I). They go the moment a piece comes off. [] for none. (Strength here makes every
+  # hit you land stronger forever; Blood Rage below is the set's burst instead.)
+  full-set-effects: [speed:0, fire_resistance:0]
   # (4 pieces) Blood Rage: when a hit leaves you at this share of your max health or less, you get
   # Strength and Resistance and a blood shockwave hurls everything nearby away.
   rage-threshold: 0.4

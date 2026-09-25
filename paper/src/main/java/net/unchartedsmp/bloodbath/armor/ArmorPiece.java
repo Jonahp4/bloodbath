@@ -28,8 +28,8 @@ public enum ArmorPiece {
 	 */
 	public static final double TOUGHNESS = 3.5;
 	public static final double KNOCKBACK_RESISTANCE = 0.15;
-	/** Extra max health per piece, in half-hearts. */
-	public static final double HEALTH = 2.0;
+	/** Extra max health per piece, in half-hearts: two hearts for the whole set. */
+	public static final double HEALTH = 1.0;
 
 	private static final Map<String, ArmorPiece> BY_NAME = new HashMap<>();
 

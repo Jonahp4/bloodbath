@@ -2,7 +2,10 @@ package net.unchartedsmp.bloodbath.weapon.behavior;
 
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
+import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -12,12 +15,13 @@ import org.bukkit.entity.Player;
 
 /**
  * Crimson Gravestone: opens a blood pool at your feet that drags everything within 6 blocks
- * inward for 3s, then erupts and hurls them away.
+ * inward for 2s, then erupts under them: 6 damage, a bleeding wound, and a throw straight up so
+ * they come down beside you rather than out of reach.
  */
 public final class Gravestone implements WeaponBehavior {
-	private static final double PULL_STRENGTH = 0.22;
-	private static final double LAUNCH_STRENGTH = 1.7;
-	private static final double LAUNCH_VERTICAL = 1.3;
+	private static final double PULL_STRENGTH = 0.2;
+	private static final double LAUNCH_STRENGTH = 0.35;
+	private static final double LAUNCH_VERTICAL = 1.15;
 
 	@Override
 	public WeaponType type() {
@@ -35,7 +39,7 @@ public final class Gravestone implements WeaponBehavior {
 
 	private void slam(Player caster) {
 		double radius = setting("radius", 6.0);
-		int duration = Math.max(1, ticksSetting("duration", 60));
+		int duration = Math.max(1, ticksSetting("duration", 40));
 		Location center = caster.getLocation();
 		Location floor = center.clone().add(0.0, 0.1, 0.0);
 		BloodFx.play(center, BloodFx.HEARTBEAT, 1.2F, 0.5F);
@@ -62,8 +66,14 @@ public final class Gravestone implements WeaponBehavior {
 			BloodFx.burst(center, BloodFx.SPLATTER, 50, 3.0, 0.25);
 			BloodFx.burst(center, BloodFx.BLOOD_LARGE, 30, 2.0);
 			BloodFx.spray(center.clone().add(0.0, 0.3, 0.0), radius, 16, 10);
+			double damage = setting("damage", 6.0);
 			for (LivingEntity target : Targeting.livingInRadius(center, radius, caster)) {
+				if (damage > 0.0) {
+					Damage.deal(target, damage, caster, type(), center);
+				}
+				Bleeding.apply(target, 1, caster, type());
 				Targeting.launchOutward(target, center, LAUNCH_STRENGTH, LAUNCH_VERTICAL);
+				Shapes.column(target.getLocation(), BloodFx.BLOOD_FADE, 2.2, 10, 0.25);
 			}
 		});
 	}

@@ -49,7 +49,11 @@ public final class Cooldowns {
 	}
 
 	public static void start(Player player, Ability ability) {
-		int length = Settings.get().cooldownTicks(ability);
+		startFor(player, ability, Settings.get().cooldownTicks(ability));
+	}
+
+	/** A cooldown of a given length (a refunded miss, a mark that faded unused). */
+	public static void startFor(Player player, Ability ability, int length) {
 		Entry entry = ENTRIES.computeIfAbsent(player.getUniqueId(), id -> new Entry(new long[Ability.COUNT], new int[Ability.COUNT]));
 		entry.readyAt()[ability.ordinal()] = length <= 0 ? 0L : ServerClock.now() + length;
 		entry.length()[ability.ordinal()] = length;

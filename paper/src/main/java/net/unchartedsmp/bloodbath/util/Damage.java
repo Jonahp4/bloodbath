@@ -61,9 +61,18 @@ public final class Damage {
 		if (!target.isValid() || target.isDead()) {
 			return;
 		}
+		double pierce = 0.0;
 		if (blow) {
 			// A weapon bled at the Blood Anvil hits harder with its ability too.
 			amount *= BloodLevels.abilityMultiplier(attacker, source);
+			if (target instanceof Player) {
+				amount *= Settings.get().pvpAbilityDamage;
+				// Part of every ability hit on a player goes straight through armour: against full
+				// netherite a hit that only armour sees does almost nothing, which made abilities
+				// decoration in PvP. (Mobs and the boss take one ordinary hit, as before.)
+				pierce = amount * Settings.get().abilityArmorPierce;
+				amount -= pierce;
+			}
 		}
 		int immunity = target.getNoDamageTicks();
 		double lastDamage = target.getLastDamage();
@@ -83,9 +92,15 @@ public final class Damage {
 				if (from != null && from.getWorld() == target.getWorld()) {
 					hit.withDamageLocation(from);
 				}
-				target.damage(amount, hit.build());
+				if (amount > 0.0) {
+					target.damage(amount, hit.build());
+				}
+				if (pierce > 0.0 && target.isValid() && !target.isDead()) {
+					target.setNoDamageTicks(0);
+					target.damage(pierce, DamageSource.builder(DamageType.MAGIC).withCausingEntity(attacker).build());
+				}
 			} else {
-				target.damage(amount);
+				target.damage(amount + pierce);
 			}
 		} finally {
 			depth--;

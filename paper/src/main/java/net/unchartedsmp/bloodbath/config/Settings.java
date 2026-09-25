@@ -69,6 +69,10 @@ public final class Settings {
 	public final String tooltipFrame;
 	/** Weapons and armour use their own item model ids (unchartedsmp:<id>) rather than riding netherite's. */
 	public final boolean customItemIds;
+	/** Share of every ability hit on a player that ignores armour (dealt as magic; Protection still counts). */
+	public final double abilityArmorPierce;
+	/** Every ability hit on a player is multiplied by this (PvP tuning). */
+	public final double pvpAbilityDamage;
 
 	public final boolean armorEnabled;
 	/** Health restored per kill with 2+ Blood Knight pieces (half-hearts). */
@@ -165,6 +169,8 @@ public final class Settings {
 			}
 		}
 		respectWorldPvp = bool(c, "gameplay.respect-world-pvp", true);
+		abilityArmorPierce = Math.max(0.0, Math.min(1.0, c == null ? 0.35 : c.getDouble("gameplay.ability-armor-pierce", 0.35)));
+		pvpAbilityDamage = Math.max(0.0, c == null ? 1.0 : c.getDouble("gameplay.pvp-ability-damage", 1.0));
 		neverDespawn = bool(c, "gameplay.weapons-never-despawn", true);
 		killTracking = bool(c, "kill-tracking.enabled", true);
 		countMobKills = bool(c, "kill-tracking.count-mobs", true);
@@ -173,8 +179,8 @@ public final class Settings {
 
 		armorEnabled = bool(c, "armor.enabled", true);
 		armorKillHeal = Math.max(0.0, c == null ? 3.0 : c.getDouble("armor.kill-heal", 3.0));
-		armorBarbDamage = Math.max(0.0, c == null ? 2.0 : c.getDouble("armor.barb-damage", 2.0));
-		fullSetEffects = effects(c, "armor.full-set-effects", List.of("strength:0", "speed:0", "fire_resistance:0"));
+		armorBarbDamage = Math.max(0.0, c == null ? 1.5 : c.getDouble("armor.barb-damage", 1.5));
+		fullSetEffects = effects(c, "armor.full-set-effects", List.of("speed:0", "fire_resistance:0"));
 		rageThreshold = Math.max(0.05, Math.min(0.95, c == null ? 0.4 : c.getDouble("armor.rage-threshold", 0.4)));
 		rageDurationTicks = Math.max(20, (int) Math.round((c == null ? 8.0 : c.getDouble("armor.rage-duration", 8.0)) * 20.0));
 		rageRadius = Math.max(0.0, c == null ? 4.0 : c.getDouble("armor.rage-radius", 4.0));

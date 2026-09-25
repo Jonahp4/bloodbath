@@ -1,7 +1,11 @@
 package net.unchartedsmp.bloodbath.weapon.behavior;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
+import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.util.Targeting;
@@ -13,8 +17,9 @@ import org.bukkit.entity.Player;
 
 /**
  * Clotblade (id {@code nullblade}): hitting a player clots their blood, suppressing their
- * abilities for 4s. Right-click throws down an 8s clot field that suppresses everyone inside.
- * Its own field never stops the Clotblade.
+ * abilities for 2.5s. A player can only be clotted by hits once every 8s, so chain-hitting can't
+ * lock someone out for a whole fight. Right-click throws down an 8s clot field that suppresses
+ * everyone inside. Its own field never stops the Clotblade.
  */
 public final class Clotblade implements WeaponBehavior {
 	@Override
@@ -27,10 +32,20 @@ public final class Clotblade implements WeaponBehavior {
 		return false;
 	}
 
+	/** Victim → the tick a hit may clot them again: one clot per window, never a permanent lock. */
+	private final Map<UUID, Long> clotImmune = new HashMap<>();
+
 	@Override
 	public void melee(Player player, LivingEntity target, double damage) {
 		if (target instanceof Player victim) {
-			NullField.debuff(victim, ticksSetting("hit-clot", 80));
+			long now = ServerClock.now();
+			Long immuneUntil = clotImmune.get(victim.getUniqueId());
+			if (immuneUntil != null && now < immuneUntil) {
+				BloodFx.burst(BloodFx.chest(victim), BloodFx.CLOT, 3, 0.25);
+				return;
+			}
+			clotImmune.put(victim.getUniqueId(), now + ticksSetting("clot-immunity", 160));
+			NullField.debuff(victim, ticksSetting("hit-clot", 50));
 			Location chest = BloodFx.chest(victim);
 			BloodFx.play(victim, BloodFx.NULLIFY, 0.6F, 1.5F);
 			BloodFx.burst(chest, BloodFx.CLOT, 10, 0.3);
@@ -68,5 +83,21 @@ public final class Clotblade implements WeaponBehavior {
 	@Override
 	public BloodFx.Fx auraAccent() {
 		return BloodFx.CLOT;
+	}
+
+	@Override
+	public void forget(UUID playerId) {
+		clotImmune.remove(playerId);
+	}
+
+	@Override
+	public void prune() {
+		long now = ServerClock.now();
+		clotImmune.values().removeIf(until -> until < now);
+	}
+
+	@Override
+	public void shutdown() {
+		clotImmune.clear();
 	}
 }

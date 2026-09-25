@@ -89,7 +89,7 @@ public final class VampireFang implements WeaponBehavior {
 		BloodFx.play(player, BloodFx.FANGS, 0.6F, 1.4F);
 		BloodFx.burst(BloodFx.chest(player), BloodFx.BLOOD_LARGE, 18, 0.35);
 
-		double damage = setting("dash-damage", 4.0);
+		double damage = setting("dash-damage", 5.0);
 		double lifesteal = setting("lifesteal", 0.25);
 		Set<UUID> cut = new HashSet<>();
 		TickScheduler.repeat(1, 1, DASH_TICKS, tick -> {

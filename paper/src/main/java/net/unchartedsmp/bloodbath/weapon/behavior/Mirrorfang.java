@@ -29,8 +29,9 @@ import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 
 /**
- * Blood Mirrorfang: conjures a blood mirror of you for 7s that slashes the nearest enemy within
- * 3.5 blocks every half second.
+ * Blood Mirrorfang: conjures a blood mirror of you for 6s that hunts the nearest enemy within 10
+ * blocks, gliding after it (slower than a sprint, so it can be outrun) and slashing it every
+ * 0.7s once it's within 3 blocks.
  *
  * <h2>Dupe safety</h2>
  * The mirror is an armor stand dressed like the caster. It only ever wears bare display copies
@@ -39,7 +40,9 @@ import org.bukkit.util.Vector;
  * that isn't live in this session is deleted on sight. See {@code MirrorGuard}.
  */
 public final class Mirrorfang implements WeaponBehavior {
-	private static final int ATTACK_INTERVAL_TICKS = 10;
+	/** How far the mirror glides toward its prey every few ticks, and how often. */
+	private static final double GLIDE_STEP = 0.55;
+	private static final int GLIDE_EVERY_TICKS = 4;
 	private static final EulerAngle ARM_READY = new EulerAngle(Math.toRadians(-40), 0.0, Math.toRadians(-8));
 	private static final EulerAngle ARM_RAISED = new EulerAngle(Math.toRadians(-125), Math.toRadians(-20), Math.toRadians(-15));
 	private static final EulerAngle ARM_SLASH = new EulerAngle(Math.toRadians(-15), Math.toRadians(25), Math.toRadians(-5));
@@ -62,9 +65,11 @@ public final class Mirrorfang implements WeaponBehavior {
 		if (!Cooldowns.checkReady(player, ability())) {
 			return;
 		}
-		int lifetime = Math.max(ATTACK_INTERVAL_TICKS, ticksSetting("duration", 140));
-		double range = setting("range", 3.5);
-		double damage = setting("damage", 4.0);
+		int interval = Math.max(4, ticksSetting("interval", 14));
+		int lifetime = Math.max(interval, ticksSetting("duration", 120));
+		double range = setting("range", 3.0);
+		double damage = setting("damage", 3.0);
+		double hunt = setting("hunt-range", 10.0);
 
 		Location spawn = player.getLocation().add(rightOf(player).multiply(1.2));
 		if (!Targeting.fitsAt(player, spawn)) {
@@ -89,13 +94,16 @@ public final class Mirrorfang implements WeaponBehavior {
 				live.remove(mirror.getUniqueId());
 				return false;
 			}
-			int phase = tick % ATTACK_INTERVAL_TICKS;
-			if (phase == ATTACK_INTERVAL_TICKS - 3) {
+			int phase = tick % interval;
+			if (phase == interval - 3) {
 				mirror.setRightArmPose(ARM_RAISED); // wind-up
-			} else if (phase == ATTACK_INTERVAL_TICKS - 1) {
+			} else if (phase == interval - 1) {
 				slash(mirror, player, range, damage);
 			} else if (phase == 1) {
 				mirror.setRightArmPose(ARM_READY);
+			}
+			if (tick % GLIDE_EVERY_TICKS == 0) {
+				glide(mirror, player, range, hunt);
 			}
 			if (tick >= lifetime - 1) {
 				dismiss(mirror);
@@ -109,6 +117,29 @@ public final class Mirrorfang implements WeaponBehavior {
 			}
 			return true;
 		});
+	}
+
+	/** The mirror closes on the nearest enemy it can see, never through walls or into blocks. */
+	private static void glide(ArmorStand mirror, Player owner, double range, double hunt) {
+		LivingEntity prey = nearestEnemy(mirror, owner, hunt);
+		if (prey == null) {
+			return;
+		}
+		Location from = mirror.getLocation();
+		Vector to = prey.getLocation().toVector().subtract(from.toVector());
+		to.setY(0.0);
+		double distance = to.length();
+		mirror.setRotation((float) Math.toDegrees(Math.atan2(-to.getX(), to.getZ())), 0.0F);
+		if (distance <= range * 0.8 || distance < 1.0E-3) {
+			return;
+		}
+		Location next = from.clone().add(to.multiply(Math.min(GLIDE_STEP, distance - range * 0.8) / distance));
+		next.setY(prey.getLocation().getY());
+		if (Targeting.fitsAt(mirror, next) && Targeting.hasLineOfSight(BloodFx.chest(mirror), next.clone().add(0.0, 1.0, 0.0))) {
+			BloodFx.burst(from.clone().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, 2, 0.15, 0.0);
+			BloodFx.burst(from.clone().add(0.0, 0.9, 0.0), BloodFx.EMBER, 2, 0.25, 0.0);
+			mirror.teleport(next);
+		}
 	}
 
 	private void dress(ArmorStand stand, Player owner) {

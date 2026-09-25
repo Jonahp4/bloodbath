@@ -27,6 +27,8 @@ import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
@@ -228,6 +230,8 @@ public final class ParadoxBow implements WeaponBehavior {
 		}
 		Echo echo = flight.echo();
 		echo.marked = target;
+		// Marked prey lights up through walls until the echo arrives: nowhere to hide from it.
+		target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, ticksSetting("mark-glow", 60), 0, false, false, true));
 		Location chest = BloodFx.chest(target);
 		BloodFx.ring(target.getLocation().add(0.0, 0.1, 0.0), BloodFx.BLOOD_FADE, 0.9, 16);
 		BloodFx.burst(chest, BloodFx.GLYPH, 12, 0.4);
@@ -271,7 +275,7 @@ public final class ParadoxBow implements WeaponBehavior {
 
 	/** A phantom arrow tears out of the rift and homes into the marked creature. */
 	private void phantom(Echo echo, Set<UUID> hit) {
-		double damage = setting("damage", 7.0);
+		double damage = setting("damage", 6.0);
 		Location[] head = {echo.rift.clone()};
 		TickScheduler.repeat(1, 1, PHANTOM_TICKS, step -> {
 			LivingEntity target = echo.marked;

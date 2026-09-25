@@ -3,6 +3,7 @@ package net.unchartedsmp.bloodbath.weapon.behavior;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
+import net.unchartedsmp.bloodbath.fx.Shapes;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.util.Targeting;
 import net.unchartedsmp.bloodbath.weapon.WeaponBehavior;
@@ -11,10 +12,12 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 /**
- * Crimson Thunder Pike: throw a bolt of charged blood up to 22 blocks, call crimson lightning
- * where it lands and ride it there.
+ * Crimson Thunder Pike: throw a bolt of charged blood up to 20 blocks, call crimson lightning
+ * where it lands and ride it there. Whatever it strikes is stunned (heavily slowed) for a second.
  *
  * <p>The lightning is cosmetic and the pike deals its own damage: real lightning would strike the
  * wielder after the teleport, start fires, and could be farmed to turn villagers into witches,
@@ -36,7 +39,7 @@ public final class ThunderPike implements WeaponBehavior {
 		Cooldowns.start(player, ability());
 		double radius = setting("radius", 3.0);
 		Location start = player.getEyeLocation();
-		Location impact = Targeting.lookTarget(player, setting("range", 22.0));
+		Location impact = Targeting.lookTarget(player, setting("range", 20.0));
 		Location floor = impact.clone().add(0.0, 0.1, 0.0);
 		// Telegraph the landing spot so the target (and you) can see where the bolt will fall.
 		BloodFx.ring(floor, BloodFx.BLOOD_FADE, radius, 24);
@@ -62,9 +65,15 @@ public final class ThunderPike implements WeaponBehavior {
 		BloodFx.line(impact, impact.clone().add(0.0, 12.0, 0.0), BloodFx.BLOOD_FADE, 2.0);
 		BloodFx.play(impact, BloodFx.THUNDER, 1.0F, 1.2F);
 
-		double damage = setting("damage", 5.0);
+		double damage = setting("damage", 7.0);
+		int stun = ticksSetting("stun", 20);
 		for (LivingEntity target : Targeting.livingInRadius(impact, radius, player)) {
 			Damage.deal(target, damage, player, type(), impact);
+			if (stun > 0 && target.isValid() && !target.isDead()) {
+				// Stunned by the bolt: slowed hard for a moment, so riding in on them is a real engage.
+				target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, stun, 2, false, true, true));
+				Shapes.spiral(target.getLocation(), BloodFx.SPARK, 0.6, 2.0, 1.5, 12, 0.0);
+			}
 		}
 
 		// Only ride the bolt if we're still in the same dimension (no portal-hopping mid-cast)
