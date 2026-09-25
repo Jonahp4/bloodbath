@@ -36,7 +36,7 @@ public final class Terrain {
 		}
 	}
 
-	private record Basin(double cx, double cz, double radius, int level, double depth, double shore, boolean pool) {
+	private record Basin(double cx, double cz, double radius, int level, double depth, double shore, boolean pool, double phase) {
 	}
 
 	private static final int LAKE_CELL = 320;
@@ -181,7 +181,7 @@ public final class Terrain {
 
 	/** Basins are costly to work out (they sample the ground) and asked for by every column near them. */
 	private final ConcurrentHashMap<Long, Basin> basins = new ConcurrentHashMap<>();
-	private static final Basin NONE = new Basin(0, 0, 1, 0, 0, 0, false);
+	private static final Basin NONE = new Basin(0, 0, 1, 0, 0, 0, false, 0);
 
 	private Basin basin(int cx, int cz, boolean pool) {
 		long key = ((long) cx << 33) ^ ((cz & 0xFFFFFFFFL) << 1) ^ (pool ? 1 : 0);
@@ -226,6 +226,7 @@ public final class Terrain {
 			}
 			depth = 2.5 + radius / 7.0;
 		}
+		double phase = unit(h, 5) * Math.PI * 2;
 		double centerGround = ground(centerX, centerZ);
 		// The water settles at the lowest point of the rim, so it never stands above the land around it.
 		double rim = centerGround;
@@ -234,7 +235,8 @@ public final class Terrain {
 		for (int i = 0; i < samples; i++) {
 			double angle = i * Math.PI * 2 / samples;
 			for (double k : new double[] {0.95, 1.25}) {
-				double g = ground(centerX + Math.cos(angle) * radius * k, centerZ + Math.sin(angle) * radius * k);
+				double reach = radius * k * lobes(angle, phase, pool);
+				double g = ground(centerX + Math.cos(angle) * reach, centerZ + Math.sin(angle) * reach);
 				rim = Math.min(rim, g);
 				high = Math.max(high, g);
 			}
@@ -245,7 +247,18 @@ public final class Terrain {
 		}
 		int level = (int) Math.floor(rim) - 1;
 		double shore = pool ? 1.8 : 1.0 + Math.min(0.9, 14.0 / radius + 0.25);
-		return new Basin(centerX, centerZ, radius, level, depth, shore, pool);
+		return new Basin(centerX, centerZ, radius, level, depth, shore, pool, phase);
+	}
+
+	/**
+	 * How far the shore reaches at this angle, as a share of the radius: a few broad lobes and bays
+	 * (0.6 to 1.4). Only ever a function of the angle, so the outline can't fold back on itself.
+	 */
+	private static double lobes(double angle, double phase, boolean pool) {
+		double wobble = 0.20 * Math.sin(2 * angle + phase)
+			+ 0.13 * Math.sin(3 * angle + phase * 1.7 + 1.0)
+			+ 0.07 * Math.sin(5 * angle + phase * 2.3 + 2.0);
+		return 1.0 + (pool ? wobble * 0.5 : wobble);
 	}
 
 	/** Every neighbour of a water column is water or rim (which never sits below the water). */
@@ -266,7 +279,7 @@ public final class Terrain {
 		double wz = z + n(warpZ, x * s, z * s + basin.cz()) * broad + n(warpZ, x, z) * Math.min(6.0, r * 0.18);
 		double dx = wx - basin.cx();
 		double dz = wz - basin.cz();
-		return Math.sqrt(dx * dx + dz * dz) / basin.radius();
+		return Math.sqrt(dx * dx + dz * dz) / (basin.radius() * lobes(Math.atan2(dz, dx), basin.phase(), basin.pool()));
 	}
 
 	// ---- spires -----------------------------------------------------------------------------

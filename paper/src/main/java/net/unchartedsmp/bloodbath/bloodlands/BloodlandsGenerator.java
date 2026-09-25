@@ -114,8 +114,15 @@ public final class BloodlandsGenerator extends ChunkGenerator {
 				return depth < 3 ? Material.MUD : Material.DIRT;
 			}
 			case SHORE -> {
-				if (depth == 0 && c.height() <= c.water() + 1) {
+				if (depth == 0 && c.height() <= c.water()) {
 					return terrain.grain(x, z) > 0.2 ? Material.PACKED_MUD : Material.MUD;
+				}
+				// One block up the bank the mud comes and goes in patches, so the shore isn't a ring.
+				if (depth == 0 && c.height() == c.water() + 1) {
+					double p = terrain.patch(x * 3, z * 3) + terrain.grain(x, z) * 0.35;
+					if (p > 0.1) {
+						return p > 0.35 ? Material.MUD : Material.COARSE_DIRT;
+					}
 				}
 			}
 			default -> {
