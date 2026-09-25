@@ -10,8 +10,8 @@ a resource pack that the plugin hosts for you.
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.5.0.jar`](dist/paper/Bloodbath-1.5.0.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.5.0.zip`](dist/Bloodbath-ResourcePack-1.5.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.6.0.jar`](dist/paper/Bloodbath-1.6.0.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.6.0.zip`](dist/Bloodbath-ResourcePack-1.6.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
@@ -19,7 +19,7 @@ a resource pack that the plugin hosts for you.
 1. Paper **1.21.11**, Java 21. Paper forks such as Purpur work too. Folia isn't supported.
    (1.4.0 and older ran on 1.21.4 and newer; from 1.5.0 the plugin is built for 1.21.11 only,
    because the Bloodlands biome uses 1.21.11's data format.)
-2. Drop `Bloodbath-1.5.0.jar` into `plugins/` and restart.
+2. Drop `Bloodbath-1.6.0.jar` into `plugins/` and restart.
 3. **Restart once more** to open the Bloodlands: on the first start the plugin installs the
    Bloodlands biome as a datapack in your main world, and the server only reads datapacks at
    startup. `/bb bloodlands` tells you where it's at.
@@ -35,18 +35,23 @@ pack, sees named netherite swords and a bow. Every weapon still works for them.
 
 | Weapon (`id`) | Right-click | Also |
 |---|---|---|
-| **Bloodrift Blade** (`riftblade`) | Tear a bleeding rift up to 14 blocks ahead that drags enemies in. Use again within 6s to step through. | 10 damage sword |
-| **Bloodhook** (`bloodhook`) | Chain whatever you're looking at and reel yourself to it. Hooking the same target again within 12s extends the range from 10 up to 28 blocks. | Can't hook through walls |
-| **Clotblade** (`nullblade`) | Throw down a clot field (4 blocks, 8s) that suppresses everyone's abilities inside. | Hits clot a player's blood: no abilities for 4s. Its own field never stops it. |
-| **Blood Meteor Gauntlet** (`meteor_gauntlet`) | Or punch a block: a blood meteor lands there 2s later, 5 damage and a big launch in 4.5 blocks. | Never hits its wielder |
-| **Crimson Gravestone** (`gravestone`) | A blood pool drags everything within 6 blocks in for 3s, then erupts and hurls it away. | |
-| **Bleeding Chronos** (`chronos`) | Leave a blood-mark. Use again within 8s to snap back to it, facing and all. | Cooldown starts on recall |
-| **Crimson Thunder Pike** (`thunder_pike`) | Hurl charged blood up to 22 blocks, call crimson lightning there (5 damage) and ride it. | The lightning is cosmetic: no fires, no charged creepers |
-| **Blood Mirrorfang** (`mirrorfang`) | A blood mirror of you fights for 7s, slashing the nearest enemy every half second. | Dupe-proof, see below |
-| **Hemorrhage Scythe** (`void_scythe`) | **Harvest:** a blood arc that cuts everything in front of you and makes it bleed. | Every hit adds a bleed stack that hurts every 1.5s (ignores armour); the 5th hemorrhages for 10 damage and 8 to everything around. 12 damage, attack speed 1.0. |
-| **Sanguine Paradox Bow** (`paradox_bow`) | A real bow. | **Paradox Echo:** a fully drawn shot fires twice. A blood rift opens where you shot from; 1.5s later a phantom arrow tears out of it and homes into whatever your arrow hit, wherever it ran (7 damage, pierces on the way). If the arrow hit nothing living, the echo retraces its real flight path instead. |
-| **Vampire Fang** *(new)* (`vampire_fang`) | **Blood Dash:** lunge along your aim, cutting and drinking from everything you pass through. | Every hit heals you for 25% of the damage. Fast 6 damage dagger. |
-| **Blood Grimoire** *(new)* (`blood_grimoire`) | **Transfusion:** a blood tether drains 6 health from a creature over 1.5s into you. | Sneak + right-click a player to give them 8 health (and Regeneration) for 4 of yours. Works with PvP off. |
+| **Bloodrift Blade** (`riftblade`) | Tear a bleeding rift up to 14 blocks ahead that drags enemies in. Use again within 6s to step through: the rift snaps shut on everything around you (4 damage, Slowness II 1.5s). 14s. | 9 damage sword, speed 1.6 |
+| **Bloodhook** (`bloodhook`) | Chain the enemy you're looking at: it bites (2 damage), holds them (Slowness 1s) and reels you in. Hooking the same target again within 12s extends the range from 12 up to 28 blocks. A miss only costs half the 7s cooldown. | Can't hook through walls |
+| **Clotblade** (`nullblade`) | Throw down a clot field (4 blocks, 8s) that suppresses everyone's abilities inside. | Hits clot a player's blood: no abilities for 2.5s, and a player can only be clotted by hits once every 8s. 7 damage sword. Its own field never stops it. |
+| **Blood Meteor Gauntlet** (`meteor_gauntlet`) | Or punch a block: a blood meteor lands there 1.6s later, 8 damage and a big launch in 4.5 blocks, and leaves a crater that bleeds whoever stands in it for 3s. 15s. | Never hits its wielder |
+| **Crimson Gravestone** (`gravestone`) | A blood pool drags everything within 6 blocks in for 2s, then erupts under them: 6 damage, a bleeding wound, and a throw straight up so they land next to you. 18s. | |
+| **Bleeding Chronos** (`chronos`) | Leave a blood-mark. Use again within 8s to snap back to it, facing and all, winning back 30% of the health you lost since (up to 3 hearts). The blood you leave behind bursts on whoever was chasing you (3 damage, a slow). | Cooldown starts on recall; a mark that dries up unused costs 6s |
+| **Crimson Thunder Pike** (`thunder_pike`) | Hurl charged blood up to 20 blocks, call crimson lightning there (7 damage, stuns for 1s) and ride it. 13s. | The lightning is cosmetic: no fires, no charged creepers |
+| **Blood Mirrorfang** (`mirrorfang`) | A blood mirror of you hunts the nearest enemy within 10 blocks for 6s, gliding after it and slashing every 0.7s (3 damage). | You can outrun it. Dupe-proof, see below |
+| **Hemorrhage Scythe** (`void_scythe`) | **Harvest** (5s): a blood arc that cuts everything in front of you and makes it bleed. | Every hit adds a bleed stack that hurts every 1.5s (ignores armour); the 5th hemorrhages for 9 damage and 6 to everything around. 12 damage, attack speed 1.0. |
+| **Sanguine Paradox Bow** (`paradox_bow`) | A real bow. | **Paradox Echo:** a fully drawn shot fires twice. A blood rift opens where you shot from; 1.5s later a phantom arrow tears out of it and homes into whatever your arrow hit, wherever it ran (6 damage, pierces on the way). What it marked glows until then. If the arrow hit nothing living, the echo retraces its real flight path instead. |
+| **Vampire Fang** (`vampire_fang`) | **Blood Dash** (9s): lunge along your aim, cutting (5 damage) and drinking from everything you pass through. | Every hit heals you for 25% of the damage it actually dealt. Fast 6 damage dagger. |
+| **Blood Grimoire** (`blood_grimoire`) | **Transfusion** (16s): a blood tether drains 5 health from a creature over 1.5s into you, slowing it. Armour doesn't stop it. | Sneak + right-click a player to give them 8 health (and Regeneration) for 4 of yours. Works with PvP off. |
+
+**In PvP**, 35% of every ability hit on a player goes straight through armour (as magic damage;
+Protection still reduces it). Without that, abilities did almost nothing against full netherite.
+Tune it with `gameplay.ability-armor-pierce`, and scale every ability hit on players with
+`gameplay.pvp-ability-damage`.
 
 Every number above (cooldowns, damage, ranges, durations) is in `config.yml`. Right-clicking a
 door, chest or button with a weapon uses the block as usual; sneak to use the ability instead.
@@ -63,8 +68,10 @@ too: it's drawn low, under your hand, so it never sits in front of your camera. 
 the full version around the weapon.
 
 **Particles are cheap.** Each effect goes only to players within `effects.view-distance` (64
-blocks), at full detail within `full-detail-distance` (24) and thinner further out. Effects nobody
-can see aren't sent at all.
+blocks), at full detail within `full-detail-distance` (24) and thinner further out: shapes (rings,
+beams, crescents, domes) send every 2nd point to players up to twice that and every 4th beyond.
+Effects nobody can see aren't sent at all, and nothing is ever drawn right in front of your own
+camera. `effects.particle-multiplier` scales everything.
 
 ## Blood Knight armour
 
@@ -74,23 +81,32 @@ The boss's armour, worn by players: **Blood Knight Helm, Cuirass, Greaves and Sa
 | | Armor | Toughness | Knockback resistance | Extra |
 |---|---|---|---|---|
 | Netherite (helm / chest / legs / boots) | 3 / 8 / 6 / 3 | 3 | 0.1 | |
-| **Blood Knight** | **4 / 9 / 7 / 4** | **3.5** | **0.15** | **+1 heart each**, fireproof |
+| **Blood Knight** | **4 / 9 / 7 / 4** | **3.5** | **0.15** | **+½ heart each**, fireproof |
 
 | Set bonus | |
 |---|---|
 | **2 pieces, Bloodlust** | Every kill heals you 1.5 hearts. |
-| **3 pieces, Barbed Blood** | Whatever hits you in melee takes 1 heart back. |
-| **4 pieces, Blood Knight** | While the whole set is on: **Strength, Speed and Fire Resistance**. They switch on the moment the fourth piece goes on (with a flash and a sound) and come off the moment any piece comes off. Only these effects are touched: a Strength potion you drank stays yours. Editable in `armor.full-set-effects`. |
+| **3 pieces, Barbed Blood** | Whatever hits you in melee takes ¾ of a heart back. |
+| **4 pieces, Blood Knight** | While the whole set is on: **Speed and Fire Resistance**. They switch on the moment the fourth piece goes on (with a flash and a sound) and come off the moment any piece comes off. Only these effects are touched: a potion you drank stays yours. Editable in `armor.full-set-effects`. |
 | **4 pieces, Blood Rage** | When a hit leaves you at 40% health or less: Strength II and Resistance for 8s and a blood shockwave that hurls everything within 4 blocks away. Your screen edges run red and your heart pounds until it fades. 60s cooldown, shown on the action bar. A clot (Clotblade) stops it. |
 
-The Sabatons leave bloody footprints and a full set drips blood (you see it too). The worn armour
-is painted at 4x vanilla resolution and shaped so it doesn't read as a box: an open-faced helm
-(brow band, nasal guard, cheek guards), a cuirass that stops above the hips so the waist tapers
-into the belt, pauldrons, mail and vambraces that leave the hands bare, and low sabatons. Curved
-shading on every plate, engraved crimson filigree, and one glowing heart-gem. The worn armour and the icons come from the resource pack. **Without the
-pack, the pieces look like netherite in the inventory but are invisible when worn** (vanilla has
-no model for them). Keep that in mind if the pack is optional on your server, or turn the set off
-with `armor.enabled: false`.
+**The look** is the boss's own: black iron plate lacquered in blood red, a Blood Core set into the
+breastplate, a glow in each knee. **The helm is a real 3D model** on your head: a closed great helm
+with a slit of burning eyes (they glow in the dark), a fanged grin and a swept fin crest. The rest
+is painted onto the body the way vanilla armour is (the game has no way to wear other 3D models).
+The Sabatons leave bloody footprints and a full set drips blood (you see it too).
+
+**Edit it in Blockbench:** `tools/blockbench/blood_knight_helm.bbmodel` is the helm (a Java
+block/item model; export it over `resourcepack/assets/unchartedsmp/models/item/blood_knight_helm.json`
+and its texture over `textures/item/blood_knight_helm_model.png`), and
+`tools/blockbench/blood_knight_armor.bbmodel` is the player's body with both worn layers on it
+(paint in 3D, then save the two textures over
+`textures/entity/equipment/humanoid/blood_knight.png` and `humanoid_leggings/blood_knight.png`).
+Both projects are generated from `tools/models/armor.py`, which is also where the art is drawn.
+
+**Without the pack**, the armour is invisible when worn and the helm is a missing-texture cube.
+Keep that in mind if the pack is optional on your server, set `items.custom-ids: false` (the
+pieces then show as netherite in the inventory), or turn the set off with `armor.enabled: false`.
 
 **Kill ranks.** Weapons count their kills and rank up: Blooded (5), Crimson (25), Sanguine (100),
 Bloodbath (250). The count lives on the item, so it travels with the weapon when it's traded.
@@ -310,6 +326,8 @@ Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.ar
   Bloodbath items can never be used as crafting ingredients, and a core only works in Bloodbath
   recipes.
 - `items.tooltip-frame`: the blood tooltip frame (see below).
+- `items.custom-ids`: weapons and armour use their own item model ids (default) or ride netherite's.
+- `gameplay.ability-armor-pierce`, `gameplay.pvp-ability-damage`: how hard abilities hit players.
 - `bloodlands`: on or off, world name, seed, the datapack, frozen time, lake frequency, Bloodbound.
 - `portal`: minimum and maximum size, warm-up, cooldown, frame reclaiming, arrival spread.
 - `blood-water`, `bleeding`: damage, interval, duration, stacks and the stacking rule.
@@ -320,11 +338,13 @@ Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.ar
 ## Resource pack
 
 The pack is inside the plugin, and players are sent it when they join. By default
-(`mode: auto`) they download it from its public copy on GitHub. The plugin downloads that copy
-at startup and only uses it if it's byte-for-byte identical to the pack inside the jar, so
-players can never get a different or outdated one. When there's no matching copy, the plugin
-serves the pack itself from a tiny web server on port 8163, which needs that port open to the
-internet. If a player's download fails from one, they're sent the other straight away.
+(`mode: auto`) they download it from its public copies (GitHub, then jsDelivr). Each copy is a file
+named after the pack's own hash (`dist/pack/<sha1>.zip`), so a copy the plugin has checked can
+never change afterwards. The plugin downloads every copy at startup and only uses the ones that
+are byte-for-byte the pack inside the jar, so players can never get a different or outdated one.
+If a player's download fails, they're sent the next copy straight away, and then the pack from the
+plugin's own tiny web server on port 8163 (which needs that port open to the internet). A copy that
+fails a player is checked again, and dropped if it no longer matches.
 
 - **`mode: embedded`**: the plugin's own server first, the GitHub copy only if a player can't
   reach it. Behind BungeeCord/Velocity/TCPShield, or if players join through a different address
@@ -347,10 +367,11 @@ texture.
 
 1. **Check `/bb status`** (op). It shows where the pack comes from, whether the GitHub copy
    checked out, how many online players get the custom visuals, and whether you do.
-2. **"The Bloodbath resource pack couldn't be downloaded"** means your game couldn't reach the pack.
-   On 1.3.2 that should only happen if GitHub is blocked where you are *and* the server's port 8163
-   isn't open. Open the port (on a hosting panel: add a port and set `resource-pack.port` to it), or
-   host the exported zip yourself (`mode: url`).
+2. **"Download failed; trying again from..."** is the plugin moving a player on to the next copy.
+   **"The Bloodbath resource pack couldn't be downloaded"** means none worked for them: GitHub and
+   jsDelivr are blocked where they are *and* the server's port 8163 isn't open. Open the port (on a
+   hosting panel: add a port and set `resource-pack.port` to it), host the exported zip yourself
+   (`mode: url`), or have them install `Bloodbath-ResourcePack-<version>.zip` by hand.
 3. **Installed the pack by hand?** The server can't see that. Run `/bb visuals on` (or click
    *[I have it installed]* in the failure message) to get the custom visuals anyway. To give them
    to everyone because the pack is forced some other way, set `effects.pack-visuals: always`.
@@ -359,8 +380,11 @@ texture.
 
 If a download fails, the player is told, and the console says why (usually the port).
 
-The pack overrides the vanilla netherite sword, bow and netherite armour models only for Bloodbath
-items (matched by `custom_model_data`); every other item, armour trims included, is untouched.
+Weapons and armour have their own item model ids (`unchartedsmp:riftblade`, ...), so another pack
+that retextures netherite can't hide them. The server can't create new item *types* for a vanilla
+game, so F3+H still shows the netherite base item underneath. With `items.custom-ids: false` the
+pack instead switches the vanilla netherite sword, bow and armour models to ours for Bloodbath
+items only (matched by `custom_model_data`); every other item, armour trims included, is untouched.
 
 A pack can't add new particles, only redraw vanilla ones, so the blood sprites take over particles
 that are rare in normal play: the warden's sonic boom (blood nova), sculk charge (blood splat),
@@ -387,6 +411,47 @@ Knight.
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.6.0
+
+**Resource pack**
+- **Downloads that don't break.** Each public copy of the pack is now a file named after its hash,
+  so it can't change under a server that already checked it. Before, rebuilding a version could
+  swap the file and make downloads fail with *Download failed; trying again from this server*.
+- A player whose network blocks one copy is sent the next (jsDelivr) before the built-in server.
+- A copy that fails a player is re-checked, and dropped if its file changed.
+
+**Items and armour**
+- **Own item ids.** Weapons and armour use their own item model ids instead of netherite's.
+- **A new Blood Knight set**, redrawn to match the boss.
+- **A real 3D helm**, with burning eyes and a fanged grin.
+- **Blockbench projects** for the helm and both worn layers.
+
+**PvP rebalance**
+- **35% of ability damage to players goes through armour**, with a PvP multiplier to tune it.
+- **Nerfs:**
+  - the Bloodrift Blade (it out-damaged netherite by 40%);
+  - the Clotblade's lockout (no more permanent clot);
+  - Harvest's cooldown;
+  - Mirrorfang's damage;
+  - the Paradox echo;
+  - the full set's permanent Strength and extra hearts.
+- **Buffs and reworks:**
+  - the rift snaps shut on exit;
+  - the hook bites and slows;
+  - the meteor's crater bleeds;
+  - the Gravestone erupts for damage;
+  - Chronos heals and punishes chasers;
+  - the Pike stuns;
+  - the mirror hunts;
+  - marked prey glows;
+  - a harder Blood Dash;
+  - Transfusion drains through armour and slows.
+- Servers that kept the old defaults get the new ones. Values an owner tuned stay theirs.
+
+**Particles**
+- **Far more particles**: crescents, helix beams, domes, vortexes, a clock face, shockwaves, stack motes, hit sprays and bleed spurts.
+- **Cheaper to send:** distant players get a fraction of each shape.
 
 ## What's new in 1.5.0
 
@@ -533,7 +598,7 @@ Knight.
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.5.0.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.6.0.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock
