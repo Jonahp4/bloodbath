@@ -1217,6 +1217,90 @@ class BloodbathPluginTest {
 	}
 
 	@Test
+	void aMirrorFileThatChangesAfterItWasCheckedIsDropped() throws Exception {
+		AtomicReference<byte[]> body = new AtomicReference<>(bundledPack());
+		HttpServer mirror = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 4);
+		AtomicReference<String> asked = new AtomicReference<>("");
+		mirror.createContext("/", exchange -> {
+			asked.set(exchange.getRequestURI().getPath());
+			byte[] bytes = body.get();
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(bytes);
+			}
+		});
+		mirror.start();
+		try {
+			String base = "http://127.0.0.1:" + mirror.getAddress().getPort();
+			plugin.getConfig().set("resource-pack.mirrors", List.of(base + "/pack/{sha1}.zip"));
+			plugin.saveConfig();
+			player.performCommand("bloodbath reload");
+			awaitMirrorCheck();
+			assertEquals("/pack/" + plugin.packs().sha1() + ".zip", asked.get(), "one file per pack build, named by its hash");
+			assertEquals(URI.create(base + "/pack/" + plugin.packs().sha1() + ".zip"), plugin.packs().mirror());
+
+			// Someone replaces the file after the check: the next failed download finds out and stops using it.
+			body.set("something else".getBytes(StandardCharsets.UTF_8));
+			player.packs.clear();
+			plugin.packs().send(player);
+			failDownload(player);
+			for (int i = 0; i < 400 && plugin.packs().mirror() != null; i++) {
+				Thread.sleep(25);
+			}
+			assertNull(plugin.packs().mirror(), "a mirror that changed is dropped");
+			assertTrue(plugin.packs().status().contains("since startup"), plugin.packs().status());
+		} finally {
+			mirror.stop(0);
+		}
+	}
+
+	@Test
+	void aPlayerWhoCantReachOneMirrorIsSentTheNextBeforeThisServer() throws Exception {
+		HttpServer first = mirrorServing(new AtomicReference<>(bundledPack()));
+		HttpServer second = mirrorServing(new AtomicReference<>(bundledPack()));
+		try {
+			String one = "http://127.0.0.1:" + first.getAddress().getPort() + "/pack.zip";
+			String two = "http://127.0.0.1:" + second.getAddress().getPort() + "/pack.zip";
+			plugin.getConfig().set("resource-pack.mirrors", List.of(one, two));
+			plugin.saveConfig();
+			player.performCommand("bloodbath reload");
+			awaitMirrorCheck();
+			for (int i = 0; i < 400 && !plugin.packs().status().contains("1 backup"); i++) {
+				Thread.sleep(25);
+			}
+			assertTrue(plugin.packs().status().contains("1 backup"), plugin.packs().status());
+			player.packs.clear();
+			plugin.packs().send(player);
+			assertEquals(one, lastPack(player).uri().toString());
+			chat(player);
+			failDownload(player);
+			assertEquals(two, lastPack(player).uri().toString(), "the other copy next");
+			assertTrue(any(chat(player), "trying again from another copy"));
+			failDownload(player);
+			assertEquals("play.example.com", lastPack(player).uri().getHost(), "then this server's own");
+		} finally {
+			first.stop(0);
+			second.stop(0);
+		}
+	}
+
+	@Test
+	void theOldPerVersionMirrorsAreSwappedForPerBuildOnes() {
+		plugin.getConfig().set("resource-pack.enabled", false); // no mirror checks from a test
+		plugin.getConfig().set("resource-pack.mirrors", Settings.LEGACY_MIRRORS);
+		plugin.saveConfig();
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertEquals(Settings.DEFAULT_MIRRORS, plugin.getConfig().getStringList("resource-pack.mirrors"));
+		// Mirrors an owner chose are theirs.
+		plugin.getConfig().set("resource-pack.mirrors", List.of("https://example.com/pack.zip"));
+		plugin.saveConfig();
+		server.getPluginManager().disablePlugin(plugin);
+		server.getPluginManager().enablePlugin(plugin);
+		assertEquals(List.of("https://example.com/pack.zip"), plugin.getConfig().getStringList("resource-pack.mirrors"));
+	}
+
+	@Test
 	void anOldConfigOnTheDefaultEmbeddedModeMovesToAuto() {
 		plugin.getConfig().set("resource-pack.enabled", false); // no mirror checks from a test
 		plugin.getConfig().set("resource-pack.mode", "embedded");
@@ -1740,5 +1824,24 @@ class BloodbathPluginTest {
 		player.disconnect();
 		player.reconnect();
 		assertFalse(Cooldowns.isReady(player, Ability.GRAVESTONE));
+	}
+
+	@Test
+	void weaponsAndArmourHaveTheirOwnItemIds() {
+		// (MockBukkit loses item_model when it copies item meta, so the ids are checked where they're chosen.)
+		assertEquals(new NamespacedKey("unchartedsmp", "riftblade"), Weapons.itemModel("riftblade", Material.NETHERITE_SWORD));
+		assertNull(BloodArmor.wornAsset(ArmorPiece.HELM), "the helm is drawn as its own 3D model on the head");
+		assertEquals(BloodArmor.EQUIPMENT, BloodArmor.wornAsset(ArmorPiece.CUIRASS));
+		ItemStack blade = Weapons.create(WeaponType.RIFTBLADE);
+		ItemStack helm = BloodArmor.create(ArmorPiece.HELM);
+
+		// Switched off: back to riding netherite's look, and items already out there follow on sight.
+		plugin.getConfig().set("items.custom-ids", false);
+		plugin.saveConfig();
+		player.performCommand("bloodbath reload");
+		assertTrue(Weapons.refresh(blade), "items made before the switch are rebuilt");
+		assertTrue(BloodArmor.refresh(helm));
+		assertEquals(Material.NETHERITE_SWORD.getKey(), Weapons.itemModel("riftblade", Material.NETHERITE_SWORD));
+		assertEquals(BloodArmor.EQUIPMENT, BloodArmor.wornAsset(ArmorPiece.HELM));
 	}
 }

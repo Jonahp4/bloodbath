@@ -19,12 +19,14 @@ resource-pack:
   #           download link (or merge it into your server's own pack) and put the link in url.
   mode: auto
 
-  # auto and embedded modes: public copies of the pack. {version} is the plugin's version. A mirror
-  # is only used after the plugin has downloaded it and checked it's identical to its own pack, so
-  # it can never hand players a different or outdated one. Remove them all to never use a mirror.
+  # auto and embedded modes: public copies of the pack. {sha1} is the pack's hash and {version} the
+  # plugin's version. A mirror is only used after the plugin has downloaded it and checked it's
+  # identical to its own pack, so it can never hand players a different or outdated one. Remove them
+  # all to never use a mirror.
   mirrors:
-    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/Bloodbath-ResourcePack-{version}.zip'
-    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/Bloodbath-ResourcePack-{version}.zip'
+    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/pack/{sha1}.zip'
+    - 'https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/pack/{sha1}.zip'
+    - 'https://cdn.jsdelivr.net/gh/Jonahp4/bloodbath/dist/pack/{sha1}.zip'
 
   # The plugin's own web server (auto and embedded modes)
   port: 8163
@@ -52,6 +54,11 @@ items:
   # auto = whenever the plugin sends the pack (or pack-visuals is always), true = always,
   # false = never.
   tooltip-frame: auto
+  # Weapons and armour have their own item ids (unchartedsmp:riftblade, ...) instead of borrowing
+  # netherite's, so another resource pack that retextures netherite can't hide them, and the Blood
+  # Knight Helm is a real 3D helm on your head. Players without the pack see a missing-texture cube
+  # instead of a netherite item, so set this to false if many of your players go without the pack.
+  custom-ids: true
 
 hud:
   # The action-bar line while holding a weapon (cooldown bar, rift timer, bleed stacks, ...).

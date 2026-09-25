@@ -67,6 +67,8 @@ public final class Settings {
 	public final boolean countMobKills;
 	/** "auto" (only when the pack is required), "true" or "false". */
 	public final String tooltipFrame;
+	/** Weapons and armour use their own item model ids (unchartedsmp:<id>) rather than riding netherite's. */
+	public final boolean customItemIds;
 
 	public final boolean armorEnabled;
 	/** Health restored per kill with 2+ Blood Knight pieces (half-hearts). */
@@ -101,7 +103,16 @@ public final class Settings {
 	private final Map<WeaponType, ConfigurationSection> weapons = new EnumMap<>(WeaponType.class);
 
 	/** Where this plugin's own pack is published: its GitHub repository (default branch, then the release branch). */
+	/**
+	 * Public copies of the pack, one file per pack build named by its SHA-1, so a file the plugin has
+	 * checked can never change under it (a rebuilt pack is a new file, not a new version of this one).
+	 */
 	public static final List<String> DEFAULT_MIRRORS = List.of(
+		"https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/pack/{sha1}.zip",
+		"https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/pack/{sha1}.zip",
+		"https://cdn.jsdelivr.net/gh/Jonahp4/bloodbath/dist/pack/{sha1}.zip");
+	/** The defaults before 1.6.0 (one file per version, which could change): replaced on upgrade. */
+	public static final List<String> LEGACY_MIRRORS = List.of(
 		"https://raw.githubusercontent.com/Jonahp4/bloodbath/HEAD/dist/Bloodbath-ResourcePack-{version}.zip",
 		"https://raw.githubusercontent.com/Jonahp4/bloodbath/claude/optimistic-shannon-gbw44d/dist/Bloodbath-ResourcePack-{version}.zip");
 
@@ -158,6 +169,7 @@ public final class Settings {
 		killTracking = bool(c, "kill-tracking.enabled", true);
 		countMobKills = bool(c, "kill-tracking.count-mobs", true);
 		tooltipFrame = str(c, "items.tooltip-frame", "auto").trim().toLowerCase(Locale.ROOT);
+		customItemIds = bool(c, "items.custom-ids", true);
 
 		armorEnabled = bool(c, "armor.enabled", true);
 		armorKillHeal = Math.max(0.0, c == null ? 3.0 : c.getDouble("armor.kill-heal", 3.0));
@@ -247,7 +259,7 @@ public final class Settings {
 	 */
 	public String itemFingerprint() {
 		StringBuilder key = new StringBuilder();
-		key.append(killTracking).append(tooltipFrame()).append(armorKillHeal).append(armorBarbDamage).append(rageThreshold)
+		key.append(killTracking).append(tooltipFrame()).append(customItemIds).append(armorKillHeal).append(armorBarbDamage).append(rageThreshold)
 			.append(fullSetEffects).append(blood.fingerprint());
 		for (Ability ability : Ability.values()) {
 			key.append(',').append(cooldownTicks(ability));

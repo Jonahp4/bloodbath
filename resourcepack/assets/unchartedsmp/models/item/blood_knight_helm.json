@@ -1,6 +1,776 @@
 {
- "parent": "minecraft:item/generated",
- "textures": {
-  "layer0": "unchartedsmp:item/blood_knight_helm"
- }
+  "credit": "Bloodbath - tools/models/armor.py (Blockbench project: tools/blockbench/blood_knight_helm.bbmodel)",
+  "texture_size": [
+    64,
+    64
+  ],
+  "textures": {
+    "helm": "unchartedsmp:item/blood_knight_helm_model",
+    "particle": "unchartedsmp:item/blood_knight_helm_model"
+  },
+  "elements": [
+    {
+      "name": "shell",
+      "from": [
+        1,
+        1,
+        1
+      ],
+      "to": [
+        15,
+        14,
+        15
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.0,
+            0.0,
+            3.5,
+            3.25
+          ],
+          "texture": "#helm"
+        },
+        "south": {
+          "uv": [
+            3.5,
+            0.0,
+            7.0,
+            3.25
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            7.0,
+            0.0,
+            10.5,
+            3.25
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            10.5,
+            0.0,
+            14.0,
+            3.25
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            0.0,
+            3.25,
+            3.5,
+            6.75
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            3.5,
+            3.25,
+            7.0,
+            6.75
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "crown",
+      "from": [
+        2,
+        14,
+        2
+      ],
+      "to": [
+        14,
+        16,
+        14
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            7.0,
+            3.25,
+            10.0,
+            6.25
+          ],
+          "texture": "#helm"
+        },
+        "north": {
+          "uv": [
+            10.0,
+            3.25,
+            13.0,
+            3.75
+          ],
+          "texture": "#helm"
+        },
+        "south": {
+          "uv": [
+            10.0,
+            3.75,
+            13.0,
+            4.25
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            10.0,
+            4.25,
+            13.0,
+            4.75
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            10.0,
+            4.75,
+            13.0,
+            5.25
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "visor",
+      "from": [
+        1.5,
+        2,
+        0
+      ],
+      "to": [
+        14.5,
+        12,
+        1
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.0,
+            6.75,
+            3.25,
+            9.25
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            3.25,
+            6.75,
+            6.5,
+            7.0
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            3.25,
+            7.0,
+            6.5,
+            7.25
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            6.5,
+            6.75,
+            6.75,
+            9.25
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            6.75,
+            6.75,
+            7.0,
+            9.25
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "brow",
+      "from": [
+        0.5,
+        11,
+        -0.5
+      ],
+      "to": [
+        15.5,
+        13,
+        1
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            7.0,
+            6.75,
+            10.75,
+            7.25
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            7.0,
+            7.25,
+            10.75,
+            7.75
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            7.0,
+            7.75,
+            10.75,
+            8.25
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            10.75,
+            6.75,
+            11.25,
+            7.25
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            11.25,
+            6.75,
+            11.75,
+            7.25
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "nasal",
+      "from": [
+        7.5,
+        7,
+        -0.3
+      ],
+      "to": [
+        8.5,
+        11,
+        0
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            7.0,
+            8.25,
+            7.25,
+            9.25
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            7.25,
+            8.25,
+            7.5,
+            9.25
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            7.5,
+            8.25,
+            7.75,
+            9.25
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            7.75,
+            8.25,
+            8.0,
+            8.5
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "eyes",
+      "from": [
+        2.5,
+        8,
+        -0.05
+      ],
+      "to": [
+        13.5,
+        10,
+        -0.05
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0.0,
+            9.75,
+            2.75,
+            10.25
+          ],
+          "texture": "#helm"
+        }
+      },
+      "light_emission": 15,
+      "shade": false
+    },
+    {
+      "name": "brow_gem",
+      "from": [
+        7,
+        11.5,
+        -0.7
+      ],
+      "to": [
+        9,
+        12.5,
+        -0.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2.75,
+            9.75,
+            3.25,
+            10.0
+          ],
+          "texture": "#helm"
+        }
+      },
+      "light_emission": 12,
+      "shade": false
+    },
+    {
+      "name": "crest_fin",
+      "from": [
+        8,
+        15.5,
+        2
+      ],
+      "to": [
+        8,
+        22.5,
+        15
+      ],
+      "faces": {
+        "east": {
+          "uv": [
+            0.0,
+            10.25,
+            3.25,
+            12.0
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            3.5,
+            10.25,
+            6.75,
+            12.0
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "crest_ridge",
+      "from": [
+        7,
+        15.5,
+        3
+      ],
+      "to": [
+        9,
+        16.5,
+        14
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            7.0,
+            10.25,
+            7.5,
+            13.0
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            7.75,
+            10.25,
+            10.5,
+            10.5
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            7.75,
+            10.75,
+            10.5,
+            11.0
+          ],
+          "texture": "#helm"
+        },
+        "north": {
+          "uv": [
+            10.75,
+            10.25,
+            11.25,
+            10.5
+          ],
+          "texture": "#helm"
+        },
+        "south": {
+          "uv": [
+            11.5,
+            10.25,
+            12.0,
+            10.5
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "neck_guard",
+      "from": [
+        1,
+        0.5,
+        12.5
+      ],
+      "to": [
+        15,
+        3.5,
+        16
+      ],
+      "faces": {
+        "south": {
+          "uv": [
+            0.0,
+            12.0,
+            3.5,
+            12.75
+          ],
+          "texture": "#helm"
+        },
+        "east": {
+          "uv": [
+            3.5,
+            12.0,
+            4.5,
+            12.75
+          ],
+          "texture": "#helm"
+        },
+        "west": {
+          "uv": [
+            4.5,
+            12.0,
+            5.5,
+            12.75
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            5.5,
+            12.0,
+            9.0,
+            13.0
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            9.0,
+            12.0,
+            12.5,
+            13.0
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "ear_right",
+      "from": [
+        0.4,
+        5,
+        6
+      ],
+      "to": [
+        1,
+        7,
+        8
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            12.5,
+            12.0,
+            13.0,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "north": {
+          "uv": [
+            13.0,
+            12.0,
+            13.25,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "south": {
+          "uv": [
+            13.25,
+            12.0,
+            13.5,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            13.5,
+            12.0,
+            13.75,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            13.75,
+            12.0,
+            14.0,
+            12.5
+          ],
+          "texture": "#helm"
+        }
+      }
+    },
+    {
+      "name": "ear_left",
+      "from": [
+        15,
+        5,
+        6
+      ],
+      "to": [
+        15.6,
+        7,
+        8
+      ],
+      "faces": {
+        "east": {
+          "uv": [
+            13.0,
+            12.0,
+            12.5,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "north": {
+          "uv": [
+            13.25,
+            12.0,
+            13.0,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "south": {
+          "uv": [
+            13.5,
+            12.0,
+            13.25,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "up": {
+          "uv": [
+            13.75,
+            12.0,
+            13.5,
+            12.5
+          ],
+          "texture": "#helm"
+        },
+        "down": {
+          "uv": [
+            14.0,
+            12.0,
+            13.75,
+            12.5
+          ],
+          "texture": "#helm"
+        }
+      }
+    }
+  ],
+  "display": {
+    "head": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    "gui": {
+      "rotation": [
+        18,
+        200,
+        0
+      ],
+      "translation": [
+        0,
+        -1.25,
+        0
+      ],
+      "scale": [
+        0.56,
+        0.56,
+        0.56
+      ]
+    },
+    "ground": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        3,
+        0
+      ],
+      "scale": [
+        0.28,
+        0.28,
+        0.28
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        180,
+        0
+      ],
+      "translation": [
+        0,
+        -1,
+        0
+      ],
+      "scale": [
+        0.55,
+        0.55,
+        0.55
+      ]
+    },
+    "thirdperson_righthand": {
+      "rotation": [
+        75,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        1.5,
+        1.5
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        75,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        1.5,
+        1.5
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ]
+    }
+  }
 }

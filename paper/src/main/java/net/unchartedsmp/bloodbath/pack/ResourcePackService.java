@@ -100,9 +100,14 @@ public final class ResourcePackService {
 	private boolean urlActive;
 	private String status = "off";
 	private long lastFailureLog;
+	private volatile long lastMirrorRecheck;
 
 	/** A verified public copy of this exact pack, or null. */
 	private volatile URI mirror;
+	/** More verified copies, tried in order when a player's network can't reach the one before. */
+	private volatile List<URI> backups = List.of();
+	/** How many verified mirrors each player has failed to download from. */
+	private final Map<UUID, Integer> mirrorTries = new HashMap<>();
 	private volatile String mirrorStatus = "none";
 	/** What {@link #mirror} was verified against (pack hash + candidates), so a reload can keep it. */
 	private String mirrorKey = "";
@@ -122,6 +127,7 @@ public final class ResourcePackService {
 
 	public void start() {
 		URI keptMirror = mirror;
+		List<URI> keptBackups = backups;
 		String keptKey = mirrorKey;
 		stop();
 		Settings settings = Settings.get();
@@ -139,6 +145,7 @@ public final class ResourcePackService {
 				if (keptMirror != null && key.equals(keptKey)) {
 					mirrorKey = keptKey; // a reload with the same pack and mirrors: still good
 					mirrorStatus = "verified";
+					backups = keptBackups;
 					mirror = keptMirror;
 					flushWaiting();
 				} else {
@@ -159,6 +166,7 @@ public final class ResourcePackService {
 		generation++;
 		urlActive = false;
 		mirror = null;
+		backups = List.of();
 		mirrorKey = "";
 		mirrorStatus = "none";
 		if (server != null) {
@@ -274,7 +282,7 @@ public final class ResourcePackService {
 	private List<URI> mirrorCandidates(Settings settings) {
 		String version = plugin.getPluginMeta().getVersion();
 		return settings.packMirrors.stream()
-			.map(url -> parse(url.replace("{version}", version)))
+			.map(url -> parse(url.replace("{version}", version).replace("{sha1}", zipSha1)))
 			.filter(Objects::nonNull)
 			.distinct()
 			.toList();
@@ -304,6 +312,9 @@ public final class ResourcePackService {
 			return;
 		}
 		if (index >= candidates.size()) {
+			if (mirror != null) {
+				return; // verified, and every backup checked too
+			}
 			mirrorStatus = "none match this pack (" + String.join("; ", problems) + ")";
 			checkFinished(gen);
 			if (attempt == 1) {
@@ -340,16 +351,24 @@ public final class ResourcePackService {
 				problem = uri.getHost() + ": HTTP " + response.statusCode();
 			} else if (response.body().length > MAX_MIRROR_BYTES || !sha1(response.body()).equals(zipSha1)) {
 				problem = uri.getHost() + ": a different pack";
-			} else {
+			} else if (mirror == null) {
 				mirrorKey = key;
 				mirrorStatus = "verified";
 				mirror = uri; // volatile: publishes the two above with it
 				checkFinished(gen);
 				plugin.getLogger().info("Players download the resource pack from " + uri + " (checked: identical to the pack in this jar)"
 					+ (server != null ? "; the built-in server on port " + port + " is the fallback." : "."));
-				return;
+				problem = null;
+			} else {
+				// Another identical copy: the next thing to try for players whose network blocks the first.
+				List<URI> more = new ArrayList<>(backups);
+				more.add(uri);
+				backups = List.copyOf(more);
+				problem = null;
 			}
-			problems.add(problem);
+			if (problem != null) {
+				problems.add(problem);
+			}
 			checkMirror(client, candidates, index + 1, key, gen, attempt, problems);
 		});
 	}
@@ -423,6 +442,7 @@ public final class ResourcePackService {
 		}
 		// Everything failed for them before: start again from the top (a manual retry).
 		failedFor.remove(player);
+		mirrorTries.remove(player);
 		for (Source source : order()) {
 			if (available(source)) {
 				return source;
@@ -515,9 +535,20 @@ public final class ResourcePackService {
 	private URI uriFor(Player player, Settings settings, Source source) {
 		return switch (source) {
 			case URL -> parse(settings.packUrl);
-			case MIRROR -> mirror;
+			case MIRROR -> mirrorFor(player.getUniqueId());
 			case EMBEDDED -> embeddedUri(player, settings);
 		};
+	}
+
+	/** The verified mirror this player should try: the first, or the next after each one that failed for them. */
+	private URI mirrorFor(UUID player) {
+		URI first = mirror;
+		List<URI> more = backups;
+		int tries = mirrorTries.getOrDefault(player, 0);
+		if (first == null || tries == 0) {
+			return first;
+		}
+		return more.isEmpty() ? first : more.get(Math.min(tries, more.size()) - 1);
 	}
 
 	private URI embeddedUri(Player player, Settings settings) {
@@ -593,23 +624,30 @@ public final class ResourcePackService {
 	private void downloadFailed(Player player, Settings settings) {
 		UUID id = player.getUniqueId();
 		Source from = sentFrom.getOrDefault(id, order().get(0));
-		failedFor.computeIfAbsent(id, key -> EnumSet.noneOf(Source.class)).add(from);
 		URI failedUri = uriFor(player, settings, from);
+		int tries = from == Source.MIRROR ? mirrorTries.merge(id, 1, Integer::sum) : 0;
+		if (from != Source.MIRROR || tries > backups.size()) {
+			failedFor.computeIfAbsent(id, key -> EnumSet.noneOf(Source.class)).add(from);
+		}
 		if (from == Source.EMBEDDED) {
 			embeddedFailed = true;
+		} else if (from == Source.MIRROR && failedUri != null) {
+			recheckMirror(failedUri);
 		}
 		Source next = pick(id, true);
 		logFailure(player.getName() + " couldn't download the resource pack from " + failedUri + ". " + switch (from) {
 			case EMBEDDED -> "Port " + port + " isn't reachable from outside"
 				+ (next == Source.MIRROR ? "; sending the mirror instead (nothing to do)." : ": open it, or use mode: auto.");
-			case MIRROR -> "The mirror isn't reachable for them" + (next == Source.EMBEDDED ? "; trying the built-in server." : ".");
+			case MIRROR -> "The mirror isn't reachable for them" + (next == Source.MIRROR ? "; trying another copy."
+				: next == Source.EMBEDDED ? "; trying the built-in server." : ".");
 			case URL -> "Check that resource-pack.url is a direct download link.";
 		});
 		if (from == Source.EMBEDDED) {
 			tellOps(next == Source.MIRROR);
 		}
 		if (next != null && send(player, next)) {
-			player.sendMessage(settings.prefix.append(Component.text("Download failed; trying again from " + next.label + "...", NamedTextColor.GRAY)));
+			String where = from == Source.MIRROR && next == Source.MIRROR ? "another copy" : next.label;
+			player.sendMessage(settings.prefix.append(Component.text("Download failed; trying again from " + where + "...", NamedTextColor.GRAY)));
 			return;
 		}
 		player.sendMessage(settings.prefix
@@ -645,7 +683,56 @@ public final class ResourcePackService {
 	public void forget(UUID player) {
 		sentFrom.remove(player);
 		failedFor.remove(player);
+		mirrorTries.remove(player);
 		waiting.remove(player);
+	}
+
+	/**
+	 * A player couldn't download from the mirror. Usually that's their network (a blocked host), but if
+	 * the file there has changed or gone since it was checked, nobody can use it: check it again in the
+	 * background and stop sending it if it no longer matches. At most once a minute.
+	 */
+	private void recheckMirror(URI uri) {
+		long now = System.currentTimeMillis();
+		if (now - lastMirrorRecheck < 60_000L || !(uri.equals(mirror) || backups.contains(uri))) {
+			return;
+		}
+		lastMirrorRecheck = now;
+		int gen = generation;
+		HttpRequest request = HttpRequest.newBuilder(uri)
+			.timeout(Duration.ofSeconds(30))
+			.header("User-Agent", "Bloodbath/" + plugin.getPluginMeta().getVersion())
+			.GET()
+			.build();
+		HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NORMAL).build()
+			.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).whenComplete((response, error) -> {
+				if (gen != generation) {
+					return;
+				}
+				String problem = error != null ? error.getClass().getSimpleName()
+					: response.statusCode() != 200 ? "HTTP " + response.statusCode()
+					: !sha1(response.body()).equals(zipSha1) ? "a different pack" : null;
+				if (problem == null) {
+					return; // still the right file: that player's network can't reach it
+				}
+				if (backups.contains(uri)) {
+					List<URI> more = new ArrayList<>(backups);
+					more.remove(uri);
+					backups = List.copyOf(more);
+				} else if (uri.equals(mirror)) {
+					// The next copy takes over; with none left, the built-in server does.
+					List<URI> more = backups;
+					backups = more.isEmpty() ? List.of() : List.copyOf(more.subList(1, more.size()));
+					mirror = more.isEmpty() ? null : more.get(0);
+					if (mirror == null) {
+						mirrorStatus = "dropped (" + uri.getHost() + ": " + problem + " since startup)";
+					}
+				} else {
+					return;
+				}
+				plugin.getLogger().warning("The resource pack mirror " + uri + " no longer serves this pack (" + problem
+					+ "). " + (mirror != null ? "Using " + mirror + " instead." : "Players get it from the built-in server from now on."));
+			});
 	}
 
 	private void logFailure(String message) {
@@ -664,7 +751,8 @@ public final class ResourcePackService {
 		}
 		URI verified = mirror;
 		String mirrorPart = switch (mirrorStatus) {
-			case "verified" -> verified == null ? "mirror verified" : "mirror " + verified.getHost() + " (verified)";
+			case "verified" -> (verified == null ? "mirror verified" : "mirror " + verified.getHost() + " (verified)")
+				+ (backups.isEmpty() ? "" : " + " + backups.size() + " backup" + (backups.size() == 1 ? "" : "s"));
 			case "checking" -> "checking the mirror";
 			default -> "no mirror: " + mirrorStatus;
 		};

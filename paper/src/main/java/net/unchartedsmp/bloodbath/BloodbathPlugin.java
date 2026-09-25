@@ -164,6 +164,12 @@ public class BloodbathPlugin extends JavaPlugin {
 	 * internet; a config still on that untouched default moves to {@code auto}, which also uses the
 	 * published copy of the pack. Anything the owner changed is left alone.
 	 */
+	private static final List<String> MIRROR_COMMENTS = List.of(
+		"auto and embedded modes: public copies of the pack. {sha1} is the pack's hash and {version} the",
+		"plugin's version. A mirror is only used after the plugin has downloaded it and checked it's",
+		"identical to its own pack, so it can never hand players a different or outdated one. Remove them",
+		"all to never use a mirror.");
+
 	private void migrateConfig() {
 		FileConfiguration config = getConfig();
 		// 1.5.0: the Blood Anvil and Bloodstone Frame recipes, for configs written before they existed.
@@ -184,15 +190,20 @@ public class BloodbathPlugin extends JavaPlugin {
 			saveConfig();
 		}
 		if (config.isSet("resource-pack.mirrors")) {
+			// 1.6.0: the old default mirrors named the file by version, so rebuilding a version changed the
+			// file under servers that had already checked it. Swap untouched defaults for the per-build ones.
+			if (config.getStringList("resource-pack.mirrors").stream().map(String::trim).toList().equals(Settings.LEGACY_MIRRORS)) {
+				config.set("resource-pack.mirrors", Settings.DEFAULT_MIRRORS);
+				config.setComments("resource-pack.mirrors", MIRROR_COMMENTS);
+				saveConfig();
+				getLogger().info("Updated config.yml: the resource pack mirrors now point at one file per pack build.");
+			}
 			return;
 		}
 		boolean untouched = "embedded".equalsIgnoreCase(config.getString("resource-pack.mode", ""))
 			&& config.getString("resource-pack.public-host", "").isBlank();
 		config.set("resource-pack.mirrors", Settings.DEFAULT_MIRRORS);
-		config.setComments("resource-pack.mirrors", List.of(
-			"auto and embedded modes: public copies of the pack. {version} is the plugin's version. A mirror",
-			"is only used after the plugin has downloaded it and checked it's identical to its own pack, so",
-			"it can never hand players a different or outdated one. Remove them all to never use a mirror."));
+		config.setComments("resource-pack.mirrors", MIRROR_COMMENTS);
 		if (untouched) {
 			config.set("resource-pack.mode", "auto");
 			config.setComments("resource-pack.mode", List.of(

@@ -5,6 +5,7 @@
 # Compiles against the Paper API jars in offline-build/.cache/libs (or PAPER_LIBS) and packages:
 #   dist/paper/Bloodbath-<version>.jar          the plugin, with the resource pack inside
 #   dist/Bloodbath-ResourcePack-<version>.zip   the same pack, to host or merge yourself
+#   dist/pack/<sha1>.zip                        the same pack again, where the plugin's mirrors find it
 # Both are byte-for-byte reproducible.
 set -euo pipefail
 
@@ -35,4 +36,5 @@ python3 "$HERE/package.py" \
 	--pack "$REPO/resourcepack" \
 	--license "$REPO/LICENSE" \
 	--jar "$REPO/dist/paper/Bloodbath-$VERSION.jar" \
-	--pack-zip "$REPO/dist/Bloodbath-ResourcePack-$VERSION.zip"
+	--pack-zip "$REPO/dist/Bloodbath-ResourcePack-$VERSION.zip" \
+	--pack-dir "$REPO/dist/pack"

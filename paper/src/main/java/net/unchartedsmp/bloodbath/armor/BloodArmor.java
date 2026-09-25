@@ -20,7 +20,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.inventory.meta.components.EquippableComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -111,15 +110,27 @@ public final class BloodArmor {
 
 	/** Inventory model, worn look and (when enabled) the blood tooltip frame. */
 	private static void look(ItemMeta meta, ArmorPiece piece) {
-		CustomModelDataComponent model = meta.getCustomModelDataComponent();
-		model.setStrings(List.of(Weapons.MODEL_PREFIX + piece.id()));
-		meta.setCustomModelDataComponent(model);
+		Weapons.look(meta, piece.id(), piece.base());
+		meta.setEquippable(equippable(meta, piece));
+		meta.setTooltipStyle(Settings.get().tooltipFrame() ? Weapons.TOOLTIP_STYLE : null);
+	}
+
+	/**
+	 * How the piece is worn. With its own item id the helm is a 3D model on the head: an equippable
+	 * with no equipment asset makes the game draw the item's own model there. Everything else (and
+	 * the helm on the netherite fallback) is painted onto the body from the pack's equipment asset.
+	 */
+	/** The equipment asset drawn on the body for this piece, or null when its own item model is worn instead. */
+	public static NamespacedKey wornAsset(ArmorPiece piece) {
+		return piece == ArmorPiece.HELM && Settings.get().customItemIds ? null : EQUIPMENT;
+	}
+
+	private static EquippableComponent equippable(ItemMeta meta, ArmorPiece piece) {
 		EquippableComponent equippable = meta.getEquippable();
 		equippable.setSlot(piece.slot());
-		equippable.setModel(EQUIPMENT);
+		equippable.setModel(wornAsset(piece));
 		equippable.setEquipSound(Sound.ITEM_ARMOR_EQUIP_NETHERITE);
-		meta.setEquippable(equippable);
-		meta.setTooltipStyle(Settings.get().tooltipFrame() ? Weapons.TOOLTIP_STYLE : null);
+		return equippable;
 	}
 
 	private static List<Component> lore(ArmorPiece piece) {
@@ -178,10 +189,7 @@ public final class BloodArmor {
 		ItemStack icon = new ItemStack(Material.PAPER);
 		icon.editMeta(meta -> {
 			meta.itemName(Component.text(piece.displayName(), NamedTextColor.RED));
-			meta.setItemModel(piece.base().getKey());
-			CustomModelDataComponent model = meta.getCustomModelDataComponent();
-			model.setStrings(List.of(Weapons.MODEL_PREFIX + piece.id()));
-			meta.setCustomModelDataComponent(model);
+			Weapons.look(meta, piece.id(), piece.base());
 			meta.setTooltipStyle(Settings.get().tooltipFrame() ? Weapons.TOOLTIP_STYLE : null);
 			meta.setMaxStackSize(1);
 			List<Component> lore = new ArrayList<>(lore(piece));
@@ -195,13 +203,8 @@ public final class BloodArmor {
 	public static ItemStack displayCopy(ItemStack worn, ArmorPiece piece) {
 		ItemStack copy = new ItemStack(worn.getType());
 		copy.editMeta(meta -> {
-			CustomModelDataComponent model = meta.getCustomModelDataComponent();
-			model.setStrings(List.of(Weapons.MODEL_PREFIX + piece.id()));
-			meta.setCustomModelDataComponent(model);
-			EquippableComponent equippable = meta.getEquippable();
-			equippable.setSlot(piece.slot());
-			equippable.setModel(EQUIPMENT);
-			meta.setEquippable(equippable);
+			Weapons.look(meta, piece.id(), piece.base());
+			meta.setEquippable(equippable(meta, piece));
 		});
 		return copy;
 	}

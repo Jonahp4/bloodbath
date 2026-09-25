@@ -144,10 +144,25 @@ public final class Weapons {
 
 	/** Points the item at our model and, when enabled, our blood tooltip frame. */
 	private static void model(ItemMeta meta, WeaponType type) {
-		CustomModelDataComponent model = meta.getCustomModelDataComponent();
-		model.setStrings(List.of(MODEL_PREFIX + type.id()));
-		meta.setCustomModelDataComponent(model);
+		look(meta, type.id(), type.base());
 		meta.setTooltipStyle(Settings.get().tooltipFrame() ? TOOLTIP_STYLE : null);
+	}
+
+	/**
+	 * An item's look: its own model id {@code unchartedsmp:<id>} (items.custom-ids), else the vanilla
+	 * item's model, which the pack switches to ours on the {@code bloodbath:<id>} custom model data
+	 * (kept either way, so turning the option off needs nothing else).
+	 */
+	public static void look(ItemMeta meta, String id, Material base) {
+		CustomModelDataComponent model = meta.getCustomModelDataComponent();
+		model.setStrings(List.of(MODEL_PREFIX + id));
+		meta.setCustomModelDataComponent(model);
+		meta.setItemModel(itemModel(id, base));
+	}
+
+	/** The item model id an item with this id gets: its own, or the vanilla base's. */
+	public static NamespacedKey itemModel(String id, Material base) {
+		return Settings.get().customItemIds ? Keys.pack(id) : base.getKey();
 	}
 
 	private static List<Component> lore(WeaponType type, int kills) {
@@ -184,7 +199,6 @@ public final class Weapons {
 		ItemStack icon = new ItemStack(Material.PAPER);
 		icon.editMeta(meta -> {
 			meta.itemName(Component.text(type.displayName(), NamedTextColor.RED));
-			meta.setItemModel(type.base().getKey());
 			model(meta, type);
 			meta.setMaxStackSize(1);
 			List<Component> lore = new ArrayList<>(lore(type, 0).subList(0, type.description().size() + 2));
@@ -225,11 +239,7 @@ public final class Weapons {
 		ItemStack copy = new ItemStack(worn.getType());
 		WeaponType type = typeOf(worn);
 		if (type != null) {
-			copy.editMeta(meta -> {
-				CustomModelDataComponent model = meta.getCustomModelDataComponent();
-				model.setStrings(List.of(MODEL_PREFIX + type.id()));
-				meta.setCustomModelDataComponent(model);
-			});
+			copy.editMeta(meta -> look(meta, type.id(), type.base()));
 		}
 		return copy;
 	}

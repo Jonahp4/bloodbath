@@ -35,6 +35,7 @@ def main():
     p = argparse.ArgumentParser()
     for arg in ("version", "classes", "resources", "pack", "license", "jar", "pack_zip"):
         p.add_argument("--" + arg.replace("_", "-"), required=True)
+    p.add_argument("--pack-dir", help="also write the pack here as <sha1>.zip, the name the plugin's mirrors use")
     a = p.parse_args()
     for out in (a.jar, a.pack_zip):
         os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -55,6 +56,20 @@ def main():
         add(zf, "resourcepack.zip", pack, compress=False)  # already compressed
         for name, path in files_under(a.classes):
             add(zf, name, read(path))
+
+    if a.pack_dir:
+        # One file per pack build, never rewritten: a server that checked a mirror file can rely on it
+        # staying exactly that file. The newest few are kept for servers still running older builds.
+        os.makedirs(a.pack_dir, exist_ok=True)
+        named = os.path.join(a.pack_dir, hashlib.sha1(pack).hexdigest() + ".zip")
+        if not os.path.exists(named):
+            with open(named, "wb") as f:
+                f.write(pack)
+        builds = sorted((os.path.join(a.pack_dir, n) for n in os.listdir(a.pack_dir) if n.endswith(".zip")),
+                        key=os.path.getmtime, reverse=True)
+        for old in builds[8:]:
+            os.remove(old)
+        print(f"  {os.path.relpath(named)}  (mirror copy)")
 
     for out in (a.jar, a.pack_zip):
         digest = hashlib.sha1(read(out)).hexdigest()
