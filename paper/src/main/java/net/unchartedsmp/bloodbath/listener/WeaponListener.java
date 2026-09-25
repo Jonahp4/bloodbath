@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
@@ -11,6 +12,9 @@ import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.blood.BloodDrop;
+import net.unchartedsmp.bloodbath.blood.BloodLevels;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
@@ -130,6 +134,37 @@ public final class WeaponListener implements Listener {
 		}
 		BloodFx.splash(BloodFx.chest(target), 3);
 		Behaviors.of(type).melee(player, target, event.getFinalDamage());
+		bloodBleed(player, target, BloodLevels.level(player.getInventory().getItemInMainHand()), type);
+	}
+
+	/** A bled weapon's hit may open a wound. */
+	private static void bloodBleed(Player player, LivingEntity target, int level, WeaponType type) {
+		double chance = BloodLevels.bleedChance(level);
+		if (chance > 0 && target.isValid() && !target.isDead() && ThreadLocalRandom.current().nextDouble() < chance) {
+			Bleeding.apply(target, 1, player, type);
+		}
+	}
+
+	/** Arrows from a bled Paradox Bow hit harder (the bow has no melee damage to raise). */
+	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+	public void onBledArrow(EntityDamageByEntityEvent event) {
+		if (event.getDamager() instanceof AbstractArrow arrow) {
+			Integer level = arrow.getPersistentDataContainer().get(Keys.ARROW_BLOOD, PersistentDataType.INTEGER);
+			if (level != null && level > 0) {
+				event.setDamage(event.getDamage() + BloodLevels.damageBonus(level));
+			}
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onBledArrowHit(EntityDamageByEntityEvent event) {
+		if (event.getDamager() instanceof AbstractArrow arrow && arrow.getShooter() instanceof Player player
+			&& event.getEntity() instanceof LivingEntity target && Targeting.validTarget(player, target)) {
+			Integer level = arrow.getPersistentDataContainer().get(Keys.ARROW_BLOOD, PersistentDataType.INTEGER);
+			if (level != null && level > 0) {
+				bloodBleed(player, target, level, WeaponType.PARADOX_BOW);
+			}
+		}
 	}
 
 	/** Tells {@link Damage} what happened to its own hits, for /bloodbath debug. */
@@ -149,6 +184,10 @@ public final class WeaponListener implements Listener {
 			return;
 		}
 		arrow.getPersistentDataContainer().set(Keys.WEAPON, PersistentDataType.STRING, WeaponType.PARADOX_BOW.id());
+		int blood = BloodLevels.level(event.getBow());
+		if (blood > 0) {
+			arrow.getPersistentDataContainer().set(Keys.ARROW_BLOOD, PersistentDataType.INTEGER, blood);
+		}
 		// Vanilla only crits fully drawn shots, on every version.
 		boolean fullDraw = arrow.isCritical() && Gate.allows(player, WeaponType.PARADOX_BOW, true);
 		Behaviors.PARADOX_BOW.shot(player, arrow, fullDraw);
@@ -235,7 +274,7 @@ public final class WeaponListener implements Listener {
 	public void onItemSpawn(ItemSpawnEvent event) {
 		Item item = event.getEntity();
 		ItemStack stack = item.getItemStack();
-		if (Settings.get().neverDespawn && (Weapons.isWeapon(stack) || BloodArmor.isArmor(stack) || BloodCore.isCore(stack))) {
+		if (Settings.get().neverDespawn && (Weapons.isWeapon(stack) || BloodArmor.isArmor(stack) || BloodCore.isCore(stack) || BloodDrop.isDrop(stack))) {
 			item.setUnlimitedLifetime(true);
 			item.setInvulnerable(true);
 		}
@@ -252,7 +291,7 @@ public final class WeaponListener implements Listener {
 		for (ItemStack ingredient : event.getInventory().getMatrix()) {
 			// A Blood Core is a nether star underneath: keep it out of beacons and every other
 			// vanilla recipe, it only works in ours.
-			if (Weapons.isWeapon(ingredient) || BloodArmor.isArmor(ingredient) || !ours && BloodCore.isCore(ingredient)) {
+			if (Weapons.isWeapon(ingredient) || BloodArmor.isArmor(ingredient) || !ours && (BloodCore.isCore(ingredient) || BloodDrop.isDrop(ingredient))) {
 				event.getInventory().setResult(null);
 				return;
 			}

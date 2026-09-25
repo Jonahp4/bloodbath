@@ -1,29 +1,34 @@
 # Bloodbath
 
-Twelve blood-soaked ability weapons with real 3D models, the Blood Knight's armour set, and the
-Blood Knight himself as an animated boss fight, for **Paper 1.21.4 and newer**. Comes with
-commands, an armory menu, kill ranks, a config for every number, Blood Core crafting recipes, and
+Twelve blood-soaked ability weapons with real 3D models, the Blood Knight's armour set, the
+Blood Knight himself as an animated boss fight, and **the Bloodlands**: a red dimension behind a
+portal you build yourself, with blood lakes, rare Blood Drops and the **Blood Anvil** that bleeds
+your weapons into stronger ones. For **Paper 1.21.11**. Comes with commands, an armory menu, kill ranks, a config for every number, Blood Core crafting recipes, and
 a resource pack that the plugin hosts for you.
 
 **Downloads**
 
 | File | What it is |
 |---|---|
-| [`dist/paper/Bloodbath-1.4.0.jar`](dist/paper/Bloodbath-1.4.0.jar) | The plugin. This is the one you want. |
-| [`dist/Bloodbath-ResourcePack-1.4.0.zip`](dist/Bloodbath-ResourcePack-1.4.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
+| [`dist/paper/Bloodbath-1.5.0.jar`](dist/paper/Bloodbath-1.5.0.jar) | The plugin. This is the one you want. |
+| [`dist/Bloodbath-ResourcePack-1.5.0.zip`](dist/Bloodbath-ResourcePack-1.5.0.zip) | The resource pack, if you'd rather host it yourself (the plugin already contains it). |
 | [`dist/fabric/unchartedsmp-bloodbath-0.3.1.jar`](dist/fabric/unchartedsmp-bloodbath-0.3.1.jar) | The old Fabric mod (10 weapons, no commands). Kept for reference. |
 
 ## Install
 
-1. Paper **1.21.4 or newer** (checked against 1.21.4, 1.21.11 and 26.3), Java 21. Paper forks such
-   as Purpur work too. Folia isn't supported.
-2. Drop `Bloodbath-1.4.0.jar` into `plugins/` and restart.
-3. That's it for the 3D models: players get a download prompt when they join. The pack comes from
+1. Paper **1.21.11**, Java 21. Paper forks such as Purpur work too. Folia isn't supported.
+   (1.4.0 and older ran on 1.21.4 and newer; from 1.5.0 the plugin is built for 1.21.11 only,
+   because the Bloodlands biome uses 1.21.11's data format.)
+2. Drop `Bloodbath-1.5.0.jar` into `plugins/` and restart.
+3. **Restart once more** to open the Bloodlands: on the first start the plugin installs the
+   Bloodlands biome as a datapack in your main world, and the server only reads datapacks at
+   startup. `/bb bloodlands` tells you where it's at.
+4. That's it for the 3D models: players get a download prompt when they join. The pack comes from
    the plugin's public copy on GitHub (checked to be identical to the one inside the jar), so
    there's no port to open. No other plugins are needed. See [Resource pack](#resource-pack).
-4. In game: `/bb armory` to browse everything, or `/bb give <you> all`.
+5. In game: `/bb armory` to browse everything, or `/bb give <you> all`.
 
-Players need a 1.21.4+ client to see the 3D models. Everyone else, and anyone who declines the
+Players need a 1.21.11 client to see the 3D models. Everyone else, and anyone who declines the
 pack, sees named netherite swords and a bow. Every weapon still works for them.
 
 ## The weapons
@@ -151,6 +156,109 @@ A reskinned nether star: a glossy blood orb ringed with thorns whose heart beats
 the pack). It's the ingredient every Bloodbath recipe needs. Get it from the boss, craft one
 (nether star in the middle, ghast tears and redstone blocks around it) or `/bb give <you> core`.
 
+## The Bloodlands
+
+The Bloodlands are a dimension of their own (`world-name: Bloodlands`) under a dusk sky that never moves.
+
+The land:
+- rolling red plains break into hills, valleys and small stepped cliffs of tuff and andesite;
+- now and then a spire of blackstone stands on its own;
+- the grass, ferns and roots come in several shades of red;
+- among them grow poppies, roses, wither roses, crimson fungus, dead bushes and dead or red-leaved dark oaks, and now and then you'll find a set of bleached ribs.
+
+**Blood lakes** sit in real basins, never as a raised puddle and never spilling down a hill:
+- mud and clay shores, irregular outlines;
+- sizes run from pools a few blocks wide up to rare lakes over a hundred blocks across.
+
+All water there is blood:
+- standing in it makes you **bleed** and takes a little health every second (both configurable);
+- it drips and bubbles, and you hear it when you wade in;
+- step out and the bleeding it gave you stops.
+
+Monsters spawn as usual; it's always dusk. About one in twelve is **Bloodbound**: red armour, more health, and a good chance of a Blood Drop. Ruined shrines hide a chest with a Blood Drop or two.
+
+The sky, the fog and the red grass come from a biome, `bloodbath:bloodlands`. The plugin installs it as a datapack in the main world (`datapacks/bloodbath_bloodlands`), which takes one restart. Set `bloodlands.biome-datapack: false` to skip it: the world then opens at once, but with vanilla green grass and a blue sky.
+
+### Portals
+
+Craft **Bloodstone Frames** (8 at a time from polished blackstone bricks, crying obsidian and a Blood Core). Stand them in an upright ring like a nether portal:
+- any size from **2×3 up to 20×20** inside (both limits configurable);
+- corners are optional;
+- light it with flint and steel or a fire charge.
+
+If the frame isn't right, the plugin tells you why and where: the block that breaks the ring, a portal that's too small or too big, or an inside that isn't a rectangle.
+
+Once lit, the inside fills with moving blood that glows and hums.
+- **Going in:** stand in it for a second. You arrive at the Bloodlands spawn, a few blocks apart from anyone who came with you.
+- **Coming back:** a return portal waits there. It takes you back to the portal you came through, or to your bed or the world spawn if that portal is gone.
+
+A lit frame can't be broken by:
+- mining, even in creative;
+- explosions, pistons or fire;
+- endermen, withers, water or lava;
+- trees growing into it;
+- a bucket or block placed in the portal.
+
+To take a frame down:
+- **Unlit:** sneak and mine a frame block to take it back. Turn this off with `portal.reclaim-inactive-frames`.
+- **Lit:** only an admin can remove it, with `/bb portal remove` or by sneaking and mining it in creative.
+
+The plugin recognises frames from its own records, not by name or block type, so ordinary reinforced deepslate is never mistaken for one.
+
+## Blood Drops and the Blood Anvil
+
+**Blood Drops** are rare on purpose. They come from:
+- 2% of monsters killed in the Bloodlands, and 35% of Bloodbound;
+- shrine chests;
+- the Blood Knight, 1 to 3 per kill.
+
+Every chance is in the config. Picking one up gives you a heartbeat and a count of how many you hold. Drops never despawn, and they can't be used in vanilla crafting.
+
+The **Blood Anvil** is a black iron anvil with glowing cracks and a groove of blood. Craft it from two netherite ingots, a Blood Core, an anvil and three polished blackstone. Right-click it to open its menu:
+- a weapon slot, a result slot and a Blood Drop slot;
+- the **BLEED WEAPON** button;
+- a meter of drops held against drops needed;
+- five pips for the weapon's level.
+
+The button shows what the anvil can do right now:
+- empty;
+- can't be bled;
+- *NEED MORE BLOOD*;
+- *READY*, pulsing;
+- *BLEEDING...* while it works;
+- *MAXIMUM LEVEL*.
+
+The result shows exactly what the next level adds before you pay for it.
+
+Bleeding a weapon spends the Blood Drops and raises its **Blood Level**. There are 5 levels by default, costing 1, 2, 3, 5 and 8 drops.
+
+The weapon keeps its kills, enchantments, name, model and ability. Its lore gains a *Blood Infusion* section.
+
+Each level adds:
+- melee damage (arrow damage for the Paradox Bow);
+- a share of the weapon's ability damage;
+- a chance that a hit makes the target bleed.
+
+The level is stored on the item itself and survives reloads and restarts. If you change the numbers in the config, levelled weapons follow them. Only Bloodbath weapons can be bled.
+
+The menu is dupe-proof. Everything you see in it is a picture. Your real items are held by the anvil and saved to disk the moment they go in. You get them back when you:
+- close the menu;
+- log out;
+- die;
+- or when the server stops, or crashes (they come back on your next join).
+
+Shift-clicks, number keys, double-clicks, dragging and spam-clicking the button are all handled. If your inventory is full, the overflow drops at your feet, owned by you.
+
+**Bleeding** is one shared system: blood water, bled weapons and anything else that makes you bleed all stack on one timer. Damage, interval, duration, stack limit and stacking rule are all under `bleeding:`. The Blood Scythe and the Blood Knight keep their own bleeds as before.
+
+**Worth knowing:**
+- the frames are reinforced deepslate underneath, so with the pack, reinforced deepslate in
+  ancient cities looks like Bloodstone too (without the portal glow);
+- the anvil menu's tooltips use the game's own tooltip box with a blood frame, and the game has no
+  way for a server to play a sound when you merely hover a slot, so there's none;
+- without the pack everything still works: the frame is plain reinforced deepslate, the anvil is a
+  normal-looking anvil, the button, meter and pips are glass, blocks and dyes.
+
 ## Commands
 
 `/bloodbath`, `/bb` or `/blood`:
@@ -160,11 +268,17 @@ the pack). It's the ingredient every Bloodbath recipe needs. Get it from the bos
 | `/bb help` | everyone | |
 | `/bb armory` | everyone | Browse every weapon and armour piece. Admins click to take one. |
 | `/bb list` | everyone | Hover a name to see the item. |
-| `/bb info <weapon\|piece>` | everyone | Accepts ids or names ("scythe", "Clotblade", "helm"). No name: the weapon in your hand. |
+| `/bb info <weapon\|piece>` | everyone | Accepts ids or names ("scythe", "Clotblade", "helm"). No name: the weapon in your hand with its Blood Level, or the Bloodlands if you hold nothing. |
 | `/bb hud [on\|off]` | everyone | Hide or show the action-bar line for yourself. Remembered. |
 | `/bb pack` | everyone | Get the resource pack again. |
 | `/bb visuals [on\|off\|auto]` | everyone | The custom particles, boss model and HUD icons for you. `on` if you installed the pack yourself and the download doesn't reach you; `auto` follows your pack. Remembered. |
 | `/bb give <player\|all> <weapon\|piece\|armor\|core [n]\|all>` | op | `/bb give <weapon>` gives it to yourself. `armor` is the whole set; `core 16` is 16 Blood Cores; `all` is every weapon plus the set. |
+| `/bb give <player> <n>` | op | `n` Blood Drops (also `drop [n]`). `anvil` gives a Blood Anvil, `frame [n]` Bloodstone Frames. |
+| `/bb bloodlands [tp]` | everyone / op | Whether the Bloodlands are open (and if not, why). `tp` takes an admin there. |
+| `/bb portal build <w> <h>` | op | Build and light a portal of that inside size where you stand. |
+| `/bb portal remove\|list\|frames [n]` | op | Remove the portal you're looking at, list every portal, or get frames. |
+| `/bb setspawn` | op | Make where you stand the Bloodlands arrival point. |
+| `/bb level <player> <level>` | op | Set the Blood Level of the weapon in that player's hand (0 clears it). |
 | `/bb reset [player\|all]` | op | Clear cooldowns and clots. |
 | `/bb pack <player\|all>` | op | Send the pack to someone else. |
 | `/bb status` | op | Pack server, downloads, recipes, live effects, disabled weapons. |
@@ -172,8 +286,8 @@ the pack). It's the ingredient every Bloodbath recipe needs. Get it from the bos
 | `/bb debug` | op | Toggle a chat log of every ability hit you deal: damage, health before and after, or which plugin cancelled it. |
 | `/bb reload` | op | Reload `config.yml`. Weapons update as players hold them. |
 
-Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.armory` and
-`bloodbath.craft` are on for everyone; `bloodbath.give` and `bloodbath.admin` are op-only.
+Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.armory`,
+`bloodbath.craft` and `bloodbath.anvil` (use Blood Anvils) are on for everyone; `bloodbath.give` and `bloodbath.admin` are op-only.
 
 ## Config
 
@@ -196,6 +310,12 @@ Permissions: `bloodbath.use` (use abilities), `bloodbath.command`, `bloodbath.ar
   Bloodbath items can never be used as crafting ingredients, and a core only works in Bloodbath
   recipes.
 - `items.tooltip-frame`: the blood tooltip frame (see below).
+- `bloodlands`: on or off, world name, seed, the datapack, frozen time, lake frequency, Bloodbound.
+- `portal`: minimum and maximum size, warm-up, cooldown, frame reclaiming, arrival spread.
+- `blood-water`, `bleeding`: damage, interval, duration, stacks and the stacking rule.
+- `blood-drop`: every drop chance, shrine frequency, the boss's drops, pickup effects.
+- `blood-anvil`, `blood-levels`: add or remove levels and set each one's cost, damage, ability
+  power and bleed chance.
 
 ## Resource pack
 
@@ -267,6 +387,16 @@ Knight.
 - **Cooldowns and clots survive relogging.**
 - Ability damage goes through the normal damage pipeline as a player attack, so armor, claims and
   PvP protection plugins apply, and kills are credited to the right player and weapon.
+
+## What's new in 1.5.0
+
+- **The Bloodlands**: a new dimension of red hills, valleys, cliffs and blood lakes that make you
+  bleed, with Bloodbound monsters and ruined shrines. See [The Bloodlands](#the-bloodlands).
+- **Portals of any size** (2×3 to 20×20) from Bloodstone Frames that nothing can break once lit.
+- **Blood Drops** and the **Blood Anvil**: bleed any Bloodbath weapon up to Blood Level V for more
+  damage, stronger abilities and a chance to make targets bleed.
+- One **bleeding** system with its own config.
+- Paper **1.21.11** only from this version.
 
 ## What's new in 1.4.0
 
@@ -403,13 +533,16 @@ Knight.
 ## Building
 
 ```sh
-./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.4.0.jar (+ the pack zip), runs the tests
+./gradlew -p paper build   # -> paper/build/libs/Bloodbath-1.5.0.jar (+ the pack zip), runs the tests
 ```
 
 The tests load the plugin into [MockBukkit](https://github.com/MockBukkit/MockBukkit) (a mock
 Paper 1.21.11 server) and play it: every weapon's ability and passive, kill tracking, the armory,
 the mirror's dupe guards, the armour set bonuses, the bow's echo, that nothing is drawn in a
-player's own face, commands, config reloads, recipes and the pack server. The test world
+player's own face, commands, config reloads, recipes and the pack server; and the Bloodlands:
+the terrain and its lakes (every lake holds its water), portals of every size lit, refused,
+entered and left, frames that don't break, and every way of clicking, dragging, quitting, dying
+or shutting down with a Blood Anvil open. The test world
 checks particle data the way Paper does, and any error the plugin logs fails the test.
 
 `paper/offline-build/build.sh` builds the same plugin without Gradle or network access (it needs

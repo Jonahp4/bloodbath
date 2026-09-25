@@ -1,0 +1,62 @@
+{
+ "credit": "Bloodbath - tools/models/bloodlands.py",
+ "gui_light": "front",
+ "textures": {
+  "face": "unchartedsmp:item/gui/button_need",
+  "particle": "unchartedsmp:item/gui/button_need"
+ },
+ "elements": [
+  {
+   "from": [
+    -16,
+    0,
+    8
+   ],
+   "to": [
+    32,
+    16,
+    8
+   ],
+   "shade": false,
+   "faces": {
+    "south": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#face"
+    },
+    "north": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#face"
+    }
+   }
+  }
+ ],
+ "display": {
+  "gui": {
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    2,
+    2,
+    1
+   ]
+  }
+ }
+}

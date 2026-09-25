@@ -6,10 +6,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
+import net.unchartedsmp.bloodbath.anvil.BloodAnvils;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
+import net.unchartedsmp.bloodbath.portal.Frames;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.Bukkit;
@@ -57,6 +59,12 @@ public final class Recipes {
 			}
 		}
 		add(plugin, BloodCore.ID, BloodCore.create(1), settings.recipes, defaults, false, log);
+		if (settings.blood.lands().enabled()) {
+			add(plugin, Frames.ID, Frames.item(8), settings.recipes, defaults, true, log);
+		}
+		if (settings.blood.anvil().enabled() && settings.blood.anvil().craftable()) {
+			add(plugin, BloodAnvils.ID, BloodAnvils.item(1), settings.recipes, defaults, true, log);
+		}
 		if (!REGISTERED.isEmpty()) {
 			Bukkit.updateRecipes();
 			for (Player player : Bukkit.getOnlinePlayers()) {

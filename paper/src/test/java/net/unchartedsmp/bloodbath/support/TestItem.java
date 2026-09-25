@@ -22,4 +22,27 @@ public final class TestItem extends ItemMock {
 	public boolean isUnlimitedLifetime() {
 		return unlimited;
 	}
+
+	private UUID owner;
+	private UUID thrower;
+
+	@Override
+	public void setOwner(UUID owner) {
+		this.owner = owner;
+	}
+
+	@Override
+	public UUID getOwner() {
+		return owner;
+	}
+
+	@Override
+	public void setThrower(UUID thrower) {
+		this.thrower = thrower;
+	}
+
+	@Override
+	public UUID getThrower() {
+		return thrower;
+	}
 }

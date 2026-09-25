@@ -5,7 +5,10 @@ import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.anvil.BloodAnvils;
 import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
+import net.unchartedsmp.bloodbath.bloodlands.Bloodlands;
 import net.unchartedsmp.bloodbath.armor.SetBonus;
 import net.unchartedsmp.bloodbath.boss.BossManager;
 import net.unchartedsmp.bloodbath.fx.Particles;
@@ -18,6 +21,7 @@ import net.unchartedsmp.bloodbath.listener.MirrorGuard;
 import net.unchartedsmp.bloodbath.listener.SessionListener;
 import net.unchartedsmp.bloodbath.listener.WeaponListener;
 import net.unchartedsmp.bloodbath.pack.ResourcePackService;
+import net.unchartedsmp.bloodbath.portal.Portals;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -42,6 +46,9 @@ public class BloodbathPlugin extends JavaPlugin {
 	private ResourcePackService packs;
 	private WeaponListener weaponListener;
 	private BossManager bosses;
+	private Bloodlands bloodlands;
+	private Portals portals;
+	private BloodAnvils anvils;
 	private BukkitTask ticker;
 
 	@Override
@@ -68,6 +75,17 @@ public class BloodbathPlugin extends JavaPlugin {
 		plugins.registerEvents(bosses, this);
 		SetBonus.init();
 
+		// The Bloodlands, their portals and the Blood Anvil.
+		bloodlands = new Bloodlands(this);
+		bloodlands.enable();
+		plugins.registerEvents(bloodlands, this);
+		portals = new Portals(this);
+		plugins.registerEvents(portals, this);
+		portals.enable(bloodlands);
+		anvils = new BloodAnvils(this);
+		plugins.registerEvents(anvils, this);
+		anvils.enable();
+
 		PluginCommand command = getCommand("bloodbath");
 		if (command != null) {
 			BloodbathCommand executor = new BloodbathCommand(this);
@@ -92,6 +110,16 @@ public class BloodbathPlugin extends JavaPlugin {
 			ticker.cancel();
 			ticker = null;
 		}
+		if (anvils != null) {
+			anvils.disable(); // every open Blood Anvil gives its items back first
+		}
+		if (portals != null) {
+			portals.disable();
+		}
+		if (bloodlands != null) {
+			bloodlands.save();
+		}
+		Bleeding.clearAll();
 		Behaviors.shutdown(); // removes live blood mirrors before the worlds save
 		if (bosses != null) {
 			bosses.shutdown(); // every Blood Knight and its model, before the worlds save
@@ -117,7 +145,12 @@ public class BloodbathPlugin extends JavaPlugin {
 		Hud.tick(now);
 		BloodKnightSet.tick(now);
 		bosses.tick(now);
+		Bleeding.tick(now);
+		bloodlands.tick(now);
+		portals.tick(now);
+		anvils.tick(now);
 		if (now % PRUNE_INTERVAL_TICKS == 0) {
+			portals.prune();
 			Cooldowns.prune();
 			NullField.prune();
 			Behaviors.prune();
@@ -133,6 +166,23 @@ public class BloodbathPlugin extends JavaPlugin {
 	 */
 	private void migrateConfig() {
 		FileConfiguration config = getConfig();
+		// 1.5.0: the Blood Anvil and Bloodstone Frame recipes, for configs written before they existed.
+		boolean added = false;
+		for (String recipe : List.of("blood_anvil", "bloodstone_frame")) {
+			if (config.isConfigurationSection("recipes") && !config.isSet("recipes." + recipe) && config.getDefaults() != null
+				&& config.getDefaults().isConfigurationSection("recipes." + recipe)) {
+				var defaults = config.getDefaults().getConfigurationSection("recipes." + recipe);
+				for (String key : defaults.getKeys(true)) {
+					if (!defaults.isConfigurationSection(key)) {
+						config.set("recipes." + recipe + "." + key, defaults.get(key));
+					}
+				}
+				added = true;
+			}
+		}
+		if (added) {
+			saveConfig();
+		}
 		if (config.isSet("resource-pack.mirrors")) {
 			return;
 		}
@@ -183,6 +233,18 @@ public class BloodbathPlugin extends JavaPlugin {
 
 	public BossManager bosses() {
 		return bosses;
+	}
+
+	public Bloodlands bloodlands() {
+		return bloodlands;
+	}
+
+	public Portals portals() {
+		return portals;
+	}
+
+	public BloodAnvils anvils() {
+		return anvils;
 	}
 
 	public WeaponListener weaponListener() {

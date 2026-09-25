@@ -22,6 +22,7 @@ import net.kyori.adventure.title.Title;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.blood.BloodDrop;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
@@ -1200,6 +1201,12 @@ final class BloodKnightBoss {
 		int cores = config.coresMin() + (config.coresMax() > config.coresMin() ? random.nextInt(config.coresMax() - config.coresMin() + 1) : 0);
 		for (int i = 0; i < cores; i++) {
 			drop(at, BloodCore.create(1));
+		}
+		// And the rarest thing it carries: blood that never dries, for the Blood Anvil.
+		var blood = Settings.get().blood.drops();
+		int drops = blood.bossMin() + (blood.bossMax() > blood.bossMin() ? random.nextInt(blood.bossMax() - blood.bossMin() + 1) : 0);
+		for (int i = 0; i < drops; i++) {
+			drop(at, BloodDrop.create(1));
 		}
 		if (random.nextDouble() < config.armorChance() && Settings.get().armorEnabled) {
 			ArmorPiece[] pieces = ArmorPiece.values();

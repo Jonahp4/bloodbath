@@ -146,6 +146,7 @@ class BloodbathPluginTest {
 		}
 		config.set("resource-pack.port", 0); // any free port, so tests never collide
 		config.set("resource-pack.mirrors", List.of()); // no network: tests serve their own mirror
+		config.set("bloodlands.biome-datapack", false); // a mock server has no datapacks
 		plugin = MockBukkit.loadWithConfig(BloodbathPlugin.class, config);
 		plugin.getLogger().addHandler(errorCatcher);
 		player = server.addTestPlayer("Steve");
@@ -1669,7 +1670,8 @@ class BloodbathPluginTest {
 	@Test
 	void everyRecipeNeedsABloodCore() {
 		// On by default now: a Blood Core makes them expensive.
-		assertEquals(WeaponType.values().length + ArmorPiece.values().length + 1, Recipes.count());
+		// Every weapon and armour piece, the core itself, the Blood Anvil and the Bloodstone Frame.
+		assertEquals(WeaponType.values().length + ArmorPiece.values().length + 3, Recipes.count());
 		ShapedRecipe recipe = (ShapedRecipe) server.getRecipe(new NamespacedKey(plugin, "riftblade"));
 		assertNotNull(recipe);
 		assertEquals(WeaponType.RIFTBLADE, Weapons.typeOf(recipe.getResult()));

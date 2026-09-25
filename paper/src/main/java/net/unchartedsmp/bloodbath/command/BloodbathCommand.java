@@ -13,8 +13,13 @@ import net.unchartedsmp.bloodbath.BloodbathPlugin;
 import net.unchartedsmp.bloodbath.ability.Cooldowns;
 import net.unchartedsmp.bloodbath.ability.NullField;
 import net.unchartedsmp.bloodbath.ability.TickScheduler;
+import net.unchartedsmp.bloodbath.anvil.BloodAnvils;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
+import net.unchartedsmp.bloodbath.blood.BloodDrop;
+import net.unchartedsmp.bloodbath.blood.BloodLevels;
+import net.unchartedsmp.bloodbath.bloodlands.Bloodlands;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.core.BloodCore;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
@@ -22,6 +27,8 @@ import net.unchartedsmp.bloodbath.gui.ArmoryMenu;
 import net.unchartedsmp.bloodbath.hud.Hud;
 import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.pack.ResourcePackService;
+import net.unchartedsmp.bloodbath.portal.Frames;
+import net.unchartedsmp.bloodbath.portal.Portal;
 import net.unchartedsmp.bloodbath.recipe.Recipes;
 import net.unchartedsmp.bloodbath.weapon.Behaviors;
 import net.unchartedsmp.bloodbath.util.Damage;
@@ -30,6 +37,7 @@ import net.unchartedsmp.bloodbath.weapon.WeaponType;
 import net.unchartedsmp.bloodbath.weapon.Weapons;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -52,7 +60,11 @@ public final class BloodbathCommand implements TabExecutor {
 		new Sub("hud", "hud [on|off]", "Toggle the cooldown line", null),
 		new Sub("pack", "pack", "Get the 3D resource pack again", null),
 		new Sub("visuals", "visuals [on|off|auto]", "Custom particles, boss model and icons for you", null),
-		new Sub("give", "give <player> <weapon|armor|core [n]|all>", "Give weapons, armor and Blood Cores", GIVE),
+		new Sub("give", "give <player> <weapon|armor|core [n]|drop [n]|<n>|anvil|frame [n]|all>", "Give weapons, armor, cores, Blood Drops, anvils, frames", GIVE),
+		new Sub("bloodlands", "bloodlands [tp]", "The Bloodlands: status, or go there", null),
+		new Sub("portal", "portal <build <w> <h>|remove|list|frames [n]>", "Build, remove and list Bloodlands portals", ADMIN),
+		new Sub("setspawn", "setspawn", "Set where portal travellers arrive in the Bloodlands", ADMIN),
+		new Sub("level", "level <player> <level>", "Set the Blood Level of a player's held weapon", ADMIN),
 		new Sub("reset", "reset [player]", "Clear cooldowns and clots", ADMIN),
 		new Sub("status", "status", "Pack server, recipes, effects", ADMIN),
 		new Sub("boss", "boss <summon|stop|status>", "The Blood Knight boss fight", ADMIN),
@@ -91,6 +103,10 @@ public final class BloodbathCommand implements TabExecutor {
 			case "reload" -> reload(sender);
 			case "debug" -> debug(sender);
 			case "boss" -> boss(sender, rest);
+			case "bloodlands" -> bloodlands(sender, rest);
+			case "portal" -> portal(sender, rest);
+			case "setspawn" -> setSpawn(sender);
+			case "level" -> level(sender, rest);
 			default -> help(sender, label);
 		}
 		return true;
@@ -167,11 +183,21 @@ public final class BloodbathCommand implements TabExecutor {
 		if (type == null && args.length == 0 && sender instanceof Player player) {
 			type = Weapons.typeOf(player.getInventory().getItemInMainHand());
 		}
+		if (type == null && args.length == 0) {
+			bloodlands(sender, new String[0]);
+			sender.sendMessage(Component.text(" /bloodbath info <weapon> for a weapon's details.", NamedTextColor.DARK_GRAY));
+			return;
+		}
 		if (type == null) {
-			error(sender, args.length == 0 ? "Which weapon? /bloodbath info <weapon>" : "No weapon called '" + String.join(" ", args) + "'.");
+			error(sender, "No weapon called '" + String.join(" ", args) + "'.");
 			return;
 		}
 		sendInfo(sender, type);
+		if (args.length == 0 && sender instanceof Player player && Weapons.typeOf(player.getInventory().getItemInMainHand()) == type) {
+			int level = BloodLevels.level(player.getInventory().getItemInMainHand());
+			sender.sendMessage(Component.text(" Blood Level " + BloodLevels.numeral(level) + " " + BloodLevels.pips(level) + "  ", NamedTextColor.DARK_RED)
+				.append(Component.text(level == 0 ? "not bled yet: take it to a Blood Anvil" : BloodLevels.effects(type, level), NamedTextColor.GRAY)));
+		}
 	}
 
 	/** An armour piece's name (hover for the item), what it does and the set bonus. */
@@ -299,6 +325,33 @@ public final class BloodbathCommand implements TabExecutor {
 		List<WeaponType> types = new ArrayList<>();
 		List<ArmorPiece> pieces = new ArrayList<>();
 		String key = what.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+		Integer bare = number(key);
+		if (bare != null || key.equals("drop") || key.startsWith("drop_") || key.equals("drops") || key.startsWith("drops_")
+			|| key.equals("blood_drop") || key.startsWith("blood_drop_")) {
+			// "/blood give Steve 5", "drop", "drop 5", "blood_drop 3"
+			int amount = bare != null ? bare : trailingNumber(key, 1);
+			for (Player target : targets) {
+				give(target, BloodDrop.create(Math.min(64, amount)), amount == 1 ? "Blood Drop" : amount + " Blood Drops");
+			}
+			if (!(targets.size() == 1 && targets.get(0) == sender)) {
+				reply(sender, "Gave " + amount + " Blood Drop" + (amount == 1 ? "" : "s") + " to " + (targets.size() == 1 ? targets.get(0).getName() : targets.size() + " players") + ".");
+			}
+			return;
+		}
+		if (key.equals("anvil") || key.equals("blood_anvil")) {
+			for (Player target : targets) {
+				give(target, BloodAnvils.item(1), "Blood Anvil");
+			}
+			return;
+		}
+		if (key.equals("frame") || key.startsWith("frame_") || key.equals("frames") || key.startsWith("frames_")
+			|| key.startsWith("bloodstone_frame")) {
+			int amount = trailingNumber(key, 16);
+			for (Player target : targets) {
+				give(target, Frames.item(Math.min(64, amount)), amount + " Bloodstone Frames");
+			}
+			return;
+		}
 		if (key.equals("core") || key.startsWith("core_") || key.equals("blood_core") || key.startsWith("blood_core_")) {
 			// "core", "core 16", "blood_core 4"
 			String[] parts = key.split("_");
@@ -416,6 +469,8 @@ public final class BloodbathCommand implements TabExecutor {
 			+ (sender instanceof Player player ? (PackState.hasPack(player) ? " (you do)" : " (you don't: rejoin, /bb pack, or set pack-visuals: always)") : ""));
 		line(sender, "Tooltip frame", settings.tooltipFrame() ? "on" : "off (" + settings.tooltipFrame + ")");
 		line(sender, "Recipes", settings.recipesEnabled ? Recipes.count() + " registered" : "off");
+		line(sender, "Bloodlands", plugin.bloodlands().status() + " · " + plugin.portals().all().size() + " lit portals · "
+			+ plugin.anvils().openCount() + " Blood Anvils in use · " + Bleeding.count() + " bleeding");
 		line(sender, "Live effects", TickScheduler.pending() + " scheduled · " + Behaviors.MIRRORFANG.liveCount() + " blood mirrors");
 		List<String> disabled = Arrays.stream(WeaponType.values()).filter(type -> !settings.enabled(type)).map(WeaponType::id).toList();
 		line(sender, "Disabled weapons", disabled.isEmpty() ? "none" : String.join(", ", disabled));
@@ -471,6 +526,176 @@ public final class BloodbathCommand implements TabExecutor {
 		reply(sender, "Reloaded config.yml. Weapons update as players hold them.");
 	}
 
+	// ---- the Bloodlands ------------------------------------------------------------------------
+
+	private void bloodlands(CommandSender sender, String[] args) {
+		Bloodlands lands = plugin.bloodlands();
+		if (args.length > 0 && args[0].equalsIgnoreCase("tp")) {
+			if (!sender.hasPermission(ADMIN)) {
+				error(sender, "Only admins can go straight there. Find or build a portal.");
+				return;
+			}
+			if (!(sender instanceof Player player)) {
+				error(sender, "Only players can travel.");
+				return;
+			}
+			if (!lands.isOpen()) {
+				error(sender, "The Bloodlands aren't open: " + lands.status() + ".");
+				return;
+			}
+			plugin.portals().arrival(lands.world(), lands.spawn(), 2).thenAccept(spot -> Bukkit.getScheduler().runTask(plugin,
+				() -> player.teleportAsync(spot)));
+			reply(sender, "Into the Bloodlands...");
+			return;
+		}
+		reply(sender, "The Bloodlands: " + lands.status() + ".");
+		if (lands.isOpen()) {
+			Location spawn = lands.spawn();
+			line(sender, "World", lands.world().getName() + " · arrivals at " + spawn.getBlockX() + " " + spawn.getBlockY() + " " + spawn.getBlockZ());
+			line(sender, "Players there", String.valueOf(lands.world().getPlayers().size()));
+		}
+		line(sender, "Portals", plugin.portals().all().size() + " lit");
+		line(sender, "How to get there", "a ring of Bloodstone Frames (any size, " + Settings.get().blood.portal().minWidth() + "×"
+			+ Settings.get().blood.portal().minHeight() + " inside at least), lit with flint and steel");
+	}
+
+	private void portal(CommandSender sender, String[] args) {
+		String action = args.length == 0 ? "list" : args[0].toLowerCase(Locale.ROOT);
+		switch (action) {
+			case "build", "create" -> {
+				if (!(sender instanceof Player player)) {
+					error(sender, "Stand where it should go.");
+					return;
+				}
+				int width = args.length > 1 ? parse(args[1], 3) : 3;
+				int height = args.length > 2 ? parse(args[2], 4) : 4;
+				if (width < 1 || height < 1 || width > 64 || height > 64) {
+					error(sender, "Sizes are 1 to 64 (the inside of the frame).");
+					return;
+				}
+				Portal portal = plugin.portals().build(player, width, height);
+				if (portal == null) {
+					error(sender, "Another portal is in the way.");
+					return;
+				}
+				reply(sender, "Built and lit a " + portal.width() + "×" + portal.height() + " portal at " + portal.x() + " " + portal.y() + " " + portal.z() + ".");
+			}
+			case "remove", "delete" -> {
+				if (!(sender instanceof Player player)) {
+					error(sender, "Look at the portal to remove.");
+					return;
+				}
+				Portal portal = lookedAt(player);
+				if (portal == null) {
+					error(sender, "Look at a lit portal (its inside or its frame), within 16 blocks.");
+					return;
+				}
+				plugin.portals().destroy(portal, true);
+				reply(sender, "Removed the " + portal.width() + "×" + portal.height() + " portal and its frame (the frame blocks dropped).");
+			}
+			case "frames" -> {
+				if (!(sender instanceof Player player)) {
+					error(sender, "Only players can hold frames.");
+					return;
+				}
+				int amount = args.length > 1 ? parse(args[1], 16) : 16;
+				give(player, Frames.item(Math.max(1, Math.min(64, amount))), Math.max(1, Math.min(64, amount)) + " Bloodstone Frames");
+			}
+			default -> {
+				reply(sender, plugin.portals().all().isEmpty() ? "No portals are lit." : plugin.portals().all().size() + " lit portals:");
+				for (Portal portal : plugin.portals().all()) {
+					World world = Bukkit.getWorld(portal.world());
+					line(sender, world == null ? "(unloaded world)" : world.getName(), portal.describe());
+				}
+			}
+		}
+	}
+
+	private Portal lookedAt(Player player) {
+		var hit = player.rayTraceBlocks(16.0, org.bukkit.FluidCollisionMode.NEVER);
+		if (hit == null || hit.getHitBlock() == null) {
+			// The inside is light blocks, which a ray passes through: walk the ray instead.
+			for (double d = 0.5; d <= 16; d += 0.5) {
+				Portal portal = plugin.portals().at(player.getEyeLocation().add(player.getEyeLocation().getDirection().multiply(d)).getBlock());
+				if (portal != null) {
+					return portal;
+				}
+			}
+			return null;
+		}
+		Portal direct = plugin.portals().at(hit.getHitBlock());
+		if (direct != null) {
+			return direct;
+		}
+		for (double d = 0.5; d <= 16; d += 0.5) {
+			Portal portal = plugin.portals().at(player.getEyeLocation().add(player.getEyeLocation().getDirection().multiply(d)).getBlock());
+			if (portal != null) {
+				return portal;
+			}
+		}
+		return Frames.isFrame(hit.getHitBlock()) ? plugin.portals().framing(hit.getHitBlock()) : null;
+	}
+
+	private void setSpawn(CommandSender sender) {
+		if (!(sender instanceof Player player)) {
+			error(sender, "Stand where travellers should arrive.");
+			return;
+		}
+		Bloodlands lands = plugin.bloodlands();
+		if (!lands.isBloodlands(player.getWorld())) {
+			error(sender, "Stand in the Bloodlands (" + (lands.isOpen() ? lands.world().getName() : "not open yet") + ") to set its arrival point.");
+			return;
+		}
+		lands.setSpawn(player.getLocation());
+		Location at = player.getLocation();
+		reply(sender, "Portal travellers now arrive at " + at.getBlockX() + " " + at.getBlockY() + " " + at.getBlockZ() + ".");
+	}
+
+	private void level(CommandSender sender, String[] args) {
+		if (args.length < 2) {
+			error(sender, "Usage: /bloodbath level <player> <level 0-" + Settings.get().blood.maxLevel() + ">");
+			return;
+		}
+		Player target = Bukkit.getPlayerExact(args[0]);
+		if (target == null) {
+			error(sender, "No online player '" + args[0] + "'.");
+			return;
+		}
+		Integer level = number(args[1]);
+		int max = Settings.get().blood.maxLevel();
+		if (level == null || level < 0 || level > max) {
+			error(sender, "The Blood Level is a number from 0 to " + max + ".");
+			return;
+		}
+		ItemStack held = target.getInventory().getItemInMainHand();
+		WeaponType type = Weapons.typeOf(held);
+		if (type == null) {
+			error(sender, target.getName() + " isn't holding a Bloodbath weapon.");
+			return;
+		}
+		BloodLevels.set(held, level);
+		reply(sender, target.getName() + "'s " + type.displayName() + " is now Blood Level " + BloodLevels.numeral(level) + ".");
+	}
+
+	private static Integer number(String text) {
+		try {
+			return Integer.parseInt(text.trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	private static int trailingNumber(String key, int fallback) {
+		String[] parts = key.split("_");
+		Integer n = number(parts[parts.length - 1]);
+		return n == null ? fallback : Math.max(1, n);
+	}
+
+	private static int parse(String text, int fallback) {
+		Integer n = number(text);
+		return n == null ? fallback : n;
+	}
+
 	// ---- helpers -----------------------------------------------------------------------------
 
 	private static List<Player> players(String name) {
@@ -510,14 +735,18 @@ public final class BloodbathCommand implements TabExecutor {
 			case "visuals" -> args.length == 2 ? matching(last, Stream.of("on", "off", "auto")) : List.of();
 			case "pack", "reset" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, playerNames(true)) : List.of();
 			case "boss" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, Stream.of("summon", "stop", "status")) : List.of();
+			case "portal" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, Stream.of("build", "remove", "list", "frames")) : List.of();
+			case "bloodlands" -> args.length == 2 && sender.hasPermission(ADMIN) ? matching(last, Stream.of("tp")) : List.of();
+			case "level" -> !sender.hasPermission(ADMIN) ? List.of() : args.length == 2 ? matching(last, playerNames(false))
+				: args.length == 3 ? matching(last, java.util.stream.IntStream.rangeClosed(0, Settings.get().blood.maxLevel()).mapToObj(String::valueOf)) : List.of();
 			case "give" -> {
 				if (!sender.hasPermission(GIVE)) {
 					yield List.of();
 				}
 				if (args.length == 2) {
-					yield matching(last, Stream.concat(playerNames(false), Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core"))));
+					yield matching(last, Stream.concat(playerNames(false), Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core", "drop", "anvil", "frame"))));
 				}
-				yield args.length == 3 ? matching(last, Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core"))) : List.of();
+				yield args.length == 3 ? matching(last, Stream.concat(Stream.concat(weaponIds(), armorIds()), Stream.of("all", "blood_knight", "core", "drop", "anvil", "frame"))) : List.of();
 			}
 			default -> List.of();
 		};

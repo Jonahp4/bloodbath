@@ -19,6 +19,15 @@
       ]
     },
     {
+      "type": "bitmap",
+      "file": "unchartedsmp:font/blood_anvil.png",
+      "ascent": 13,
+      "height": 111,
+      "chars": [
+        "\ue110"
+      ]
+    },
+    {
       "type": "space",
       "advances": {
         "\uf001": -8,

@@ -83,6 +83,8 @@ public final class Settings {
 
 	public final boolean recipesEnabled;
 	public final BossSettings boss;
+	/** The Bloodlands, portals, bleeding, Blood Drops, the Blood Anvil and Blood Levels. */
+	public final BloodConfig blood;
 
 	/** The Blood Knight boss fight ({@code boss:} in config.yml). Times are already in ticks. */
 	public record BossSettings(boolean enabled, double health, double healthPerPlayer, double armor, double armorToughness,
@@ -207,6 +209,7 @@ public final class Settings {
 			num(c, "boss.loot.armor-chance", 0.6, 0, 1),
 			(int) num(c, "boss.loot.experience", 1500, 0, 100000),
 			bool(c, "boss.announce", true));
+		blood = BloodConfig.read(c);
 		recipes = c == null ? null : c.getConfigurationSection("recipes");
 		prefix = MiniMessage.miniMessage().deserialize(str(c, "messages.prefix", "<dark_red>☠</dark_red> "));
 
@@ -245,7 +248,7 @@ public final class Settings {
 	public String itemFingerprint() {
 		StringBuilder key = new StringBuilder();
 		key.append(killTracking).append(tooltipFrame()).append(armorKillHeal).append(armorBarbDamage).append(rageThreshold)
-			.append(fullSetEffects);
+			.append(fullSetEffects).append(blood.fingerprint());
 		for (Ability ability : Ability.values()) {
 			key.append(',').append(cooldownTicks(ability));
 		}

@@ -9,6 +9,7 @@ import java.util.WeakHashMap;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.unchartedsmp.bloodbath.ability.ServerClock;
+import net.unchartedsmp.bloodbath.blood.BloodLevels;
 import net.unchartedsmp.bloodbath.config.Settings;
 import net.unchartedsmp.bloodbath.fx.BloodFx;
 import net.unchartedsmp.bloodbath.weapon.WeaponType;
@@ -59,6 +60,10 @@ public final class Damage {
 	public static void deal(LivingEntity target, double amount, Player attacker, WeaponType source, Location from, boolean blow) {
 		if (!target.isValid() || target.isDead()) {
 			return;
+		}
+		if (blow) {
+			// A weapon bled at the Blood Anvil hits harder with its ability too.
+			amount *= BloodLevels.abilityMultiplier(attacker, source);
 		}
 		int immunity = target.getNoDamageTicks();
 		double lastDamage = target.getLastDamage();

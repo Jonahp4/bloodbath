@@ -5,6 +5,7 @@ import net.unchartedsmp.bloodbath.BloodbathPlugin;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
 import net.unchartedsmp.bloodbath.armor.BloodKnightSet;
 import net.unchartedsmp.bloodbath.armor.SetBonus;
+import net.unchartedsmp.bloodbath.blood.Bleeding;
 import net.unchartedsmp.bloodbath.pack.PackState;
 import net.unchartedsmp.bloodbath.util.Damage;
 import net.unchartedsmp.bloodbath.hud.Hud;
@@ -66,6 +67,8 @@ public final class SessionListener implements Listener {
 		plugin.packs().forget(id);
 		Damage.forget(id);
 		plugin.weaponListener().forget(id);
+		plugin.bloodlands().forget(id);
+		Bleeding.forget(id);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR)

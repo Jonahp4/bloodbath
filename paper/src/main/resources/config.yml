@@ -249,6 +249,74 @@ boss:
     armor-chance: 0.6     # chance of one Blood Knight armour piece
     experience: 1500
 
+# ☠ The Bloodlands: a crimson plains world reached through Bloodstone portals. Its red grass,
+# blood-red water and crimson fog come from a small datapack the plugin installs into your main
+# world (Minecraft 1.21.11 only); the Bloodlands open after the server's next restart. See the
+# README for what that means before you update Minecraft.
+bloodlands:
+  enabled: true
+  world-name: Bloodlands
+  seed: 0                 # 0 = derived from the main world's seed
+  biome-datapack: true    # false: no datapack, the Bloodlands open at once with vanilla grass and sky
+  freeze-time: true       # a sky that stays at dusk (monsters walk)
+  time: 13800             # the time it's frozen at, in ticks (13000 = sunset, 18000 = midnight)
+  lake-frequency: 1.0     # blood lakes: 0 = none, 2 = twice as many
+  elite-chance: 0.08      # share of Bloodlands monsters that spawn Bloodbound (red armour, more health)
+  elite-health: 40
+
+# Bloodlands portals: a ring of Bloodstone Frames of any size, lit with flint and steel. Sizes are
+# the inside of the frame, in blocks.
+portal:
+  minimum-width: 2
+  maximum-width: 20
+  minimum-height: 3
+  maximum-height: 20
+  warmup: 1.0             # seconds standing in a portal before it takes you
+  cooldown: 5             # seconds before a player can use a portal again
+  reclaim-inactive-frames: true   # sneak-mine an UNLIT frame block to take it back (lit ones never break)
+  arrival-spread: 4       # arrivals land up to this far from the Bloodlands spawn, never on each other
+
+# Any water in the Bloodlands is blood. Standing in it hurts and makes you bleed; leaving it stops it.
+blood-water:
+  enabled: true
+  damage: 1.0             # every interval, on top of the bleeding
+  interval: 1.0
+  bleeding-duration: 5
+  bleeding-stacks: 1
+
+# Bloodbath's bleeding: from blood water, bled weapons (below). All run off one timer.
+bleeding:
+  damage: 0.5             # per stack, every interval (armour doesn't stop it)
+  interval: 1.5
+  duration: 5
+  max-stacks: 5
+  stacking: stack         # stack: stacks add up | refresh: the stronger stays | none: a running bleed is left alone
+  particles: 2            # drops of blood per stack each interval (capped at 8)
+
+# Blood Drops: the Blood Anvil's currency. Deliberately rare.
+blood-drop:
+  mob-drop-chance: 0.02   # any monster killed in the Bloodlands
+  elite-drop-chance: 0.35 # a Bloodbound
+  structure-chance: 0.6   # a ruined shrine's chest (1, sometimes 2)
+  shrine-frequency: 1.0   # how often shrines appear (1 = about one in 280 chunks)
+  boss-min: 1             # the Blood Knight
+  boss-max: 3
+  pickup-effects: true
+
+blood-anvil:
+  enabled: true
+  craftable: true         # recipes.blood_anvil below
+
+# Blood Levels: what each level adds to a weapon, and what it costs. Add or remove levels freely
+# (1, 2, 3... in order). damage-bonus: melee damage (arrow damage for the bow). ability-power: extra
+# share of the weapon's ability damage. bleeding-chance: chance a hit makes the target bleed.
+blood-levels:
+  1: {cost: 1, damage-bonus: 1.0, ability-power: 0.05, bleeding-chance: 0.04}
+  2: {cost: 2, damage-bonus: 2.0, ability-power: 0.10, bleeding-chance: 0.08}
+  3: {cost: 3, damage-bonus: 3.0, ability-power: 0.15, bleeding-chance: 0.12}
+  4: {cost: 5, damage-bonus: 4.5, ability-power: 0.20, bleeding-chance: 0.16}
+  5: {cost: 8, damage-bonus: 6.0, ability-power: 0.30, bleeding-chance: 0.22}
+
 # Every Bloodbath sound can be made quieter, swapped or muted.
 sounds:
   volume: 1.0
@@ -314,3 +382,9 @@ recipes:
   blood_knight_sabatons:
     shape: [' S ', 'RBR', ' C ']
     ingredients: {S: SOUL_SAND, R: REDSTONE_BLOCK, B: NETHERITE_BOOTS, C: BLOOD_CORE}
+  blood_anvil:
+    shape: ['NCN', ' A ', 'BBB']
+    ingredients: {N: NETHERITE_INGOT, C: BLOOD_CORE, A: ANVIL, B: POLISHED_BLACKSTONE}
+  bloodstone_frame:   # makes 8
+    shape: ['BOB', 'OCO', 'BOB']
+    ingredients: {B: POLISHED_BLACKSTONE_BRICKS, O: CRYING_OBSIDIAN, C: BLOOD_CORE}

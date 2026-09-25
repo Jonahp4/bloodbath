@@ -1468,6 +1468,8 @@ def write_hud_and_gui():
         # ascent 13: the title is drawn 6px down with a 7px ascent, so the art's top meets the GUI's.
         gui.append({"type": "bitmap", "file": f"{NS}:font/{name}.png", "ascent": 13, "height": img.height,
                     "chars": [json.loads('"' + char + '"')]})
+    import bloodlands  # the Blood Anvil screen's backdrop joins the armory's (tools/models/bloodlands.py)
+    gui.append(bloodlands.write(PACK))
     gui.append({"type": "space", "advances": {json.loads('"\\uf001"'): -8, json.loads('"\\uf002"'): -(GUI_WIDTH + 1 - 8)}})
     with open(os.path.join(fonts, "gui.json"), "w") as f:
         json.dump({"providers": gui}, f, indent=2)

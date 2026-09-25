@@ -30,6 +30,28 @@ public final class Keys {
 	public static NamespacedKey PACK;
 	/** On players, kept: "on" or "off" when they chose the pack visuals themselves (/bb visuals). */
 	public static NamespacedKey VISUALS;
+	/** On weapon items: the Blood Level the Blood Anvil has bled into it (0 when absent). */
+	public static NamespacedKey BLOOD_LEVEL;
+	/** On Blood Drops. */
+	public static NamespacedKey BLOOD_DROP;
+	/** On Bloodstone Frame items (the Bloodlands portal frame). */
+	public static NamespacedKey FRAME_ITEM;
+	/** On Blood Anvil items. */
+	public static NamespacedKey ANVIL_ITEM;
+	/** On chunks: the frame blocks placed in them (packed positions), so a frame is known by more than its look. */
+	public static NamespacedKey FRAMES;
+	/** On chunks: the Blood Anvils standing in them (packed positions). */
+	public static NamespacedKey ANVILS;
+	/** On the display entities Bloodbath shows at portals and anvils (never saved: respawned with their chunk). */
+	public static NamespacedKey FIXTURE;
+	/** On every item a Bloodbath menu shows: a picture, never a real item. Anything carrying it is destroyed on sight outside a menu. */
+	public static NamespacedKey GUI;
+	/** On players: where the portal they took into the Bloodlands stands, to send them back there. */
+	public static NamespacedKey RETURN;
+	/** On Bloodlands elite mobs ("Bloodbound"), which carry Blood Drops. */
+	public static NamespacedKey BLOODBOUND;
+	/** On arrows shot from a bled bow: the bow's Blood Level. */
+	public static NamespacedKey ARROW_BLOOD;
 
 	private Keys() {
 	}
@@ -46,6 +68,17 @@ public final class Keys {
 		THRALL = new NamespacedKey(plugin, "thrall");
 		PACK = new NamespacedKey(plugin, "pack_loaded");
 		VISUALS = new NamespacedKey(plugin, "visuals");
+		BLOOD_LEVEL = new NamespacedKey(plugin, "blood_level");
+		BLOOD_DROP = new NamespacedKey(plugin, "blood_drop");
+		FRAME_ITEM = new NamespacedKey(plugin, "bloodstone_frame");
+		ANVIL_ITEM = new NamespacedKey(plugin, "blood_anvil");
+		FRAMES = new NamespacedKey(plugin, "frames");
+		ANVILS = new NamespacedKey(plugin, "anvils");
+		FIXTURE = new NamespacedKey(plugin, "fixture");
+		GUI = new NamespacedKey(plugin, "gui");
+		RETURN = new NamespacedKey(plugin, "return");
+		BLOODBOUND = new NamespacedKey(plugin, "bloodbound");
+		ARROW_BLOOD = new NamespacedKey(plugin, "arrow_blood");
 	}
 
 	/** A key in the resource pack's namespace, e.g. {@code unchartedsmp:riftblade}. */

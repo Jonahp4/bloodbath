@@ -1,7 +1,7 @@
 name: Bloodbath
 version: '${version}'
 main: net.unchartedsmp.bloodbath.BloodbathPlugin
-api-version: '1.21.4'
+api-version: '1.21.11'
 description: Twelve blood-soaked 3D ability weapons, an armory, and a self-hosted resource pack.
 authors: [Uncharted SMP]
 website: https://github.com/jonahp4/bloodbath
@@ -25,6 +25,9 @@ permissions:
     default: true
   bloodbath.craft:
     description: Craft weapons when recipes are enabled in config.yml.
+    default: true
+  bloodbath.anvil:
+    description: Use Blood Anvils to bleed weapons.
     default: true
   bloodbath.give:
     description: Give weapons with /bloodbath give and take them from the armory.

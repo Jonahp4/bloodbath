@@ -39,6 +39,32 @@ public final class TestWorld extends WorldMock {
 	}
 
 	@Override
+	public int getHighestBlockYAt(int x, int z, org.bukkit.HeightMap heightMap) {
+		for (int y = getMaxHeight() - 1; y > getMinHeight(); y--) {
+			Material type = getBlockAt(x, y, z).getType();
+			if (!type.isAir() && type != Material.LIGHT && (type.isSolid() || type == Material.WATER || type == Material.LAVA)) {
+				return y;
+			}
+		}
+		return getMinHeight();
+	}
+
+	@Override
+	public org.bukkit.block.Block getHighestBlockAt(int x, int z, org.bukkit.HeightMap heightMap) {
+		return getBlockAt(x, getHighestBlockYAt(x, z, heightMap), z);
+	}
+
+	@Override
+	public int getHighestBlockYAt(int x, int z) {
+		return getHighestBlockYAt(x, z, org.bukkit.HeightMap.MOTION_BLOCKING);
+	}
+
+	@Override
+	public org.bukkit.block.Block getHighestBlockAt(int x, int z) {
+		return getBlockAt(x, getHighestBlockYAt(x, z), z);
+	}
+
+	@Override
 	public <T> void spawnParticle(Particle particle, double x, double y, double z, int count, double offsetX, double offsetY,
 		double offsetZ, double extra, T data, boolean force) {
 		spawnParticle(particle, null, null, x, y, z, count, offsetX, offsetY, offsetZ, extra, data, force);

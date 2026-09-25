@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.unchartedsmp.bloodbath.Keys;
 import net.unchartedsmp.bloodbath.armor.ArmorPiece;
 import net.unchartedsmp.bloodbath.armor.BloodArmor;
+import net.unchartedsmp.bloodbath.blood.BloodLevels;
 import net.unchartedsmp.bloodbath.config.Settings;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -67,7 +68,9 @@ public final class Weapons {
 		if (material != Material.NETHERITE_SWORD && material != Material.BOW) {
 			return null; // cheap reject before touching persistent data
 		}
-		return WeaponType.byId(stack.getPersistentDataContainer().get(Keys.WEAPON, PersistentDataType.STRING));
+		WeaponType type = WeaponType.byId(stack.getPersistentDataContainer().get(Keys.WEAPON, PersistentDataType.STRING));
+		// A picture of a weapon in a menu is never a weapon, even if one somehow got out.
+		return type != null && stack.getPersistentDataContainer().has(Keys.GUI, PersistentDataType.BYTE) ? null : type;
 	}
 
 	public static boolean isWeapon(ItemStack stack) {
@@ -95,10 +98,22 @@ public final class Weapons {
 		return true;
 	}
 
+	/** Rebuilds a weapon's name, tooltip and attributes now (after its Blood Level changed), keeping everything else. */
+	public static void rebuild(ItemStack stack) {
+		WeaponType type = typeOf(stack);
+		if (type != null) {
+			build(stack, type, kills(stack));
+		}
+	}
+
 	static void build(ItemStack stack, WeaponType type, int kills) {
 		stack.editMeta(meta -> {
+			// The Blood Anvil's level rides along in the same data; every rebuild keeps and shows it.
+			int blood = BloodLevels.level(meta.getPersistentDataContainer());
 			meta.itemName(Component.text(type.displayName(), NamedTextColor.RED));
-			meta.lore(lore(type, kills));
+			List<Component> lore = lore(type, kills);
+			lore.addAll(BloodLevels.weaponLore(type, blood));
+			meta.lore(lore);
 			model(meta, type);
 			meta.setMaxStackSize(1);
 			// Enchantment glint smears across every face of a 3D model; the blood aura says "special" instead.
@@ -106,7 +121,7 @@ public final class Weapons {
 			if (type.attackDamage() > 0) {
 				meta.removeAttributeModifier(Attribute.ATTACK_DAMAGE);
 				meta.removeAttributeModifier(Attribute.ATTACK_SPEED);
-				meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(BASE_DAMAGE, type.attackDamage() - 1.0,
+				meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(BASE_DAMAGE, BloodLevels.damageAt(type, blood) - 1.0,
 					AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
 				meta.addAttributeModifier(Attribute.ATTACK_SPEED, new AttributeModifier(BASE_SPEED, type.attackSpeed() - 4.0,
 					AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.MAINHAND));
